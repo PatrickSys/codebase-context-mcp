@@ -65,11 +65,13 @@ export class CodebaseSearcher {
 
       this.fuseIndex = new Fuse(this.chunks, {
         keys: [
-          { name: 'content', weight: 0.5 },
-          { name: 'metadata.componentName', weight: 0.3 },
-          { name: 'componentType', weight: 0.2 },
+          { name: 'content', weight: 0.4 },
+          { name: 'metadata.componentName', weight: 0.25 },
+          { name: 'filePath', weight: 0.15 },
+          { name: 'relativePath', weight: 0.15 },
+          { name: 'componentType', weight: 0.15 },
           { name: 'layer', weight: 0.1 },
-          { name: 'tags', weight: 0.2 },
+          { name: 'tags', weight: 0.15 },
         ],
         includeScore: true,
         threshold: 0.4,
@@ -257,10 +259,36 @@ export class CodebaseSearcher {
       });
     }
 
-    return fuseResults.slice(0, limit).map(r => ({
-      chunk: r.item,
-      score: 1 - (r.score || 0),
-    }));
+    return fuseResults.slice(0, limit).map(r => {
+      const chunk = r.item;
+      let score = 1 - (r.score || 0);
+      
+      // Boost exact matches on class name or file path
+      const queryLower = query.toLowerCase();
+      const fileName = path.basename(chunk.filePath).toLowerCase();
+      const relativePathLower = chunk.relativePath.toLowerCase();
+      const componentName = chunk.metadata?.componentName?.toLowerCase() || '';
+      
+      // Exact class name match
+      if (componentName && queryLower === componentName) {
+        score = Math.min(1.0, score + 0.3);
+      }
+      
+      // Exact file name match
+      if (fileName === queryLower || fileName.replace(/\.ts$/, '') === queryLower.replace(/\.ts$/, '')) {
+        score = Math.min(1.0, score + 0.2);
+      }
+      
+      // File path contains query
+      if (chunk.filePath.toLowerCase().includes(queryLower) || relativePathLower.includes(queryLower)) {
+        score = Math.min(1.0, score + 0.1);
+      }
+      
+      return {
+        chunk,
+        score,
+      };
+    });
   }
 
   private generateRelevanceReason(chunk: CodeChunk, query: string): string {
