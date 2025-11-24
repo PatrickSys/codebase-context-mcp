@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.codebase-index/
+.codebase-index.json
+*.log
+.DS_Store
+.env
+.vscode/
+*.swp
+*.swo
+*~

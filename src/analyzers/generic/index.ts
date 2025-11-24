@@ -1,0 +1,406 @@
+/**
+ * Generic code analyzer - handles any programming language as fallback
+ * Provides basic AST parsing and chunking for languages without specialized analyzers
+ */
+
+import { promises as fs } from 'fs';
+import path from 'path';
+import {
+  FrameworkAnalyzer,
+  AnalysisResult,
+  CodebaseMetadata,
+  CodeChunk,
+  CodeComponent,
+  ImportStatement,
+  ExportStatement,
+  Dependency,
+} from '../../types/index.js';
+import { createChunksFromCode } from '../../utils/chunking.js';
+import { detectLanguage } from '../../utils/language-detection.js';
+
+export class GenericAnalyzer implements FrameworkAnalyzer {
+  readonly name = 'generic';
+  readonly version = '1.0.0';
+  readonly supportedExtensions = [
+    // JavaScript/TypeScript
+    '.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs',
+    // Python
+    '.py', '.pyi',
+    // Java/Kotlin
+    '.java', '.kt', '.kts',
+    // C/C++
+    '.c', '.cpp', '.cc', '.cxx', '.h', '.hpp',
+    // C#
+    '.cs',
+    // Go
+    '.go',
+    // Rust
+    '.rs',
+    // PHP
+    '.php',
+    // Ruby
+    '.rb',
+    // Swift
+    '.swift',
+    // Scala
+    '.scala',
+    // Shell
+    '.sh', '.bash', '.zsh',
+    // Config
+    '.json', '.yaml', '.yml', '.toml', '.xml',
+    // Markup
+    '.html', '.htm', '.md', '.mdx',
+    // Styles
+    '.css', '.scss', '.sass', '.less',
+  ];
+  readonly priority = 10; // Low priority - fallback analyzer
+
+  canAnalyze(filePath: string, content?: string): boolean {
+    const ext = path.extname(filePath).toLowerCase();
+    return this.supportedExtensions.includes(ext);
+  }
+
+  async analyze(filePath: string, content: string): Promise<AnalysisResult> {
+    const language = detectLanguage(filePath);
+    const relativePath = path.relative(process.cwd(), filePath);
+
+    // Parse based on language
+    let components: CodeComponent[] = [];
+    let imports: ImportStatement[] = [];
+    let exports: ExportStatement[] = [];
+    
+    try {
+      if (language === 'typescript' || language === 'javascript') {
+        const parsed = await this.parseJSTSFile(filePath, content, language);
+        components = parsed.components;
+        imports = parsed.imports;
+        exports = parsed.exports;
+      } else {
+        // For other languages, use basic line-based parsing
+        components = this.parseGenericFile(content);
+      }
+    } catch (error) {
+      console.warn(`Failed to parse ${filePath}:`, error);
+    }
+
+    // Create chunks
+    const chunks = await createChunksFromCode(
+      content,
+      filePath,
+      relativePath,
+      language,
+      components
+    );
+
+    return {
+      filePath,
+      language,
+      components,
+      imports,
+      exports,
+      dependencies: [],
+      metadata: {
+        analyzer: this.name,
+        fileSize: content.length,
+        lineCount: content.split('\n').length,
+      },
+      chunks,
+    };
+  }
+
+  async detectCodebaseMetadata(rootPath: string): Promise<CodebaseMetadata> {
+    const packageJsonPath = path.join(rootPath, 'package.json');
+    let projectName = path.basename(rootPath);
+    let dependencies: Dependency[] = [];
+
+    try {
+      const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf-8'));
+      projectName = packageJson.name || projectName;
+      
+      // Extract dependencies
+      const allDeps = {
+        ...packageJson.dependencies,
+        ...packageJson.devDependencies,
+      };
+      
+      dependencies = Object.entries(allDeps).map(([name, version]) => ({
+        name,
+        version: version as string,
+        category: this.categorizeDependency(name),
+      }));
+    } catch (error) {
+      // No package.json or failed to read
+    }
+
+    return {
+      name: projectName,
+      rootPath,
+      languages: [],
+      dependencies,
+      architecture: {
+        type: 'mixed',
+        layers: {
+          presentation: 0,
+          business: 0,
+          data: 0,
+          state: 0,
+          core: 0,
+          shared: 0,
+          feature: 0,
+          infrastructure: 0,
+          unknown: 0,
+        },
+        patterns: [],
+      },
+      styleGuides: [],
+      documentation: [],
+      projectStructure: {
+        type: 'single-app',
+      },
+      statistics: {
+        totalFiles: 0,
+        totalLines: 0,
+        totalComponents: 0,
+        componentsByType: {},
+        componentsByLayer: {
+          presentation: 0,
+          business: 0,
+          data: 0,
+          state: 0,
+          core: 0,
+          shared: 0,
+          feature: 0,
+          infrastructure: 0,
+          unknown: 0,
+        },
+      },
+      customMetadata: {},
+    };
+  }
+
+  private async parseJSTSFile(
+    filePath: string,
+    content: string,
+    language: 'typescript' | 'javascript'
+  ): Promise<{
+    components: CodeComponent[];
+    imports: ImportStatement[];
+    exports: ExportStatement[];
+  }> {
+    const components: CodeComponent[] = [];
+    const imports: ImportStatement[] = [];
+    const exports: ExportStatement[] = [];
+
+    try {
+      // Use typescript-estree for parsing
+      const { parse } = await import('@typescript-eslint/typescript-estree');
+      const ast = parse(content, {
+        loc: true,
+        range: true,
+        comment: true,
+        jsx: filePath.endsWith('x'),
+      });
+
+      // Extract imports
+      for (const node of ast.body) {
+        if (node.type === 'ImportDeclaration' && node.source.value) {
+          imports.push({
+            source: node.source.value as string,
+            imports: node.specifiers.map((s: any) => {
+              if (s.type === 'ImportDefaultSpecifier') return 'default';
+              if (s.type === 'ImportNamespaceSpecifier') return '*';
+              return s.imported?.name || s.local.name;
+            }),
+            isDefault: node.specifiers.some((s: any) => s.type === 'ImportDefaultSpecifier'),
+            isDynamic: false,
+          });
+        }
+
+        // Extract components (classes, functions, interfaces)
+        if (node.type === 'ClassDeclaration' && node.id) {
+          components.push({
+            name: node.id.name,
+            type: 'class',
+            startLine: node.loc!.start.line,
+            endLine: node.loc!.end.line,
+            metadata: {},
+          });
+        }
+
+        if (node.type === 'FunctionDeclaration' && node.id) {
+          components.push({
+            name: node.id.name,
+            type: 'function',
+            startLine: node.loc!.start.line,
+            endLine: node.loc!.end.line,
+            metadata: {},
+          });
+        }
+
+        if (node.type === 'VariableDeclaration') {
+          for (const decl of node.declarations) {
+            if (decl.id.type === 'Identifier') {
+              // Check if it's an arrow function or function expression
+              const isFunction = decl.init && 
+                (decl.init.type === 'ArrowFunctionExpression' || 
+                 decl.init.type === 'FunctionExpression');
+              
+              components.push({
+                name: decl.id.name,
+                type: isFunction ? 'function' : 'variable',
+                startLine: decl.loc!.start.line,
+                endLine: decl.loc!.end.line,
+                metadata: {},
+              });
+            }
+          }
+        }
+
+        // Extract exports
+        if (node.type === 'ExportNamedDeclaration') {
+          if (node.declaration) {
+            if (node.declaration.type === 'VariableDeclaration') {
+              for (const decl of node.declaration.declarations) {
+                if (decl.id.type === 'Identifier') {
+                  exports.push({
+                    name: decl.id.name,
+                    isDefault: false,
+                    type: 'named',
+                  });
+                }
+              }
+            } else if ('id' in node.declaration && node.declaration.id) {
+              exports.push({
+                name: (node.declaration.id as any).name,
+                isDefault: false,
+                type: 'named',
+              });
+            }
+          }
+          
+          if (node.specifiers) {
+            for (const spec of node.specifiers) {
+              if (spec.type === 'ExportSpecifier') {
+                exports.push({
+                  name: spec.exported.name,
+                  isDefault: false,
+                  type: 'named',
+                });
+              }
+            }
+          }
+        }
+
+        if (node.type === 'ExportDefaultDeclaration') {
+          const name = node.declaration.type === 'Identifier' 
+            ? node.declaration.name 
+            : 'default';
+          exports.push({
+            name,
+            isDefault: true,
+            type: 'default',
+          });
+        }
+      }
+    } catch (error) {
+      console.warn(`Failed to parse JS/TS file ${filePath}:`, error);
+    }
+
+    return { components, imports, exports };
+  }
+
+  private parseGenericFile(content: string): CodeComponent[] {
+    const components: CodeComponent[] = [];
+    const lines = content.split('\n');
+
+    // Basic pattern matching for functions, classes, etc.
+    const patterns = [
+      // Functions: def, function, func, fn
+      { regex: /(?:^|\s)(?:def|function|func|fn)\s+(\w+)/i, type: 'function' },
+      // Classes: class, struct
+      { regex: /(?:^|\s)(?:class|struct|interface|trait)\s+(\w+)/i, type: 'class' },
+      // Methods: pub fn, pub fn, private func
+      { regex: /(?:pub|public|private|protected)?\s*(?:fn|func|function|def|method)\s+(\w+)/i, type: 'method' },
+    ];
+
+    lines.forEach((line, index) => {
+      for (const pattern of patterns) {
+        const match = line.match(pattern.regex);
+        if (match && match[1]) {
+          components.push({
+            name: match[1],
+            type: pattern.type,
+            startLine: index + 1,
+            endLine: index + 1, // Will be updated if we find end
+            metadata: {},
+          });
+        }
+      }
+    });
+
+    return components;
+  }
+
+  private categorizeDependency(name: string): any {
+    // Basic categorization
+    if (name.includes('test') || name.includes('jest') || name.includes('vitest')) {
+      return 'testing';
+    }
+    if (name.includes('eslint') || name.includes('prettier') || name.includes('lint')) {
+      return 'build';
+    }
+    if (name.startsWith('@types/')) {
+      return 'build';
+    }
+    return 'other';
+  }
+
+  /**
+   * Generate generic summary for any code chunk
+   */
+  summarize(chunk: CodeChunk): string {
+    const fileName = path.basename(chunk.filePath);
+    const { language, componentType, content } = chunk;
+
+    // Try to extract meaningful information
+    const firstComment = this.extractFirstComment(content);
+    if (firstComment) {
+      return `${language} ${componentType || 'code'} in ${fileName}: ${firstComment}`;
+    }
+
+    // Extract class/function names
+    const classMatch = content.match(/(?:class|struct|interface|trait)\s+(\w+)/);
+    const funcMatch = content.match(/(?:function|fn|func|def|method)\s+(\w+)/);
+
+    if (classMatch) {
+      return `${language} ${classMatch[0].split(/\s+/)[0]} '${classMatch[1]}' in ${fileName}.`;
+    }
+
+    if (funcMatch) {
+      return `${language} ${funcMatch[0].split(/\s+/)[0]} '${funcMatch[1]}' in ${fileName}.`;
+    }
+
+    // Fallback to first meaningful line
+    const firstLine = content
+      .split('\n')
+      .find(line => line.trim() && !line.trim().startsWith('import') && !line.trim().startsWith('//'));
+
+    return `${language} code in ${fileName}: ${firstLine ? firstLine.trim().slice(0, 60) + '...' : 'code definition'}`;
+  }
+
+  private extractFirstComment(content: string): string {
+    // Try JSDoc style
+    const jsdocMatch = content.match(/\/\*\*\s*\n?\s*\*\s*(.+?)(?:\n|\*\/)/);
+    if (jsdocMatch) return jsdocMatch[1].trim();
+
+    // Try Python docstring
+    const pythonMatch = content.match(/^[\s]*"""(.+?)"""/s);
+    if (pythonMatch) return pythonMatch[1].trim().split('\n')[0];
+
+    // Try single-line comment
+    const singleMatch = content.match(/^[\s]*\/\/\s*(.+?)$/m);
+    if (singleMatch) return singleMatch[1].trim();
+
+    return '';
+  }
+}
