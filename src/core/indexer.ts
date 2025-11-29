@@ -27,6 +27,7 @@ import {
   VectorStorageProvider,
   CodeChunkWithEmbedding,
 } from "../storage/index.js";
+import { LibraryUsageTracker, PatternDetector } from "../utils/usage-tracker.js";
 
 export interface IndexerOptions {
   rootPath: string;
@@ -170,6 +171,8 @@ export class CodebaseIndexer {
       // Phase 2: Analyzing & Parsing
       this.updateProgress("analyzing", 0);
       const allChunks: CodeChunk[] = [];
+      const libraryTracker = new LibraryUsageTracker();
+      const patternDetector = new PatternDetector();
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
@@ -187,6 +190,14 @@ export class CodebaseIndexer {
             allChunks.push(...result.chunks);
             stats.indexedFiles++;
             stats.totalLines += content.split("\n").length;
+
+            // Track library usage from imports
+            for (const imp of result.imports) {
+              libraryTracker.track(imp.source, file);
+            }
+
+            // Detect patterns from code
+            patternDetector.detectFromCode(content, file);
 
             // Update component statistics
             for (const component of result.components) {
@@ -301,6 +312,15 @@ export class CodebaseIndexer {
       // Write without pretty-printing to save memory
       await fs.writeFile(indexPath, JSON.stringify(chunksToEmbed));
 
+      // Save library usage and pattern stats
+      const intelligencePath = path.join(this.rootPath, ".codebase-intelligence.json");
+      const intelligence = {
+        libraryUsage: libraryTracker.getStats(),
+        patterns: patternDetector.getAllPatterns(),
+        generatedAt: new Date().toISOString(),
+      };
+      await fs.writeFile(intelligencePath, JSON.stringify(intelligence, null, 2));
+
       // Phase 5: Complete
       this.updateProgress("complete", 100);
 
@@ -396,55 +416,74 @@ export class CodebaseIndexer {
     // Try to use the most specific analyzer for metadata detection
     const primaryAnalyzer = analyzerRegistry.getAll()[0]; // Highest priority
 
+    let metadata: CodebaseMetadata;
     if (primaryAnalyzer) {
-      return await primaryAnalyzer.detectCodebaseMetadata(this.rootPath);
+      metadata = await primaryAnalyzer.detectCodebaseMetadata(this.rootPath);
+    } else {
+      // Fallback metadata
+      metadata = {
+        name: path.basename(this.rootPath),
+        rootPath: this.rootPath,
+        languages: [],
+        dependencies: [],
+        architecture: {
+          type: "mixed",
+          layers: {
+            presentation: 0,
+            business: 0,
+            data: 0,
+            state: 0,
+            core: 0,
+            shared: 0,
+            feature: 0,
+            infrastructure: 0,
+            unknown: 0,
+          },
+          patterns: [],
+        },
+        styleGuides: [],
+        documentation: [],
+        projectStructure: {
+          type: "single-app",
+        },
+        statistics: {
+          totalFiles: 0,
+          totalLines: 0,
+          totalComponents: 0,
+          componentsByType: {},
+          componentsByLayer: {
+            presentation: 0,
+            business: 0,
+            data: 0,
+            state: 0,
+            core: 0,
+            shared: 0,
+            feature: 0,
+            infrastructure: 0,
+            unknown: 0,
+          },
+        },
+        customMetadata: {},
+      };
     }
 
-    // Fallback metadata
-    return {
-      name: path.basename(this.rootPath),
-      rootPath: this.rootPath,
-      languages: [],
-      dependencies: [],
-      architecture: {
-        type: "mixed",
-        layers: {
-          presentation: 0,
-          business: 0,
-          data: 0,
-          state: 0,
-          core: 0,
-          shared: 0,
-          feature: 0,
-          infrastructure: 0,
-          unknown: 0,
-        },
-        patterns: [],
-      },
-      styleGuides: [],
-      documentation: [],
-      projectStructure: {
-        type: "single-app",
-      },
-      statistics: {
-        totalFiles: 0,
-        totalLines: 0,
-        totalComponents: 0,
-        componentsByType: {},
-        componentsByLayer: {
-          presentation: 0,
-          business: 0,
-          data: 0,
-          state: 0,
-          core: 0,
-          shared: 0,
-          feature: 0,
-          infrastructure: 0,
-          unknown: 0,
-        },
-      },
-      customMetadata: {},
-    };
+    // Load intelligence data if available
+    try {
+      const intelligencePath = path.join(this.rootPath, ".codebase-intelligence.json");
+      const intelligenceContent = await fs.readFile(intelligencePath, "utf-8");
+      const intelligence = JSON.parse(intelligenceContent);
+
+      metadata.customMetadata = {
+        ...metadata.customMetadata,
+        libraryUsage: intelligence.libraryUsage,
+        patterns: intelligence.patterns,
+        intelligenceGeneratedAt: intelligence.generatedAt,
+      };
+    } catch (error) {
+      // Intelligence file doesn't exist yet (indexing not run)
+    }
+
+    return metadata;
   }
 
   getProgress(): IndexingProgress {
