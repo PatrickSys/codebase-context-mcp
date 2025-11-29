@@ -9,6 +9,21 @@ npm install
 npm run build
 ```
 
+## Using the Published Package
+
+If you just want to use the tool (not develop it):
+
+```bash
+npm install -g codebase-context-mcp
+codebase-context /path/to/your/project
+```
+
+Or use npx:
+
+```bash
+npx codebase-context-mcp /path/to/your/project
+```
+
 ## Project Structure
 
 ```
@@ -22,6 +37,7 @@ src/
   embeddings/    # Transformers.js wrapper
   storage/       # LanceDB wrapper
   index.ts       # MCP server entry point
+  lib.ts         # Library exports for programmatic use
 ```
 
 ## What Would Help

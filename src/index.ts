@@ -49,7 +49,7 @@ function resolveRootPath(): string {
 
 const ROOT_PATH = resolveRootPath();
 
-interface IndexState {
+export interface IndexState {
   status: "idle" | "indexing" | "ready" | "error";
   lastIndexed?: Date;
   stats?: IndexingStats;
@@ -634,7 +634,18 @@ async function main() {
   console.error("Server ready");
 }
 
-main().catch((error) => {
-  console.error("Fatal:", error);
-  process.exit(1);
-});
+// Export server components for programmatic use
+export { server, performIndexing, resolveRootPath, shouldReindex, TOOLS };
+
+// Only auto-start when run directly as CLI (not when imported as module)
+// Check if this module is the entry point
+const isDirectRun =
+  process.argv[1]?.replace(/\\/g, "/").endsWith("index.js") ||
+  process.argv[1]?.replace(/\\/g, "/").endsWith("index.ts");
+
+if (isDirectRun) {
+  main().catch((error) => {
+    console.error("Fatal:", error);
+    process.exit(1);
+  });
+}

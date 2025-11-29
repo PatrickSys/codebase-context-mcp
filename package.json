@@ -1,14 +1,75 @@
 {
   "name": "codebase-context-mcp",
   "version": "1.0.0",
-  "description": "MCP server for semantic codebase indexing and search",
+  "description": "MCP server for semantic codebase indexing and search - gives AI agents real understanding of your codebase",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "./dist/lib.js",
+  "types": "./dist/lib.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/lib.js",
+      "types": "./dist/lib.d.ts"
+    },
+    "./server": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./analyzers/angular": {
+      "import": "./dist/analyzers/angular/index.js",
+      "types": "./dist/analyzers/angular/index.d.ts"
+    },
+    "./analyzers/generic": {
+      "import": "./dist/analyzers/generic/index.js",
+      "types": "./dist/analyzers/generic/index.d.ts"
+    },
+    "./embeddings": {
+      "import": "./dist/embeddings/index.js",
+      "types": "./dist/embeddings/index.d.ts"
+    },
+    "./storage": {
+      "import": "./dist/storage/index.js",
+      "types": "./dist/storage/index.d.ts"
+    }
+  },
   "bin": {
     "codebase-context": "./dist/index.js"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "semantic-search",
+    "codebase",
+    "indexing",
+    "embeddings",
+    "vector-search",
+    "angular",
+    "ai",
+    "llm",
+    "code-understanding",
+    "developer-tools"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PatrickSys/codebase-context-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/PatrickSys/codebase-context-mcp/issues"
+  },
+  "homepage": "https://github.com/PatrickSys/codebase-context-mcp#readme",
+  "author": "PatrickSys",
+  "license": "MIT",
   "scripts": {
     "build": "tsc",
+    "prepublishOnly": "npm run build",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
     "watch": "tsc -w"
