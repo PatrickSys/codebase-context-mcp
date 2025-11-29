@@ -7,6 +7,7 @@
 
 import { promises as fs } from "fs";
 import path from "path";
+import { glob } from "glob";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -24,7 +25,29 @@ import { GenericAnalyzer } from "./analyzers/generic/index.js";
 analyzerRegistry.register(new AngularAnalyzer());
 analyzerRegistry.register(new GenericAnalyzer());
 
-const ROOT_PATH = process.argv[2] || process.env.CODEBASE_ROOT || process.cwd();
+// Resolve root path with validation
+function resolveRootPath(): string {
+  const arg = process.argv[2];
+  const envPath = process.env.CODEBASE_ROOT;
+
+  // Priority: CLI arg > env var > cwd
+  let rootPath = arg || envPath || process.cwd();
+  rootPath = path.resolve(rootPath);
+
+  // Warn if using cwd as fallback
+  if (!arg && !envPath) {
+    console.error(
+      `WARNING: No project path specified. Using current directory: ${rootPath}`
+    );
+    console.error(
+      `Hint: Specify path as CLI argument or set CODEBASE_ROOT env var`
+    );
+  }
+
+  return rootPath;
+}
+
+const ROOT_PATH = resolveRootPath();
 
 interface IndexState {
   status: "idle" | "indexing" | "ready" | "error";
@@ -66,8 +89,8 @@ const TOOLS: Tool[] = [
         },
         limit: {
           type: "number",
-          description: "Maximum number of results to return (default: 10)",
-          default: 10,
+          description: "Maximum number of results to return (default: 5)",
+          default: 5,
         },
         filters: {
           type: "object",
@@ -114,8 +137,7 @@ const TOOLS: Tool[] = [
   },
   {
     name: "get_indexing_status",
-    description:
-      "Get the current indexing status and progress information.",
+    description: "Get the current indexing status and progress information.",
     inputSchema: {
       type: "object",
       properties: {},
@@ -180,9 +202,7 @@ async function performIndexing(): Promise<void> {
       rootPath: ROOT_PATH,
       onProgress: (progress) => {
         if (progress.percentage % 10 === 0) {
-          console.error(
-            `[${progress.phase}] ${progress.percentage}%`
-          );
+          console.error(`[${progress.phase}] ${progress.percentage}%`);
         }
       },
     });
@@ -195,7 +215,9 @@ async function performIndexing(): Promise<void> {
     indexState.stats = stats;
 
     console.error(
-      `Complete: ${stats.indexedFiles} files, ${stats.totalChunks} chunks in ${(stats.duration / 1000).toFixed(2)}s`
+      `Complete: ${stats.indexedFiles} files, ${stats.totalChunks} chunks in ${(
+        stats.duration / 1000
+      ).toFixed(2)}s`
     );
   } catch (error) {
     indexState.status = "error";
@@ -260,7 +282,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         const searcher = new CodebaseSearcher(ROOT_PATH);
-        const results = await searcher.search(query, limit || 10, filters);
+        const results = await searcher.search(query, limit || 5, filters);
 
         return {
           content: [
@@ -306,7 +328,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                         totalFiles: indexState.stats.totalFiles,
                         indexedFiles: indexState.stats.indexedFiles,
                         totalChunks: indexState.stats.totalChunks,
-                        duration: `${(indexState.stats.duration / 1000).toFixed(2)}s`,
+                        duration: `${(indexState.stats.duration / 1000).toFixed(
+                          2
+                        )}s`,
                       }
                     : undefined,
                   progress: progress
@@ -341,7 +365,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               text: JSON.stringify(
                 {
                   status: "started",
-                  message: "Re-indexing started. Check status with get_indexing_status.",
+                  message:
+                    "Re-indexing started. Check status with get_indexing_status.",
                   reason,
                 },
                 null,
@@ -387,17 +412,106 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           category?: string;
         };
 
+        const styleGuidePatterns = [
+          "STYLE_GUIDE.md",
+          "CODING_STYLE.md",
+          "ARCHITECTURE.md",
+          "CONTRIBUTING.md",
+          "docs/style-guide.md",
+          "docs/coding-style.md",
+          "docs/ARCHITECTURE.md",
+        ];
+
+        const foundGuides: Array<{
+          file: string;
+          content: string;
+          relevantSections: string[];
+        }> = [];
+        const queryLower = query.toLowerCase();
+        const queryTerms = queryLower.split(/\s+/);
+
+        for (const pattern of styleGuidePatterns) {
+          try {
+            const files = await glob(pattern, {
+              cwd: ROOT_PATH,
+              absolute: true,
+            });
+            for (const file of files) {
+              try {
+                // Normalize line endings to \n for consistent output
+                const rawContent = await fs.readFile(file, "utf-8");
+                const content = rawContent.replace(/\r\n/g, "\n");
+                const relativePath = path.relative(ROOT_PATH, file);
+
+                // Find relevant sections based on query
+                const sections = content.split(/^##\s+/m);
+                const relevantSections: string[] = [];
+
+                for (const section of sections) {
+                  const sectionLower = section.toLowerCase();
+                  const isRelevant = queryTerms.some((term) =>
+                    sectionLower.includes(term)
+                  );
+                  if (isRelevant) {
+                    // Limit section size to ~500 words
+                    const words = section.split(/\s+/);
+                    const truncated = words.slice(0, 500).join(" ");
+                    relevantSections.push(
+                      "## " +
+                        (words.length > 500
+                          ? truncated + "..."
+                          : section.trim())
+                    );
+                  }
+                }
+
+                if (relevantSections.length > 0) {
+                  foundGuides.push({
+                    file: relativePath,
+                    content: content.slice(0, 200) + "...",
+                    relevantSections: relevantSections.slice(0, 3), // Max 3 sections per file
+                  });
+                }
+              } catch (e) {
+                // Skip unreadable files
+              }
+            }
+          } catch (e) {
+            // Pattern didn't match, continue
+          }
+        }
+
+        if (foundGuides.length === 0) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(
+                  {
+                    status: "no_results",
+                    message: `No style guide content found matching: ${query}`,
+                    searchedPatterns: styleGuidePatterns,
+                    hint: "Try broader terms like 'naming', 'patterns', 'testing', 'components'",
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+        }
+
         return {
           content: [
             {
               type: "text",
               text: JSON.stringify(
                 {
-                  status: "not_implemented",
-                  message:
-                    "Style guide search not yet implemented",
+                  status: "success",
                   query,
                   category,
+                  results: foundGuides,
+                  totalFiles: foundGuides.length,
                 },
                 null,
                 2
@@ -478,6 +592,30 @@ async function main() {
       .map((a) => a.name)
       .join(", ")}`
   );
+
+  // Validate root path exists and is a directory
+  try {
+    const stats = await fs.stat(ROOT_PATH);
+    if (!stats.isDirectory()) {
+      console.error(`ERROR: Root path is not a directory: ${ROOT_PATH}`);
+      console.error(`Please specify a valid project directory.`);
+      process.exit(1);
+    }
+  } catch (error) {
+    console.error(`ERROR: Root path does not exist: ${ROOT_PATH}`);
+    console.error(`Please specify a valid project directory.`);
+    process.exit(1);
+  }
+
+  // Check for package.json to confirm it's a project root
+  try {
+    await fs.access(path.join(ROOT_PATH, "package.json"));
+    console.error(`Project detected: ${path.basename(ROOT_PATH)}`);
+  } catch {
+    console.error(
+      `WARNING: No package.json found. This may not be a project root.`
+    );
+  }
 
   const needsIndex = await shouldReindex();
 

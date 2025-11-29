@@ -2,13 +2,16 @@
  * Hybrid search combining semantic vector search with keyword matching
  */
 
-import Fuse from 'fuse.js';
-import path from 'path';
-import { promises as fs } from 'fs';
-import { CodeChunk, SearchResult, SearchFilters } from '../types/index.js';
-import { EmbeddingProvider, getEmbeddingProvider } from '../embeddings/index.js';
-import { VectorStorageProvider, getStorageProvider } from '../storage/index.js';
-import { analyzerRegistry } from './analyzer-registry.js';
+import Fuse from "fuse.js";
+import path from "path";
+import { promises as fs } from "fs";
+import { CodeChunk, SearchResult, SearchFilters } from "../types/index.js";
+import {
+  EmbeddingProvider,
+  getEmbeddingProvider,
+} from "../embeddings/index.js";
+import { VectorStorageProvider, getStorageProvider } from "../storage/index.js";
+import { analyzerRegistry } from "./analyzer-registry.js";
 
 export interface SearchOptions {
   useSemanticSearch?: boolean;
@@ -38,7 +41,7 @@ export class CodebaseSearcher {
 
   constructor(rootPath: string) {
     this.rootPath = rootPath;
-    this.storagePath = path.join(rootPath, '.codebase-index');
+    this.storagePath = path.join(rootPath, ".codebase-index");
   }
 
   async initialize(): Promise<void> {
@@ -48,30 +51,32 @@ export class CodebaseSearcher {
       await this.loadKeywordIndex();
 
       this.embeddingProvider = await getEmbeddingProvider();
-      this.storageProvider = await getStorageProvider({ path: this.storagePath });
+      this.storageProvider = await getStorageProvider({
+        path: this.storagePath,
+      });
 
       this.initialized = true;
     } catch (error) {
-      console.warn('Partial initialization (keyword search only):', error);
+      console.warn("Partial initialization (keyword search only):", error);
       this.initialized = true;
     }
   }
 
   private async loadKeywordIndex(): Promise<void> {
     try {
-      const indexPath = path.join(this.rootPath, '.codebase-index.json');
-      const content = await fs.readFile(indexPath, 'utf-8');
+      const indexPath = path.join(this.rootPath, ".codebase-index.json");
+      const content = await fs.readFile(indexPath, "utf-8");
       this.chunks = JSON.parse(content);
 
       this.fuseIndex = new Fuse(this.chunks, {
         keys: [
-          { name: 'content', weight: 0.4 },
-          { name: 'metadata.componentName', weight: 0.25 },
-          { name: 'filePath', weight: 0.15 },
-          { name: 'relativePath', weight: 0.15 },
-          { name: 'componentType', weight: 0.15 },
-          { name: 'layer', weight: 0.1 },
-          { name: 'tags', weight: 0.15 },
+          { name: "content", weight: 0.4 },
+          { name: "metadata.componentName", weight: 0.25 },
+          { name: "filePath", weight: 0.15 },
+          { name: "relativePath", weight: 0.15 },
+          { name: "componentType", weight: 0.15 },
+          { name: "layer", weight: 0.1 },
+          { name: "tags", weight: 0.15 },
         ],
         includeScore: true,
         threshold: 0.4,
@@ -79,7 +84,7 @@ export class CodebaseSearcher {
         ignoreLocation: true,
       });
     } catch (error) {
-      console.warn('Keyword index load failed:', error);
+      console.warn("Keyword index load failed:", error);
       this.chunks = [];
       this.fuseIndex = null;
     }
@@ -87,7 +92,7 @@ export class CodebaseSearcher {
 
   async search(
     query: string,
-    limit: number = 10,
+    limit: number = 5,
     filters?: SearchFilters,
     options: SearchOptions = DEFAULT_SEARCH_OPTIONS
   ): Promise<SearchResult[]> {
@@ -95,16 +100,26 @@ export class CodebaseSearcher {
       await this.initialize();
     }
 
-    const { useSemanticSearch, useKeywordSearch, semanticWeight, keywordWeight } = {
+    const {
+      useSemanticSearch,
+      useKeywordSearch,
+      semanticWeight,
+      keywordWeight,
+    } = {
       ...DEFAULT_SEARCH_OPTIONS,
       ...options,
     };
 
-    const results: Map<string, { chunk: CodeChunk; scores: number[] }> = new Map();
+    const results: Map<string, { chunk: CodeChunk; scores: number[] }> =
+      new Map();
 
     if (useSemanticSearch && this.embeddingProvider && this.storageProvider) {
       try {
-        const vectorResults = await this.semanticSearch(query, limit * 2, filters);
+        const vectorResults = await this.semanticSearch(
+          query,
+          limit * 2,
+          filters
+        );
 
         vectorResults.forEach((result) => {
           const id = result.chunk.id;
@@ -120,13 +135,17 @@ export class CodebaseSearcher {
           }
         });
       } catch (error) {
-        console.warn('Semantic search failed:', error);
+        console.warn("Semantic search failed:", error);
       }
     }
 
     if (useKeywordSearch && this.fuseIndex) {
       try {
-        const keywordResults = await this.keywordSearch(query, limit * 2, filters);
+        const keywordResults = await this.keywordSearch(
+          query,
+          limit * 2,
+          filters
+        );
 
         keywordResults.forEach((result) => {
           const id = result.chunk.id;
@@ -142,16 +161,31 @@ export class CodebaseSearcher {
           }
         });
       } catch (error) {
-        console.warn('Keyword search failed:', error);
+        console.warn("Keyword search failed:", error);
       }
     }
 
     const combinedResults: SearchResult[] = Array.from(results.entries())
       .map(([id, { chunk, scores }]) => {
-        const combinedScore = scores.reduce((sum, score) => sum + score, 0);
+        // Calculate base combined score
+        let combinedScore = scores.reduce((sum, score) => sum + score, 0);
+
+        // Normalize to 0-1 range (scores are already weighted)
+        // If both semantic and keyword matched, max possible is ~1.0
+        combinedScore = Math.min(1.0, combinedScore);
+
+        // Boost scores for Angular components with proper detection
+        if (chunk.componentType && chunk.framework === "angular") {
+          combinedScore = Math.min(1.0, combinedScore * 1.3);
+        }
+
+        // Boost if layer is detected
+        if (chunk.layer && chunk.layer !== "unknown") {
+          combinedScore = Math.min(1.0, combinedScore * 1.1);
+        }
 
         const summary = this.generateSummary(chunk);
-        const snippet = this.generateSnippet(chunk.content, 500);
+        const snippet = this.generateSnippet(chunk.content);
 
         return {
           summary,
@@ -181,25 +215,65 @@ export class CodebaseSearcher {
 
     if (analyzer && analyzer.summarize) {
       try {
-        return analyzer.summarize(chunk);
+        const summary = analyzer.summarize(chunk);
+        // Only use analyzer summary if it's meaningful (not the generic fallback)
+        if (
+          summary &&
+          !summary.startsWith("Code in ") &&
+          !summary.includes(": lines ")
+        ) {
+          return summary;
+        }
       } catch (error) {
-        console.warn('Analyzer summary failed:', error);
+        console.warn("Analyzer summary failed:", error);
       }
     }
 
+    // Enhanced generic summary
     const fileName = path.basename(chunk.filePath);
-    return `${chunk.language || 'Code'} in ${fileName}${chunk.componentType ? ` (${chunk.componentType})` : ''}: lines ${chunk.startLine}-${chunk.endLine}`;
+    const componentName = chunk.metadata?.componentName;
+    const componentType = chunk.componentType;
+
+    // Try to extract a meaningful name from content
+    const classMatch = chunk.content.match(
+      /(?:export\s+)?(?:class|interface|type|enum|function)\s+(\w+)/
+    );
+    const name = componentName || (classMatch ? classMatch[1] : null);
+
+    if (name && componentType) {
+      return `${
+        componentType.charAt(0).toUpperCase() + componentType.slice(1)
+      } '${name}' in ${fileName}.`;
+    } else if (name) {
+      return `'${name}' defined in ${fileName}.`;
+    } else if (componentType) {
+      return `${
+        componentType.charAt(0).toUpperCase() + componentType.slice(1)
+      } in ${fileName}.`;
+    }
+
+    // Last resort: describe the file type
+    const ext = path.extname(fileName).slice(1);
+    const langMap: Record<string, string> = {
+      ts: "TypeScript",
+      js: "JavaScript",
+      html: "HTML template",
+      scss: "SCSS styles",
+      css: "CSS styles",
+      json: "JSON config",
+    };
+    return `${langMap[ext] || ext.toUpperCase()} in ${fileName}.`;
   }
 
-  private generateSnippet(content: string, maxWords: number = 500): string {
-    const words = content.split(/\s+/);
-    if (words.length <= maxWords) {
+  private generateSnippet(content: string, maxLines: number = 100): string {
+    const lines = content.split("\n");
+    if (lines.length <= maxLines) {
       return content;
     }
 
-    const snippet = words.slice(0, maxWords).join(' ');
-    const remaining = words.length - maxWords;
-    return `${snippet}\n\n... [${remaining} more words]`;
+    const snippet = lines.slice(0, maxLines).join("\n");
+    const remaining = lines.length - maxLines;
+    return `${snippet}\n\n... [${remaining} more lines]`;
   }
 
   private async semanticSearch(
@@ -213,9 +287,13 @@ export class CodebaseSearcher {
 
     const queryVector = await this.embeddingProvider.embed(query);
 
-    const results = await this.storageProvider.search(queryVector, limit, filters);
+    const results = await this.storageProvider.search(
+      queryVector,
+      limit,
+      filters
+    );
 
-    return results.map(r => ({
+    return results.map((r) => ({
       chunk: r.chunk,
       score: r.score,
     }));
@@ -233,10 +311,13 @@ export class CodebaseSearcher {
     let fuseResults = this.fuseIndex.search(query);
 
     if (filters) {
-      fuseResults = fuseResults.filter(r => {
+      fuseResults = fuseResults.filter((r) => {
         const chunk = r.item;
 
-        if (filters.componentType && chunk.componentType !== filters.componentType) {
+        if (
+          filters.componentType &&
+          chunk.componentType !== filters.componentType
+        ) {
           return false;
         }
         if (filters.layer && chunk.layer !== filters.layer) {
@@ -250,7 +331,7 @@ export class CodebaseSearcher {
         }
         if (filters.tags && filters.tags.length > 0) {
           const chunkTags = chunk.tags || [];
-          if (!filters.tags.some(tag => chunkTags.includes(tag))) {
+          if (!filters.tags.some((tag) => chunkTags.includes(tag))) {
             return false;
           }
         }
@@ -259,31 +340,37 @@ export class CodebaseSearcher {
       });
     }
 
-    return fuseResults.slice(0, limit).map(r => {
+    return fuseResults.slice(0, limit).map((r) => {
       const chunk = r.item;
       let score = 1 - (r.score || 0);
-      
+
       // Boost exact matches on class name or file path
       const queryLower = query.toLowerCase();
       const fileName = path.basename(chunk.filePath).toLowerCase();
       const relativePathLower = chunk.relativePath.toLowerCase();
-      const componentName = chunk.metadata?.componentName?.toLowerCase() || '';
-      
+      const componentName = chunk.metadata?.componentName?.toLowerCase() || "";
+
       // Exact class name match
       if (componentName && queryLower === componentName) {
         score = Math.min(1.0, score + 0.3);
       }
-      
+
       // Exact file name match
-      if (fileName === queryLower || fileName.replace(/\.ts$/, '') === queryLower.replace(/\.ts$/, '')) {
+      if (
+        fileName === queryLower ||
+        fileName.replace(/\.ts$/, "") === queryLower.replace(/\.ts$/, "")
+      ) {
         score = Math.min(1.0, score + 0.2);
       }
-      
+
       // File path contains query
-      if (chunk.filePath.toLowerCase().includes(queryLower) || relativePathLower.includes(queryLower)) {
+      if (
+        chunk.filePath.toLowerCase().includes(queryLower) ||
+        relativePathLower.includes(queryLower)
+      ) {
         score = Math.min(1.0, score + 0.1);
       }
-      
+
       return {
         chunk,
         score,
@@ -303,14 +390,14 @@ export class CodebaseSearcher {
     }
 
     const queryLower = query.toLowerCase();
-    const matchingTags = (chunk.tags || []).filter(tag =>
+    const matchingTags = (chunk.tags || []).filter((tag) =>
       queryLower.includes(tag.toLowerCase())
     );
     if (matchingTags.length > 0) {
-      reasons.push(`tags: ${matchingTags.join(', ')}`);
+      reasons.push(`tags: ${matchingTags.join(", ")}`);
     }
 
-    return reasons.length > 0 ? reasons.join('; ') : 'content match';
+    return reasons.length > 0 ? reasons.join("; ") : "content match";
   }
 
   async getChunkCount(): Promise<number> {

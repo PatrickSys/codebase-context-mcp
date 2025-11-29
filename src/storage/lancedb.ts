@@ -107,7 +107,7 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
 
     try {
       // Build query
-      let query = this.table.search(queryVector).limit(limit);
+      let query = this.table.vectorSearch(queryVector).limit(limit);
 
       // Apply filters if provided
       if (filters) {

@@ -148,7 +148,20 @@ export class CodebaseIndexer {
     try {
       // Phase 1: Scanning
       this.updateProgress("scanning", 0);
-      const files = await this.scanFiles();
+      let files = await this.scanFiles();
+
+      // Memory safety: limit total files to prevent heap exhaustion
+      const MAX_FILES = 10000;
+      if (files.length > MAX_FILES) {
+        console.warn(
+          `WARNING: Found ${files.length} files, limiting to ${MAX_FILES} to prevent memory issues.`
+        );
+        console.warn(
+          `Consider using more specific include patterns or excluding large directories.`
+        );
+        files = files.slice(0, MAX_FILES);
+      }
+
       stats.totalFiles = files.length;
       this.progress.totalFiles = files.length;
 
@@ -165,7 +178,9 @@ export class CodebaseIndexer {
         this.progress.percentage = Math.round(((i + 1) / files.length) * 100);
 
         try {
-          const content = await fs.readFile(file, "utf-8");
+          // Normalize line endings to \n for consistent cross-platform output
+          const rawContent = await fs.readFile(file, "utf-8");
+          const content = rawContent.replace(/\r\n/g, "\n");
           const result = await analyzerRegistry.analyzeFile(file, content);
 
           if (result) {
@@ -210,9 +225,19 @@ export class CodebaseIndexer {
             )
           : 0;
 
+      // Memory safety: limit chunks to prevent embedding memory issues
+      const MAX_CHUNKS = 5000;
+      let chunksToEmbed = allChunks;
+      if (allChunks.length > MAX_CHUNKS) {
+        console.warn(
+          `WARNING: ${allChunks.length} chunks exceed limit. Indexing first ${MAX_CHUNKS} chunks.`
+        );
+        chunksToEmbed = allChunks.slice(0, MAX_CHUNKS);
+      }
+
       // Phase 3: Embedding
       this.updateProgress("embedding", 50);
-      console.log(`Creating embeddings for ${allChunks.length} chunks...`);
+      console.log(`Creating embeddings for ${chunksToEmbed.length} chunks...`);
 
       // Initialize embedding provider
       const embeddingProvider = await getEmbeddingProvider();
@@ -221,8 +246,8 @@ export class CodebaseIndexer {
       const chunksWithEmbeddings: CodeChunkWithEmbedding[] = [];
       const batchSize = 32;
 
-      for (let i = 0; i < allChunks.length; i += batchSize) {
-        const batch = allChunks.slice(i, i + batchSize);
+      for (let i = 0; i < chunksToEmbed.length; i += batchSize) {
+        const batch = chunksToEmbed.slice(i, i + batchSize);
         const texts = batch.map((chunk) => {
           // Create a searchable text representation
           const parts = [chunk.content];
@@ -245,13 +270,17 @@ export class CodebaseIndexer {
         }
 
         // Update progress
-        const embeddingProgress = 50 + Math.round((i / allChunks.length) * 25);
+        const embeddingProgress =
+          50 + Math.round((i / chunksToEmbed.length) * 25);
         this.updateProgress("embedding", embeddingProgress);
 
-        if ((i + batchSize) % 100 === 0 || i + batchSize >= allChunks.length) {
+        if (
+          (i + batchSize) % 100 === 0 ||
+          i + batchSize >= chunksToEmbed.length
+        ) {
           console.log(
-            `Embedded ${Math.min(i + batchSize, allChunks.length)}/${
-              allChunks.length
+            `Embedded ${Math.min(i + batchSize, chunksToEmbed.length)}/${
+              chunksToEmbed.length
             } chunks`
           );
         }
@@ -259,7 +288,7 @@ export class CodebaseIndexer {
 
       // Phase 4: Storing
       this.updateProgress("storing", 75);
-      console.log(`Storing ${allChunks.length} chunks...`);
+      console.log(`Storing ${chunksToEmbed.length} chunks...`);
 
       // Store in LanceDB for vector search
       const storagePath = path.join(this.rootPath, ".codebase-index");
@@ -267,9 +296,10 @@ export class CodebaseIndexer {
       await storageProvider.clear(); // Clear existing index
       await storageProvider.store(chunksWithEmbeddings);
 
-      // Also save JSON for keyword search (Fuse.js)
+      // Also save JSON for keyword search (Fuse.js) - use chunksToEmbed for consistency
       const indexPath = path.join(this.rootPath, ".codebase-index.json");
-      await fs.writeFile(indexPath, JSON.stringify(allChunks, null, 2));
+      // Write without pretty-printing to save memory
+      await fs.writeFile(indexPath, JSON.stringify(chunksToEmbed));
 
       // Phase 5: Complete
       this.updateProgress("complete", 100);

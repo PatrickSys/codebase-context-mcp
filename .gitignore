@@ -9,3 +9,9 @@ dist/
 *.swp
 *.swo
 *~
+.claude
+
+# Internal docs (not for public release)
+SPEC.md
+TODO.md
+.mcp.json
