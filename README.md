@@ -40,7 +40,7 @@ It indexes automatically on first run. After that, just ask naturally:
 
 ```
 "Find the auth guards"
-"Show me services in the data layer"  
+"Show me services in the data layer"
 "Where do we handle HTTP errors?"
 ```
 
@@ -52,18 +52,19 @@ It indexes automatically on first run. After that, just ask naturally:
 4. **Angular analyzer** extracts component types, architectural layers, patterns
 
 For Angular projects specifically, it detects:
+
 - Component types (components, services, guards, interceptors, pipes, directives)
 - Architectural layers (presentation, business, data, core, shared)
 - Modern patterns (signals, `inject()`, `@if`/`@for` control flow)
 
 ## Available Tools
 
-| Tool | What it does |
-|------|--------------|
-| `search_codebase` | Semantic search with optional filters by layer, component type, etc. |
-| `get_codebase_metadata` | Framework info, dependencies, architecture stats |
-| `get_style_guide` | Finds relevant sections from CONTRIBUTING.md, style guides, etc. |
-| `get_indexing_status` | Check if index is ready |
+| Tool                    | What it does                                                         |
+| ----------------------- | -------------------------------------------------------------------- |
+| `search_codebase`       | Semantic search with optional filters by layer, component type, etc. |
+| `get_codebase_metadata` | Framework info, dependencies, architecture stats                     |
+| `get_style_guide`       | Finds relevant sections from CONTRIBUTING.md, style guides, etc.     |
+| `get_indexing_status`   | Check if index is ready                                              |
 
 ## Requirements
 
@@ -73,33 +74,36 @@ For Angular projects specifically, it detects:
 
 ## Current State
 
-This is v1.0 - it works, I use it daily on Angular monorepos with 600+ files. 
+This is v1.0 - it works, I use it daily on Angular monorepos with 600+ files.
 
 **What's there:**
+
 - Semantic + keyword hybrid search
 - Angular-specific analysis with layer detection
 - Local embeddings via Transformers.js (no API keys needed)
 - LanceDB vector storage
 
 **What's coming:**
+
 - Incremental indexing (right now it re-indexes everything on restart)
 - React/Vue analyzers
 - Dependency graph analysis
 
 ## Why Not Just Use X?
 
-| | Cursor @codebase | Claude Code | This |
-|---|---|---|---|
-| Semantic search | ✅ | ❌ grep only | ✅ |
-| Framework-aware | ❌ | ❌ | ✅ Angular |
-| Privacy | ☁️ cloud | 💻 local | 💻 local |
-| Works with Claude | ❌ | ✅ | ✅ |
+|                   | Cursor @codebase | Claude Code  | This       |
+| ----------------- | ---------------- | ------------ | ---------- |
+| Semantic search   | ✅               | ❌ grep only | ✅         |
+| Framework-aware   | ❌               | ❌           | ✅ Angular |
+| Privacy           | ☁️ cloud         | 💻 local     | 💻 local   |
+| Works with Claude | ❌               | ✅           | ✅         |
 
 ## Contributing
 
 PRs welcome. The main things that would help:
+
 - React analyzer (biggest gap right now)
-- Vue analyzer  
+- Vue analyzer
 - Better search ranking algorithms
 - Tests
 

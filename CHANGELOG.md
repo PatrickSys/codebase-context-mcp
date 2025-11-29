@@ -14,5 +14,6 @@ Initial release.
 - No API keys required, runs 100% locally
 
 **Known limitations:**
+
 - Angular only (React/Vue analyzers not yet implemented)
 - Full re-index on every restart (no incremental indexing yet)
