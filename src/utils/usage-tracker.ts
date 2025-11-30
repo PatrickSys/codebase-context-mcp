@@ -57,7 +57,14 @@ export class LibraryUsageTracker {
   private categorizeLibrary(libName: string): string {
     const name = libName.toLowerCase();
 
-    if (name.includes('primeng') || name.includes('material') || name.includes('antd') || name.includes('ant-design')) {
+    // UI libraries - check first before framework catch-all
+    if (name.includes('primeng') ||
+        name.includes('prime/') ||  // @codeblue/prime/*
+        name.includes('material') ||
+        name.includes('antd') ||
+        name.includes('ant-design') ||
+        name.includes('syncfusion') ||
+        name.includes('devextreme')) {
       return 'ui';
     }
     if (name.includes('ngrx') || name.includes('redux') || name.includes('rxjs')) {
@@ -66,7 +73,10 @@ export class LibraryUsageTracker {
     if (name.includes('jest') || name.includes('jasmine') || name.includes('vitest')) {
       return 'testing';
     }
-    if (name.includes('angular') || name.includes('react') || name.includes('vue')) {
+    // Framework core libs (but NOT UI component libraries)
+    if ((name.includes('angular') || name.includes('react') || name.includes('vue')) &&
+        !name.includes('syncfusion') &&
+        !name.includes('material')) {
       return 'framework';
     }
     if (libName.startsWith('@') && !libName.startsWith('@angular') && !libName.startsWith('@react')) {
@@ -169,7 +179,7 @@ export class PatternDetector {
     }
 
     // Dependency injection (Angular)
-    if (filePath.endsWith('.component.ts')) {
+    if (filePath.endsWith('.component.ts') || filePath.endsWith('.service.ts')) {
       if (content.includes('inject(')) {
         this.track('dependencyInjection', 'inject() function');
       } else if (content.includes('constructor(') && content.includes('private')) {
@@ -177,10 +187,19 @@ export class PatternDetector {
       }
     }
 
+    // Component inputs (Angular)
+    if (filePath.endsWith('.component.ts')) {
+      if (content.includes('input(') || content.includes('input.required(')) {
+        this.track('componentInputs', 'Signal-based inputs');
+      } else if (content.includes('@Input()')) {
+        this.track('componentInputs', 'Decorator-based @Input');
+      }
+    }
+
     // State management
     if (content.includes('BehaviorSubject') || content.includes('ReplaySubject')) {
       this.track('stateManagement', 'RxJS Subjects');
-    } else if (content.includes('signal(')) {
+    } else if (content.includes('signal(') || content.includes('computed(')) {
       this.track('stateManagement', 'Angular Signals');
     } else if (content.includes('Store')) {
       this.track('stateManagement', 'NgRx Store');
