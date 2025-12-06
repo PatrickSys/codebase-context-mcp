@@ -27,7 +27,7 @@ import {
   VectorStorageProvider,
   CodeChunkWithEmbedding,
 } from "../storage/index.js";
-import { LibraryUsageTracker, PatternDetector } from "../utils/usage-tracker.js";
+import { LibraryUsageTracker, PatternDetector, ImportGraph } from "../utils/usage-tracker.js";
 
 export interface IndexerOptions {
   rootPath: string;
@@ -71,9 +71,6 @@ export class CodebaseIndexer {
         "dist/**",
         "build/**",
         ".git/**",
-        "**/*.spec.ts",
-        "**/*.test.ts",
-        "**/*.test.js",
         "coverage/**",
       ],
       respectGitignore: true,
@@ -81,7 +78,7 @@ export class CodebaseIndexer {
         maxFileSize: 1048576, // 1MB
         chunkSize: 100,
         chunkOverlap: 10,
-        parseTests: false,
+        parseTests: true,
         parseNodeModules: false,
       },
       styleGuides: {
@@ -166,13 +163,14 @@ export class CodebaseIndexer {
       stats.totalFiles = files.length;
       this.progress.totalFiles = files.length;
 
-      console.log(`Found ${files.length} files to index`);
+      console.error(`Found ${files.length} files to index`);
 
       // Phase 2: Analyzing & Parsing
       this.updateProgress("analyzing", 0);
       const allChunks: CodeChunk[] = [];
       const libraryTracker = new LibraryUsageTracker();
       const patternDetector = new PatternDetector();
+      const importGraph = new ImportGraph();
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
@@ -191,13 +189,65 @@ export class CodebaseIndexer {
             stats.indexedFiles++;
             stats.totalLines += content.split("\n").length;
 
-            // Track library usage from imports
+            // Track library usage AND import graph from imports
             for (const imp of result.imports) {
               libraryTracker.track(imp.source, file);
+              importGraph.trackImport(imp.source, file, imp.line || 1);
             }
 
-            // Detect patterns from code
+            // Detect generic patterns from code
             patternDetector.detectFromCode(content, file);
+
+            // Helper to extract code snippet around a pattern
+            const extractSnippet = (pattern: RegExp, linesBefore = 1, linesAfter = 3): string | undefined => {
+              const match = content.match(pattern);
+              if (!match) return undefined;
+              const lines = content.split('\n');
+              const matchIndex = content.substring(0, match.index).split('\n').length - 1;
+              const start = Math.max(0, matchIndex - linesBefore);
+              const end = Math.min(lines.length, matchIndex + linesAfter + 1);
+              return lines.slice(start, end).join('\n').trim();
+            };
+
+            const relPath = file.split(/[\\/]/).slice(-3).join('/');
+
+            // GENERIC PATTERN FORWARDING
+            // Framework analyzers return detectedPatterns in metadata - we just forward them
+            // This keeps the indexer framework-agnostic
+            if (result.metadata?.detectedPatterns) {
+              for (const pattern of result.metadata.detectedPatterns) {
+                // Try to extract a relevant snippet for the pattern
+                const snippetPattern = this.getSnippetPatternFor(pattern.category, pattern.name);
+                const snippet = snippetPattern ? extractSnippet(snippetPattern) : undefined;
+                patternDetector.track(pattern.category, pattern.name,
+                  snippet ? { file: relPath, snippet } : undefined);
+              }
+            }
+
+            // Track file for Golden File scoring (framework-agnostic based on patterns)
+            const detectedPatterns = result.metadata?.detectedPatterns || [];
+            const hasPattern = (category: string, name: string) =>
+              detectedPatterns.some((p: { category: string; name: string }) =>
+                p.category === category && p.name === name);
+
+            const patternScore = (
+              (hasPattern('dependencyInjection', 'inject() function') ? 1 : 0) +
+              (hasPattern('stateManagement', 'Signals') ? 1 : 0) +
+              (hasPattern('reactivity', 'Computed') ? 1 : 0) +
+              (hasPattern('reactivity', 'Effect') ? 1 : 0) +
+              (hasPattern('componentStyle', 'Standalone') ? 1 : 0) +
+              (hasPattern('componentInputs', 'Signal-based inputs') ? 1 : 0)
+            );
+            if (patternScore >= 3) {
+              patternDetector.trackGoldenFile(relPath, patternScore, {
+                inject: hasPattern('dependencyInjection', 'inject() function'),
+                signals: hasPattern('stateManagement', 'Signals'),
+                computed: hasPattern('reactivity', 'Computed'),
+                effect: hasPattern('reactivity', 'Effect'),
+                standalone: hasPattern('componentStyle', 'Standalone'),
+                signalInputs: hasPattern('componentInputs', 'Signal-based inputs'),
+              });
+            }
 
             // Update component statistics
             for (const component of result.components) {
@@ -231,9 +281,9 @@ export class CodebaseIndexer {
       stats.avgChunkSize =
         allChunks.length > 0
           ? Math.round(
-              allChunks.reduce((sum, c) => sum + c.content.length, 0) /
-                allChunks.length
-            )
+            allChunks.reduce((sum, c) => sum + c.content.length, 0) /
+            allChunks.length
+          )
           : 0;
 
       // Memory safety: limit chunks to prevent embedding memory issues
@@ -248,7 +298,7 @@ export class CodebaseIndexer {
 
       // Phase 3: Embedding
       this.updateProgress("embedding", 50);
-      console.log(`Creating embeddings for ${chunksToEmbed.length} chunks...`);
+      console.error(`Creating embeddings for ${chunksToEmbed.length} chunks...`);
 
       // Initialize embedding provider
       const embeddingProvider = await getEmbeddingProvider();
@@ -289,9 +339,8 @@ export class CodebaseIndexer {
           (i + batchSize) % 100 === 0 ||
           i + batchSize >= chunksToEmbed.length
         ) {
-          console.log(
-            `Embedded ${Math.min(i + batchSize, chunksToEmbed.length)}/${
-              chunksToEmbed.length
+          console.error(
+            `Embedded ${Math.min(i + batchSize, chunksToEmbed.length)}/${chunksToEmbed.length
             } chunks`
           );
         }
@@ -299,7 +348,7 @@ export class CodebaseIndexer {
 
       // Phase 4: Storing
       this.updateProgress("storing", 75);
-      console.log(`Storing ${chunksToEmbed.length} chunks...`);
+      console.error(`Storing ${chunksToEmbed.length} chunks...`);
 
       // Store in LanceDB for vector search
       const storagePath = path.join(this.rootPath, ".codebase-index");
@@ -314,9 +363,33 @@ export class CodebaseIndexer {
 
       // Save library usage and pattern stats
       const intelligencePath = path.join(this.rootPath, ".codebase-intelligence.json");
+      const libraryStats = libraryTracker.getStats();
+
+      // Extract tsconfig paths for AI to understand import aliases
+      let tsconfigPaths: Record<string, string[]> | undefined;
+      try {
+        const tsconfigPath = path.join(this.rootPath, "tsconfig.json");
+        const tsconfigContent = await fs.readFile(tsconfigPath, "utf-8");
+        const tsconfig = JSON.parse(tsconfigContent);
+        if (tsconfig.compilerOptions?.paths) {
+          tsconfigPaths = tsconfig.compilerOptions.paths;
+          console.error(`Found ${Object.keys(tsconfigPaths!).length} path aliases in tsconfig.json`);
+        }
+      } catch (error) {
+        // No tsconfig.json or no paths defined
+      }
+
       const intelligence = {
-        libraryUsage: libraryTracker.getStats(),
+        libraryUsage: libraryStats,
         patterns: patternDetector.getAllPatterns(),
+        goldenFiles: patternDetector.getGoldenFiles(5),
+        // tsconfig paths help AI understand import aliases (e.g., @mycompany/* -> libs/*)
+        // This reveals which @scoped packages are internal vs external
+        tsconfigPaths,
+        importGraph: {
+          usages: importGraph.getAllUsages(),
+          topUsed: importGraph.getTopUsed(30),
+        },
         generatedAt: new Date().toISOString(),
       };
       await fs.writeFile(intelligencePath, JSON.stringify(intelligence, null, 2));
@@ -327,8 +400,8 @@ export class CodebaseIndexer {
       stats.duration = Date.now() - startTime;
       stats.completedAt = new Date();
 
-      console.log(`Indexing complete in ${stats.duration}ms`);
-      console.log(
+      console.error(`Indexing complete in ${stats.duration}ms`);
+      console.error(
         `Indexed ${stats.indexedFiles} files, ${stats.totalChunks} chunks`
       );
 
@@ -484,6 +557,36 @@ export class CodebaseIndexer {
     }
 
     return metadata;
+  }
+
+  /**
+   * Get regex pattern for extracting code snippets based on pattern category and name
+   * This maps abstract pattern names to actual code patterns
+   */
+  private getSnippetPatternFor(category: string, name: string): RegExp | null {
+    const patterns: Record<string, Record<string, RegExp>> = {
+      dependencyInjection: {
+        'inject() function': /\binject\s*[<(]/,
+        'Constructor injection': /constructor\s*\(/,
+      },
+      stateManagement: {
+        'RxJS': /BehaviorSubject|ReplaySubject|Subject|Observable/,
+        'Signals': /\bsignal\s*[<(]/,
+      },
+      reactivity: {
+        'Effect': /\beffect\s*\(/,
+        'Computed': /\bcomputed\s*[<(]/,
+      },
+      componentStyle: {
+        'Standalone': /standalone\s*:\s*true/,
+        'NgModule-based': /@(?:Component|Directive|Pipe)\s*\(/,
+      },
+      componentInputs: {
+        'Signal-based inputs': /\binput\s*[<(]/,
+        'Decorator-based @Input': /@Input\(\)/,
+      },
+    };
+    return patterns[category]?.[name] || null;
   }
 
   getProgress(): IndexingProgress {

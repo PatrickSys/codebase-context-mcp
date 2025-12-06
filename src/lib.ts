@@ -21,7 +21,7 @@
  * // Create and run indexer
  * const indexer = new CodebaseIndexer({
  *   rootPath: '/path/to/project',
- *   onProgress: (progress) => console.log(progress)
+ *   onProgress: (progress) => console.error(progress)
  * });
  * const stats = await indexer.index();
  *
@@ -38,6 +38,7 @@ export {
   AnalyzerRegistry,
   analyzerRegistry,
 } from "./core/analyzer-registry.js";
+
 
 // Embedding providers
 export {

@@ -24,6 +24,8 @@ import { CodebaseSearcher } from "./core/search.js";
 import { analyzerRegistry } from "./core/analyzer-registry.js";
 import { AngularAnalyzer } from "./analyzers/angular/index.js";
 import { GenericAnalyzer } from "./analyzers/generic/index.js";
+import { FileWatcher, FileChangeEvent } from "./core/file-watcher.js";
+
 
 analyzerRegistry.register(new AngularAnalyzer());
 analyzerRegistry.register(new GenericAnalyzer());
@@ -63,6 +65,21 @@ export interface IndexState {
 const indexState: IndexState = {
   status: "idle",
 };
+
+// File watcher for auto-updates
+interface FileWatcherState {
+  enabled: boolean;
+  watcher: FileWatcher | null;
+  pendingChanges: number;
+  lastTriggered?: Date;
+}
+
+const watcherState: FileWatcherState = {
+  enabled: false,
+  watcher: null,
+  pendingChanges: 0,
+};
+
 
 const server = new Server(
   {
@@ -141,7 +158,9 @@ const TOOLS: Tool[] = [
   },
   {
     name: "get_indexing_status",
-    description: "Get the current indexing status and progress information.",
+    description:
+      "Get comprehensive indexing status: current state, file watcher status, and change tracking. " +
+      "Shows stale file count (files changed since last index) for incremental indexing decisions.",
     inputSchema: {
       type: "object",
       properties: {},
@@ -150,7 +169,8 @@ const TOOLS: Tool[] = [
   {
     name: "refresh_index",
     description:
-      "Trigger a complete re-indexing of the codebase. Use when index corruption is suspected.",
+      "Re-index the codebase. Supports full re-index or incremental mode. " +
+      "Use incrementalOnly=true to only process files changed since last index.",
     inputSchema: {
       type: "object",
       properties: {
@@ -158,9 +178,14 @@ const TOOLS: Tool[] = [
           type: "string",
           description: "Reason for refreshing the index (for logging)",
         },
+        incrementalOnly: {
+          type: "boolean",
+          description: "If true, only re-index files changed since last full index (faster). Default: false (full re-index)",
+        },
       },
     },
   },
+
   {
     name: "get_style_guide",
     description:
@@ -183,15 +208,40 @@ const TOOLS: Tool[] = [
     },
   },
   {
-    name: "get_analyzer_info",
+    name: "get_team_patterns",
     description:
-      "Get information about registered framework analyzers and their capabilities.",
+      "Get actionable team pattern recommendations based on codebase analysis. " +
+      "Returns consensus patterns for DI, state management, testing, library wrappers, etc.",
     inputSchema: {
       type: "object",
-      properties: {},
+      properties: {
+        category: {
+          type: "string",
+          description: "Pattern category to retrieve",
+          enum: ["all", "di", "state", "testing", "libraries"],
+        },
+      },
+    },
+  },
+  {
+    name: "get_component_usage",
+    description:
+      "Find WHERE a library or component is used in the codebase. " +
+      "This is 'Find Usages' - returns all files that import a given package/module. " +
+      "Example: get_component_usage('@mycompany/utils') → shows all 34 files using it.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: {
+          type: "string",
+          description: "Import source to find usages for (e.g., 'primeng/table', '@mycompany/ui/button', 'lodash')",
+        },
+      },
+      required: ["name"],
     },
   },
 ];
+
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return { tools: TOOLS };
@@ -236,58 +286,28 @@ async function generateCodebaseContext(): Promise<string> {
       .map(([lib, data]: [string, any]) => ({
         lib,
         count: data.count,
-        category: data.category,
       }))
       .sort((a, b) => b.count - a.count);
 
     if (libraryEntries.length > 0) {
-      lines.push("## Libraries Actually Used");
+      lines.push("## Libraries Actually Used (Top 15)");
       lines.push("");
 
-      const byCategory: Record<string, typeof libraryEntries> = {};
-      for (const entry of libraryEntries) {
-        const cat = entry.category || "other";
-        if (!byCategory[cat]) byCategory[cat] = [];
-        byCategory[cat].push(entry);
+      for (const { lib, count } of libraryEntries.slice(0, 15)) {
+        lines.push(`- **${lib}** (${count} uses)`);
       }
+      lines.push("");
+    }
 
-      // UI libraries first
-      if (byCategory.ui?.length) {
-        lines.push("### UI Components (What THIS Codebase Uses)");
-        for (const { lib, count } of byCategory.ui.slice(0, 5)) {
-          lines.push(`- **${lib}** (${count} uses) → USE THIS, not generic alternatives`);
-        }
-        lines.push("");
+    // Show tsconfig paths if available (helps AI understand internal imports)
+    if (intelligence.tsconfigPaths && Object.keys(intelligence.tsconfigPaths).length > 0) {
+      lines.push("## Import Aliases (from tsconfig.json)");
+      lines.push("");
+      lines.push("These path aliases map to internal project code:");
+      for (const [alias, paths] of Object.entries(intelligence.tsconfigPaths)) {
+        lines.push(`- \`${alias}\` → ${(paths as string[]).join(", ")}`);
       }
-
-      // Custom/internal libraries
-      if (byCategory.custom?.length) {
-        lines.push("### Custom/Internal Libraries");
-        for (const { lib, count } of byCategory.custom.slice(0, 5)) {
-          lines.push(
-            `- **${lib}** (${count} uses) - Internal library, import from here`
-          );
-        }
-        lines.push("");
-      }
-
-      // State management
-      if (byCategory.state?.length) {
-        lines.push("### State Management");
-        for (const { lib, count } of byCategory.state.slice(0, 3)) {
-          lines.push(`- **${lib}** (${count} uses)`);
-        }
-        lines.push("");
-      }
-
-      // Framework
-      const topFramework = byCategory.framework?.[0];
-      if (topFramework && topFramework.count > 50) {
-        lines.push(
-          `**Framework:** ${topFramework.lib} (heavily used - ${topFramework.count}+ imports)`
-        );
-        lines.push("");
-      }
+      lines.push("");
     }
 
     // Pattern consensus
@@ -499,6 +519,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "get_indexing_status": {
         const progress = indexState.indexer?.getProgress();
+        const watcherStats = watcherState.watcher?.getStats();
 
         return {
           content: [
@@ -511,23 +532,33 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   lastIndexed: indexState.lastIndexed?.toISOString(),
                   stats: indexState.stats
                     ? {
-                        totalFiles: indexState.stats.totalFiles,
-                        indexedFiles: indexState.stats.indexedFiles,
-                        totalChunks: indexState.stats.totalChunks,
-                        duration: `${(indexState.stats.duration / 1000).toFixed(
-                          2
-                        )}s`,
-                      }
+                      totalFiles: indexState.stats.totalFiles,
+                      indexedFiles: indexState.stats.indexedFiles,
+                      totalChunks: indexState.stats.totalChunks,
+                      duration: `${(indexState.stats.duration / 1000).toFixed(2)}s`,
+                    }
                     : undefined,
                   progress: progress
                     ? {
-                        phase: progress.phase,
-                        percentage: progress.percentage,
-                        filesProcessed: progress.filesProcessed,
-                        totalFiles: progress.totalFiles,
-                      }
+                      phase: progress.phase,
+                      percentage: progress.percentage,
+                      filesProcessed: progress.filesProcessed,
+                      totalFiles: progress.totalFiles,
+                    }
                     : undefined,
+                  fileWatcher: {
+                    enabled: watcherState.enabled,
+                    watching: watcherStats?.filesWatched ?? 0,
+                    changesDetected: watcherStats?.changesDetected ?? 0,
+                    pendingChanges: watcherState.pendingChanges,
+                    lastTriggered: watcherState.lastTriggered?.toISOString(),
+                  },
                   error: indexState.error,
+                  hint: watcherState.pendingChanges > 0
+                    ? `${watcherState.pendingChanges} file changes detected since last index. Consider refresh_index(incrementalOnly: true).`
+                    : watcherState.enabled
+                      ? "File watcher active. Index is up-to-date."
+                      : "File watcher disabled. Set WATCH_FILES=true to enable auto-updates.",
                 },
                 null,
                 2
@@ -538,10 +569,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "refresh_index": {
-        const { reason } = args as { reason?: string };
+        const { reason, incrementalOnly } = args as { reason?: string; incrementalOnly?: boolean };
 
-        console.error(`Refresh requested: ${reason || "Manual trigger"}`);
+        const mode = incrementalOnly ? "incremental" : "full";
+        console.error(`Refresh requested (${mode}): ${reason || "Manual trigger"}`);
 
+        // Reset pending changes counter
+        const previousPending = watcherState.pendingChanges;
+        watcherState.pendingChanges = 0;
+
+        // TODO: When incremental indexing is implemented (Phase 2),
+        // use `incrementalOnly` to only re-index changed files.
+        // For now, always do full re-index but acknowledge the intention.
         performIndexing();
 
         return {
@@ -551,9 +590,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               text: JSON.stringify(
                 {
                   status: "started",
-                  message:
-                    "Re-indexing started. Check status with get_indexing_status.",
+                  mode,
+                  message: incrementalOnly
+                    ? `Incremental re-indexing started (${previousPending} pending changes). Check status with get_indexing_status.`
+                    : "Full re-indexing started. Check status with get_indexing_status.",
                   reason,
+                  pendingChangesProcessed: previousPending,
+                  note: incrementalOnly
+                    ? "Incremental mode requested. Full re-index for now; true incremental indexing coming in Phase 2."
+                    : undefined,
                 },
                 null,
                 2
@@ -566,6 +611,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "get_codebase_metadata": {
         const indexer = new CodebaseIndexer({ rootPath: ROOT_PATH });
         const metadata = await indexer.detectMetadata();
+
+        // Load team patterns from intelligence file
+        let teamPatterns = {};
+        try {
+          const intelligencePath = path.join(ROOT_PATH, ".codebase-intelligence.json");
+          const intelligenceContent = await fs.readFile(intelligencePath, "utf-8");
+          const intelligence = JSON.parse(intelligenceContent);
+
+          if (intelligence.patterns) {
+            teamPatterns = {
+              dependencyInjection: intelligence.patterns.dependencyInjection,
+              stateManagement: intelligence.patterns.stateManagement,
+              componentInputs: intelligence.patterns.componentInputs,
+            };
+          }
+        } catch (error) {
+          // No intelligence file or parsing error
+        }
 
         return {
           content: [
@@ -582,6 +645,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     architecture: metadata.architecture,
                     projectStructure: metadata.projectStructure,
                     statistics: metadata.statistics,
+                    teamPatterns,
                   },
                 },
                 null,
@@ -644,9 +708,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     const truncated = words.slice(0, 500).join(" ");
                     relevantSections.push(
                       "## " +
-                        (words.length > 500
-                          ? truncated + "..."
-                          : section.trim())
+                      (words.length > 500
+                        ? truncated + "..."
+                        : section.trim())
                     );
                   }
                 }
@@ -706,30 +770,118 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           ],
         };
       }
+      case "get_team_patterns": {
+        const { category } = args as { category?: string };
 
-      case "get_analyzer_info": {
-        const analyzers = analyzerRegistry.getStats();
+        try {
+          const intelligencePath = path.join(ROOT_PATH, ".codebase-intelligence.json");
+          const content = await fs.readFile(intelligencePath, "utf-8");
+          const intelligence = JSON.parse(content);
 
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                {
+          const result: any = { status: "success" };
+
+          if (category === "all" || !category) {
+            result.patterns = intelligence.patterns || {};
+            result.goldenFiles = intelligence.goldenFiles || [];
+            if (intelligence.tsconfigPaths) {
+              result.tsconfigPaths = intelligence.tsconfigPaths;
+            }
+          } else if (category === "di") {
+            result.dependencyInjection = intelligence.patterns?.dependencyInjection;
+          } else if (category === "state") {
+            result.stateManagement = intelligence.patterns?.stateManagement;
+          } else if (category === "testing") {
+            result.testingFramework = intelligence.patterns?.testingFramework;
+            result.testMocking = intelligence.patterns?.testMocking;
+          } else if (category === "libraries") {
+            result.topUsed = intelligence.importGraph?.topUsed || [];
+            if (intelligence.tsconfigPaths) {
+              result.tsconfigPaths = intelligence.tsconfigPaths;
+            }
+          }
+
+          return {
+            content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  status: "error",
+                  message: "Failed to load team patterns",
+                  error: error instanceof Error ? error.message : String(error),
+                }, null, 2),
+              },
+            ],
+          };
+        }
+      }
+
+      case "get_component_usage": {
+        const { name: componentName } = args as { name: string };
+
+        try {
+          const intelligencePath = path.join(ROOT_PATH, ".codebase-intelligence.json");
+          const content = await fs.readFile(intelligencePath, "utf-8");
+          const intelligence = JSON.parse(content);
+
+          const importGraph = intelligence.importGraph || {};
+          const usages = importGraph.usages || {};
+
+          // Find matching usages (exact match or partial match)
+          let matchedUsage = usages[componentName];
+
+          // Try partial match if exact match not found
+          if (!matchedUsage) {
+            const matchingKeys = Object.keys(usages).filter(key =>
+              key.includes(componentName) || componentName.includes(key)
+            );
+            if (matchingKeys.length > 0) {
+              matchedUsage = usages[matchingKeys[0]];
+            }
+          }
+
+          if (matchedUsage) {
+            return {
+              content: [{
+                type: "text",
+                text: JSON.stringify({
                   status: "success",
-                  analyzers: analyzers.map((a) => ({
-                    name: a.name,
-                    priority: a.priority,
-                    supportedExtensions: a.extensions,
-                  })),
-                  total: analyzers.length,
-                },
-                null,
-                2
-              ),
-            },
-          ],
-        };
+                  component: componentName,
+                  usageCount: matchedUsage.usageCount,
+                  usedIn: matchedUsage.usedIn,
+                }, null, 2),
+              }],
+            };
+          } else {
+            // Show top used as alternatives
+            const topUsed = importGraph.topUsed || [];
+            return {
+              content: [{
+                type: "text",
+                text: JSON.stringify({
+                  status: "not_found",
+                  component: componentName,
+                  message: `No usages found for '${componentName}'.`,
+                  suggestions: topUsed.slice(0, 10),
+                }, null, 2),
+              }],
+            };
+          }
+        } catch (error) {
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                status: "error",
+                message: "Failed to get component usage. Run indexing first.",
+                error: error instanceof Error ? error.message : String(error),
+              }, null, 2),
+            }],
+          };
+        }
       }
 
       default:
@@ -812,6 +964,38 @@ async function main() {
     console.error("Index found. Ready.");
     indexState.status = "ready";
     indexState.lastIndexed = new Date();
+  }
+
+  // Auto-enable file watcher (disable with WATCH_FILES=false)
+  const watchEnabled = process.env.WATCH_FILES !== "false";
+  if (watchEnabled) {
+    try {
+      watcherState.watcher = new FileWatcher({
+        rootPath: ROOT_PATH,
+        verbose: process.env.WATCH_VERBOSE === "true",
+      });
+
+      watcherState.watcher.on("changes", async (changes: FileChangeEvent[]) => {
+        watcherState.pendingChanges += changes.length;
+        watcherState.lastTriggered = new Date();
+
+        console.error(`[FileWatcher] ${changes.length} file(s) changed, triggering re-index`);
+
+        if (indexState.status !== "indexing") {
+          performIndexing();
+        }
+      });
+
+      watcherState.watcher.on("error", (error) => {
+        console.error(`[FileWatcher] Error: ${error}`);
+      });
+
+      await watcherState.watcher.start();
+      watcherState.enabled = true;
+      console.error(`File watcher enabled (${watcherState.watcher.getStats().filesWatched} directories)`);
+    } catch (error) {
+      console.error(`File watcher failed to start: ${error}`);
+    }
   }
 
   const transport = new StdioServerTransport();

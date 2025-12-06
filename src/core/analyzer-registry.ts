@@ -16,7 +16,7 @@ export class AnalyzerRegistry {
     this.sortedAnalyzers = Array.from(this.analyzers.values())
       .sort((a, b) => b.priority - a.priority);
 
-    console.log(`Registered analyzer: ${analyzer.name} (priority: ${analyzer.priority})`);
+    console.error(`Registered analyzer: ${analyzer.name} (priority: ${analyzer.priority})`);
   }
 
   unregister(name: string): boolean {
@@ -69,7 +69,7 @@ export class AnalyzerRegistry {
       return null;
     }
 
-    console.log(`Analyzing ${filePath} with ${analyzer.name} analyzer`);
+    // console.error(`Analyzing ${filePath} with ${analyzer.name} analyzer`);
 
     try {
       return await analyzer.analyze(filePath, content);

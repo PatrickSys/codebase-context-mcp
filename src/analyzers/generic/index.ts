@@ -68,7 +68,7 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
     let components: CodeComponent[] = [];
     let imports: ImportStatement[] = [];
     let exports: ExportStatement[] = [];
-    
+
     try {
       if (language === 'typescript' || language === 'javascript') {
         const parsed = await this.parseJSTSFile(filePath, content, language);
@@ -116,13 +116,13 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
     try {
       const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf-8'));
       projectName = packageJson.name || projectName;
-      
+
       // Extract dependencies
       const allDeps = {
         ...packageJson.dependencies,
         ...packageJson.devDependencies,
       };
-      
+
       dependencies = Object.entries(allDeps).map(([name, version]) => ({
         name,
         version: version as string,
@@ -213,6 +213,7 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
             }),
             isDefault: node.specifiers.some((s: any) => s.type === 'ImportDefaultSpecifier'),
             isDynamic: false,
+            line: node.loc?.start.line,
           });
         }
 
@@ -241,10 +242,10 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
           for (const decl of node.declarations) {
             if (decl.id.type === 'Identifier') {
               // Check if it's an arrow function or function expression
-              const isFunction = decl.init && 
-                (decl.init.type === 'ArrowFunctionExpression' || 
-                 decl.init.type === 'FunctionExpression');
-              
+              const isFunction = decl.init &&
+                (decl.init.type === 'ArrowFunctionExpression' ||
+                  decl.init.type === 'FunctionExpression');
+
               components.push({
                 name: decl.id.name,
                 type: isFunction ? 'function' : 'variable',
@@ -277,7 +278,7 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
               });
             }
           }
-          
+
           if (node.specifiers) {
             for (const spec of node.specifiers) {
               if (spec.type === 'ExportSpecifier') {
@@ -292,8 +293,8 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
         }
 
         if (node.type === 'ExportDefaultDeclaration') {
-          const name = node.declaration.type === 'Identifier' 
-            ? node.declaration.name 
+          const name = node.declaration.type === 'Identifier'
+            ? node.declaration.name
             : 'default';
           exports.push({
             name,

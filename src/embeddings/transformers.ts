@@ -36,8 +36,8 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
 
   private async _initialize(): Promise<void> {
     try {
-      console.log(`Loading embedding model: ${this.modelName}`);
-      console.log("(First run will download ~130MB model)");
+      console.error(`Loading embedding model: ${this.modelName}`);
+      console.error("(First run will download ~130MB model)");
 
       // Dynamic import to avoid issues at require time
       const { pipeline } = await import("@xenova/transformers");
@@ -48,7 +48,7 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
       });
 
       this.ready = true;
-      console.log(`Model loaded successfully: ${this.modelName}`);
+      console.error(`Model loaded successfully: ${this.modelName}`);
     } catch (error) {
       console.error("Failed to initialize embedding model:", error);
       throw error;
@@ -96,7 +96,7 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
 
       // Log progress for large batches
       if (texts.length > 100 && (i + batchSize) % 100 === 0) {
-        console.log(
+        console.error(
           `Embedded ${Math.min(i + batchSize, texts.length)}/${
             texts.length
           } chunks`

@@ -39,11 +39,11 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
       const tableNames = await this.db.tableNames();
       if (tableNames.includes('code_chunks')) {
         this.table = await this.db.openTable('code_chunks');
-        console.log('Opened existing LanceDB table');
+        console.error('Opened existing LanceDB table');
       }
 
       this.initialized = true;
-      console.log(`LanceDB initialized at: ${storagePath}`);
+      console.error(`LanceDB initialized at: ${storagePath}`);
     } catch (error) {
       console.error('Failed to initialize LanceDB:', error);
       throw error;
@@ -89,7 +89,7 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
         });
       }
 
-      console.log(`Stored ${chunks.length} chunks in LanceDB`);
+      console.error(`Stored ${chunks.length} chunks in LanceDB`);
     } catch (error) {
       console.error('Failed to store chunks:', error);
       throw error;
@@ -173,7 +173,7 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
         this.table = null;
       }
 
-      console.log('Cleared LanceDB storage');
+      console.error('Cleared LanceDB storage');
     } catch (error) {
       console.error('Failed to clear storage:', error);
       throw error;

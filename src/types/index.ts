@@ -72,6 +72,7 @@ export interface ImportStatement {
   imports: string[];
   isDefault: boolean;
   isDynamic: boolean;
+  line?: number; // Line number for usage tracking
 }
 
 export interface ExportStatement {
@@ -87,7 +88,7 @@ export interface Dependency {
   layer?: ArchitecturalLayer;
 }
 
-export type DependencyCategory = 
+export type DependencyCategory =
   | 'framework'      // Angular, React, Vue core
   | 'state'          // State management (NgRx, Redux, Pinia)
   | 'ui'             // UI libraries (Material, Ant Design)
@@ -98,7 +99,7 @@ export type DependencyCategory =
   | 'build'          // Build tools
   | 'other';
 
-export type ArchitecturalLayer = 
+export type ArchitecturalLayer =
   | 'presentation'   // UI components, views
   | 'business'       // Business logic, services
   | 'data'          // Data access, API calls
@@ -138,37 +139,37 @@ export interface ChunkMetadata {
   decoratorType?: string;
   className?: string;
   functionName?: string;
-  
+
   // Framework-specific
   isStandalone?: boolean;
   selector?: string;
   template?: string;
   styles?: string[];
-  
+
   // Code quality metrics
   linesOfCode?: number;
   complexity?: number;
   cyclomaticComplexity?: number;
   maintainabilityIndex?: number;
-  
+
   // Testing
   hasTests?: boolean;
   testCoverage?: number;
-  
+
   // Relationships
   dependencies?: string[];
   dependents?: string[];
   relatedFiles?: string[];
-  
+
   // Patterns and practices
   patterns?: string[];
   antiPatterns?: string[];
   styleViolations?: string[];
-  
+
   // Custom tags for filtering
   tags?: string[];
   category?: string;
-  
+
   // Any framework-specific metadata
   [key: string]: any;
 }
@@ -373,7 +374,7 @@ export interface IndexingProgress {
   estimatedCompletion?: Date;
 }
 
-export type IndexingPhase = 
+export type IndexingPhase =
   | 'initializing'
   | 'scanning'
   | 'analyzing'
@@ -426,12 +427,12 @@ export interface CodebaseConfig {
     generic?: AnalyzerConfig;
     [key: string]: AnalyzerConfig | undefined;
   };
-  
+
   // File filtering
   include?: string[];
   exclude?: string[];
   respectGitignore?: boolean;
-  
+
   // Parsing options
   parsing: {
     maxFileSize?: number; // bytes
@@ -440,14 +441,14 @@ export interface CodebaseConfig {
     parseTests?: boolean;
     parseNodeModules?: boolean;
   };
-  
+
   // Style guides
   styleGuides?: {
     autoDetect?: boolean;
     paths?: string[];
     parseMarkdown?: boolean;
   };
-  
+
   // Documentation
   documentation?: {
     autoDetect?: boolean;
@@ -455,21 +456,21 @@ export interface CodebaseConfig {
     includeChangelogs?: boolean;
     customPaths?: string[];
   };
-  
+
   // Embedding
   embedding?: {
     provider?: 'transformers' | 'openai' | 'voyage' | 'ollama' | 'custom';
     model?: string;
     batchSize?: number;
   };
-  
+
   // Storage
   storage?: {
     provider?: 'lancedb' | 'milvus' | 'chromadb' | 'custom';
     path?: string;
     connection?: Record<string, any>;
   };
-  
+
   // Custom metadata
   customMetadata?: Record<string, any>;
 }

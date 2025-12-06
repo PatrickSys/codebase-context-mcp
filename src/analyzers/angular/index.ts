@@ -155,6 +155,7 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
               (s: any) => s.type === "ImportDefaultSpecifier"
             ),
             isDynamic: false,
+            line: node.loc?.start.line,
           });
 
           // Track dependencies
@@ -248,6 +249,62 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
       }
     );
 
+    // Build detected patterns for the indexer to forward
+    const detectedPatterns: Array<{ category: string; name: string }> = [];
+
+    // Dependency Injection pattern
+    if (modernPatterns.includes("injectFunction")) {
+      detectedPatterns.push({ category: "dependencyInjection", name: "inject() function" });
+    } else if (content.includes("constructor(") && content.includes("private") &&
+      (relativePath.endsWith(".service.ts") || relativePath.endsWith(".component.ts"))) {
+      detectedPatterns.push({ category: "dependencyInjection", name: "Constructor injection" });
+    }
+
+    // State Management pattern
+    if (/BehaviorSubject|ReplaySubject|Subject|Observable/.test(content)) {
+      detectedPatterns.push({ category: "stateManagement", name: "RxJS" });
+    }
+    if (modernPatterns.some((p) => p.startsWith("signal"))) {
+      detectedPatterns.push({ category: "stateManagement", name: "Signals" });
+    }
+
+    // Reactivity patterns
+    if (/\beffect\s*\(/.test(content)) {
+      detectedPatterns.push({ category: "reactivity", name: "Effect" });
+    }
+    if (/\bcomputed\s*[<(]/.test(content)) {
+      detectedPatterns.push({ category: "reactivity", name: "Computed" });
+    }
+
+    // Component Style pattern detection
+    // Logic: explicit standalone: true → Standalone
+    //        explicit standalone: false → NgModule-based
+    //        no explicit flag + uses modern patterns (inject, signals) → likely Standalone (Angular v19+ default)
+    //        no explicit flag + no modern patterns → ambiguous, don't classify
+    const hasExplicitStandalone = content.includes("standalone: true");
+    const hasExplicitNgModule = content.includes("standalone: false");
+    const usesModernPatterns = modernPatterns.includes("injectFunction") ||
+      modernPatterns.some(p => p.startsWith("signal"));
+
+    if (relativePath.endsWith("component.ts") || relativePath.endsWith("directive.ts") || relativePath.endsWith("pipe.ts")) {
+      if (hasExplicitStandalone) {
+        detectedPatterns.push({ category: "componentStyle", name: "Standalone" });
+      } else if (hasExplicitNgModule) {
+        detectedPatterns.push({ category: "componentStyle", name: "NgModule-based" });
+      } else if (usesModernPatterns) {
+        // No explicit flag but uses modern patterns → likely v19+ standalone default
+        detectedPatterns.push({ category: "componentStyle", name: "Standalone" });
+      }
+      // If no explicit flag and no modern patterns, don't classify (ambiguous)
+    }
+
+    // Input style pattern
+    if (modernPatterns.includes("signalInput")) {
+      detectedPatterns.push({ category: "componentInputs", name: "Signal-based inputs" });
+    } else if (content.includes("@Input()")) {
+      detectedPatterns.push({ category: "componentInputs", name: "Decorator-based @Input" });
+    }
+
     return {
       filePath,
       language: "typescript",
@@ -265,7 +322,10 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
         layer,
         statePattern,
         modernPatterns,
-        isStandalone: content.includes("standalone: true"),
+        // isStandalone: true if explicit standalone: true, or if uses modern patterns (implying v19+ default)
+        isStandalone: content.includes("standalone: true") ||
+          (!content.includes("standalone: false") &&
+            (modernPatterns.includes("injectFunction") || modernPatterns.some(p => p.startsWith("signal")))),
         hasRoutes:
           content.includes("RouterModule") || content.includes("routes"),
         usesSignals:
@@ -275,6 +335,12 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
           p.startsWith("controlFlow")
         ),
         usesInject: modernPatterns.includes("injectFunction"),
+        usesRxJS: /BehaviorSubject|ReplaySubject|Subject|Observable/.test(content),
+        usesEffect: /\beffect\s*\(/.test(content),
+        usesComputed: /\bcomputed\s*[<(]/.test(content),
+        componentType: components.length > 0 ? components[0].metadata.angularType : undefined,
+        // NEW: Patterns for the indexer to forward generically
+        detectedPatterns,
       },
       chunks,
     };
@@ -885,7 +951,7 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
       const indexContent = await fs.readFile(indexPath, "utf-8");
       const chunks = JSON.parse(indexContent);
 
-      console.log(
+      console.error(
         `Loading statistics from ${indexPath}: ${chunks.length} chunks`
       );
 
@@ -954,18 +1020,15 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
         const inputs = metadata.decorator?.inputs?.length || 0;
         const outputs = metadata.decorator?.outputs?.length || 0;
         const lifecycle = this.extractLifecycleMethods(content);
-        return `Angular component '${className}' (selector: ${selector})${
-          lifecycle ? ` with ${lifecycle}` : ""
-        }${inputs ? `, ${inputs} inputs` : ""}${
-          outputs ? `, ${outputs} outputs` : ""
-        }.`;
+        return `Angular component '${className}' (selector: ${selector})${lifecycle ? ` with ${lifecycle}` : ""
+          }${inputs ? `, ${inputs} inputs` : ""}${outputs ? `, ${outputs} outputs` : ""
+          }.`;
 
       case "service":
         const providedIn = metadata.decorator?.providedIn || "unknown";
         const methods = this.extractPublicMethods(content);
-        return `Angular service '${className}' (providedIn: ${providedIn})${
-          methods ? ` providing ${methods}` : ""
-        }.`;
+        return `Angular service '${className}' (providedIn: ${providedIn})${methods ? ` providing ${methods}` : ""
+          }.`;
 
       case "guard":
         const guardType = this.detectGuardType(content);
