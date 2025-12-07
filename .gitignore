@@ -10,3 +10,4 @@ dist/
 *.swo
 *~
 .claude
+internal-docs/

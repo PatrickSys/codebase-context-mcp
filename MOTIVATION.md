@@ -1,4 +1,4 @@
-# Why This Exists: Research & Evidence
+# Motivation: Why This Exists
 
 > **TL;DR**: AI coding assistants are smart but generic. They don't know YOUR codebase's patterns. This MCP gives them that context.
 
@@ -88,9 +88,7 @@ We're honest about what we don't solve:
 2. [GitClear 2024 AI Code Quality Report](https://www.gitclear.com/) — Code churn analysis
 3. [DORA State of DevOps 2024](https://dora.dev/research/2024/dora-report/) — Code churn as quality metric
 4. [Anthropic MCP](https://modelcontextprotocol.io/) — Protocol specification
-5. Internal validation on enterprise Angular codebase (611 files, 887 chunks indexed)
-
-📄 **[Research Notes](./research/06-arxiv-research.md)** — What I learned from the academic papers
+5. Internal validation on enterprise Angular medium-sized codebase
 
 ---
 

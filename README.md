@@ -217,11 +217,7 @@ We stay focused. Here's what we deliberately exclude:
 
 ## Why This Exists
 
-📄 **[Why This Exists: Evidence](./EVIDENCE.md)** — The research and pain points that led to this  
-📄 **[Research Notes](./research/06-arxiv-research.md)** — What I learned from the papers  
-📄 **[Competitive Analysis](./research/02-competitive-validation.md)** — How we compare to alternatives
-
----
+📄 **[Motivation](./MOTIVATION.md)** — The research and pain points that led to this
 
 ## License
 
