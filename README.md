@@ -163,7 +163,6 @@ npx codebase-context-mcp /path/to/your/project
 Or if installed globally:
 
 ```json
-```json
 {
   "codebase-context-mcp": {
     "command": "codebase-context",
@@ -206,11 +205,15 @@ We stay focused. Here's what we deliberately exclude:
 
 ## Known Limitations
 
-| Limitation | Status | Mitigation |
-|------------|--------|------------|
-| **Specialized patterns are Angular-only** | MVP | Generic analyzer works on any JS/TS, React/Vue specialists planned. |
-| **Single repo** | MVP | Multi-repo (Nx workspaces) planned for Phase 2. |
-| **Pattern frequency ≠ correctness** | By design | Shows team consensus, not "right" patterns. Combine with AGENTS.md. |
+Being honest about what this can't do (yet):
+
+| Limitation | Status | What to do about it |
+|------------|--------|---------------------|
+| **Specialized patterns are Angular-only** | MVP | Generic analyzer works on any JS/TS. React/Vue specialists are planned. |
+| **Single repo** | MVP | Multi-repo (Nx workspaces) planned. For now, point it at one repo at a time. |
+| **Pattern frequency ≠ correctness** | By design | We show team consensus, not "right" patterns. 97% inject() usage doesn't mean inject() is correct—it means that's what your team does. Combine with AGENTS.md for intent. |
+| **Index goes stale** | MVP | Re-index manually with `refresh_index` or restart the MCP. File watcher catches most changes, but major refactors need a full re-index. Lazy incremental indexing planned. |
+| **First index can be slow** | Depends | Uses local embeddings by default (downloads ~100MB model). Use `EMBEDDING_PROVIDER=openai` for faster startup if privacy isn't a concern. |
 
 
 ---
