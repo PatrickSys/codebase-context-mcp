@@ -24,7 +24,6 @@ import { CodebaseSearcher } from "./core/search.js";
 import { analyzerRegistry } from "./core/analyzer-registry.js";
 import { AngularAnalyzer } from "./analyzers/angular/index.js";
 import { GenericAnalyzer } from "./analyzers/generic/index.js";
-import { FileWatcher, FileChangeEvent } from "./core/file-watcher.js";
 
 
 analyzerRegistry.register(new AngularAnalyzer());
@@ -64,20 +63,6 @@ export interface IndexState {
 
 const indexState: IndexState = {
   status: "idle",
-};
-
-// File watcher for auto-updates
-interface FileWatcherState {
-  enabled: boolean;
-  watcher: FileWatcher | null;
-  pendingChanges: number;
-  lastTriggered?: Date;
-}
-
-const watcherState: FileWatcherState = {
-  enabled: false,
-  watcher: null,
-  pendingChanges: 0,
 };
 
 
@@ -159,8 +144,8 @@ const TOOLS: Tool[] = [
   {
     name: "get_indexing_status",
     description:
-      "Get comprehensive indexing status: current state, file watcher status, and change tracking. " +
-      "Shows stale file count (files changed since last index) for incremental indexing decisions.",
+      "Get current indexing status: state, statistics, and progress. " +
+      "Use refresh_index to manually trigger re-indexing when needed.",
     inputSchema: {
       type: "object",
       properties: {},
@@ -336,16 +321,16 @@ async function generateCodebaseContext(): Promise<string> {
         } else if (percentage >= 80) {
           lines.push(`### ${categoryName}: **${primary.name}** (${primary.frequency} - strong consensus)`);
           lines.push(`   → Your team strongly prefers ${primary.name}`);
-          if (patternData.alternatives?.length) {
-            const alt = patternData.alternatives[0];
+          if (patternData.alsoDetected?.length) {
+            const alt = patternData.alsoDetected[0];
             lines.push(`   → Minority pattern: ${alt.name} (${alt.frequency}) - avoid for new code`);
           }
         } else if (percentage >= 60) {
           lines.push(`### ${categoryName}: **${primary.name}** (${primary.frequency} - majority)`);
           lines.push(`   → Most code uses ${primary.name}, but not unanimous`);
-          if (patternData.alternatives?.length) {
+          if (patternData.alsoDetected?.length) {
             lines.push(
-              `   → Alternative exists: ${patternData.alternatives[0].name} (${patternData.alternatives[0].frequency})`
+              `   → Also detected: ${patternData.alsoDetected[0].name} (${patternData.alsoDetected[0].frequency})`
             );
           }
         } else {
@@ -353,8 +338,8 @@ async function generateCodebaseContext(): Promise<string> {
           lines.push(`### ${categoryName}: ⚠️ NO TEAM CONSENSUS`);
           lines.push(`   Your codebase is split between multiple approaches:`);
           lines.push(`   - ${primary.name} (${primary.frequency})`);
-          if (patternData.alternatives?.length) {
-            for (const alt of patternData.alternatives.slice(0, 2)) {
+          if (patternData.alsoDetected?.length) {
+            for (const alt of patternData.alsoDetected.slice(0, 2)) {
               lines.push(`   - ${alt.name} (${alt.frequency})`);
             }
           }
@@ -526,7 +511,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "get_indexing_status": {
         const progress = indexState.indexer?.getProgress();
-        const watcherStats = watcherState.watcher?.getStats();
 
         return {
           content: [
@@ -553,19 +537,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                       totalFiles: progress.totalFiles,
                     }
                     : undefined,
-                  fileWatcher: {
-                    enabled: watcherState.enabled,
-                    watching: watcherStats?.filesWatched ?? 0,
-                    changesDetected: watcherStats?.changesDetected ?? 0,
-                    pendingChanges: watcherState.pendingChanges,
-                    lastTriggered: watcherState.lastTriggered?.toISOString(),
-                  },
                   error: indexState.error,
-                  hint: watcherState.pendingChanges > 0
-                    ? `${watcherState.pendingChanges} file changes detected since last index. Consider refresh_index(incrementalOnly: true).`
-                    : watcherState.enabled
-                      ? "File watcher active. Index is up-to-date."
-                      : "File watcher disabled. Set WATCH_FILES=true to enable auto-updates.",
+                  hint: "Use refresh_index to manually trigger re-indexing when needed.",
                 },
                 null,
                 2
@@ -581,10 +554,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const mode = incrementalOnly ? "incremental" : "full";
         console.error(`Refresh requested (${mode}): ${reason || "Manual trigger"}`);
 
-        // Reset pending changes counter
-        const previousPending = watcherState.pendingChanges;
-        watcherState.pendingChanges = 0;
-
         // TODO: When incremental indexing is implemented (Phase 2),
         // use `incrementalOnly` to only re-index changed files.
         // For now, always do full re-index but acknowledge the intention.
@@ -599,10 +568,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   status: "started",
                   mode,
                   message: incrementalOnly
-                    ? `Incremental re-indexing started (${previousPending} pending changes). Check status with get_indexing_status.`
+                    ? "Incremental re-indexing requested. Check status with get_indexing_status."
                     : "Full re-indexing started. Check status with get_indexing_status.",
                   reason,
-                  pendingChangesProcessed: previousPending,
                   note: incrementalOnly
                     ? "Incremental mode requested. Full re-index for now; true incremental indexing coming in Phase 2."
                     : undefined,
@@ -971,38 +939,6 @@ async function main() {
     console.error("Index found. Ready.");
     indexState.status = "ready";
     indexState.lastIndexed = new Date();
-  }
-
-  // Auto-enable file watcher (disable with WATCH_FILES=false)
-  const watchEnabled = process.env.WATCH_FILES !== "false";
-  if (watchEnabled) {
-    try {
-      watcherState.watcher = new FileWatcher({
-        rootPath: ROOT_PATH,
-        verbose: process.env.WATCH_VERBOSE === "true",
-      });
-
-      watcherState.watcher.on("changes", async (changes: FileChangeEvent[]) => {
-        watcherState.pendingChanges += changes.length;
-        watcherState.lastTriggered = new Date();
-
-        console.error(`[FileWatcher] ${changes.length} file(s) changed, triggering re-index`);
-
-        if (indexState.status !== "indexing") {
-          performIndexing();
-        }
-      });
-
-      watcherState.watcher.on("error", (error) => {
-        console.error(`[FileWatcher] Error: ${error}`);
-      });
-
-      await watcherState.watcher.start();
-      watcherState.enabled = true;
-      console.error(`File watcher enabled (${watcherState.watcher.getStats().filesWatched} directories)`);
-    } catch (error) {
-      console.error(`File watcher failed to start: ${error}`);
-    }
   }
 
   const transport = new StdioServerTransport();

@@ -100,8 +100,8 @@ AGENTS.md tells the AI what you *want*. We show what you *actually do*—and sur
 | `search_codebase` | Semantic + keyword hybrid search |
 | `get_codebase_metadata` | Project structure + patterns summary |
 | `get_style_guide` | Style guide content lookup |
-| `get_indexing_status` | Index state + file watcher status + pending changes |
-| `refresh_index` | Re-index (supports `incrementalOnly: true` for faster updates) |
+| `get_indexing_status` | Index state and progress |
+| `refresh_index` | Re-index the codebase (supports `incrementalOnly: true` for Phase 2) |
 
 
 
@@ -132,8 +132,6 @@ AGENTS.md tells the AI what you *want*. We show what you *actually do*—and sur
 - **Future**: React, Vue analyzers planned; tree-sitter integration for true multi-language AST support.
 
 > **Current focus**: JS/TS codebases with Angular as the primary specialized analyzer. The architecture is designed to be language-agnostic with pluggable analyzers—that's the mid-term vision.
-
-File watcher auto-enabled by default. Disable with `WATCH_FILES=false`.
 
 ---
 
@@ -183,7 +181,6 @@ Or if installed globally:
 |----------|---------|-------------|
 | `EMBEDDING_PROVIDER` | `transformers` | Set to `openai` to use OpenAI's API (faster, lighter) or `transformers` for local (private, free). |
 | `OPENAI_API_KEY` | - | Required if provider is `openai`. |
-| `WATCH_FILES` | `true` | Set to `false` to disable the file watcher. |
 
 **Why use OpenAI?**
 - **Faster**: No need to download/run local 100MB+ models.
@@ -213,7 +210,7 @@ We stay focused. Here's what we deliberately exclude:
 | **Specialized patterns are Angular-only** | MVP | React/Vue specialists are planned. The pluggable architecture makes this extensible. |
 | **Single repo** | MVP | Multi-repo (Nx workspaces) planned. For now, point it at one repo at a time. |
 | **Pattern frequency ≠ correctness** | By design | We show team consensus, not "right" patterns. 97% inject() usage doesn't mean inject() is correct—it means that's what your team does. Combine with AGENTS.md for intent. |
-| **Index goes stale** | MVP | Re-index manually with `refresh_index` or restart the MCP. File watcher catches most changes, but major refactors need a full re-index. Lazy incremental indexing planned. |
+| **Index goes stale** | MVP | Re-index manually with `refresh_index` or restart the MCP. Incremental indexing planned for Phase 2. |
 | **First index can be slow** | Depends | Uses local embeddings by default (downloads ~100MB model). Use `EMBEDDING_PROVIDER=openai` for faster startup if privacy isn't a concern. |
 
 
@@ -221,7 +218,7 @@ We stay focused. Here's what we deliberately exclude:
 
 ## Why This Exists
 
-📄 **[Motivation](./MOTIVATION.md)** — The research and pain points that led to this
+📄 **[Motivation](./MOTIVATION.md)** - The research and pain points that led to this
 
 ## License
 

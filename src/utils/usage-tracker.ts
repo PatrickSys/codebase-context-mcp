@@ -19,7 +19,7 @@ export interface PatternUsageStats {
       examples: string[];
       canonicalExample?: { file: string; snippet: string };
     };
-    alternatives?: Array<{
+    alsoDetected?: Array<{
       name: string;
       count: number;
       frequency: string;
@@ -311,7 +311,7 @@ export class PatternDetector {
     };
 
     if (sorted.length > 1) {
-      result.alternatives = sorted.slice(1, 3).map(([name, count]) => ({
+      result.alsoDetected = sorted.slice(1, 3).map(([name, count]) => ({
         name,
         count,
         frequency: `${Math.round((count / total) * 100)}%`,

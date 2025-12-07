@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.1 (2025-12-07)
+
+### Removed
+
+- File watcher feature removed (will be reintroduced with incremental indexing support)
+
+---
+
 ## 1.2.0 (2025-12-06)
 
 ### Added
@@ -14,15 +22,11 @@
   - `topUsed` array shows usage ratios (e.g., `@mycompany/ui: 847` vs `primeng: 3`)
   - Exposes tsconfig paths so AI can identify internal vs external imports
 
-- **Enhanced `get_indexing_status`**: Now includes file watcher stats and pending changes
-  - Shows `pendingChanges` count (files changed since last index)
-  - Provides actionable hints for re-indexing decisions
-
-- **`incrementalOnly` option for `refresh_index`**: API ready for Phase 2 incremental indexing
+- **`incrementalOnly` option for `refresh_index`**: API ready for incremental indexing
 
 ### Changed
 
-- **Framework-agnostic architecture clarified**: Works on ANY project, Angular as first specialized analyzer
+- **Framework-agnostic architecture**: Works on ANY project, Angular as first specialized analyzer
   - Generic analyzer supports 32 file extensions (JS, TS, Python, Java, Go, Rust, etc.)
   - Angular patterns (inject, signals, standalone) are specialized intelligence, not a requirement
 
@@ -33,22 +37,19 @@
 
 - **Indexer now forwards patterns generically**: Keeps core framework-agnostic
 
-- README updated with correct "works on any project" messaging
-
-
 ---
 
 ## 1.1.0 (2025-12-05)
 
 ### Added
-- **Testing framework detection**: Detects Jest, Jasmine/Karma, Vitest, Cypress, Playwright from actual code patterns (not just package.json)
-- **Golden Files**: Surfaces files that demonstrate all team patterns together—one file for AI to mimic
+- **Testing framework detection**: Detects Jest, Jasmine/Karma, Vitest, Cypress, Playwright from actual code patterns
+- **Golden Files**: Surfaces files that demonstrate all team patterns together
 - **Wrapper recommendations**: Exposes library wrapper detection in `get_team_patterns` response
 - **Test utilities tracking**: Detects ng-mocks, MSW, Testing Library usage
 
 ### Changed
-- Framework-agnostic indexer: Pattern detection moved into framework analyzers, indexer just forwards
-- Test files now parsed for pattern detection (`parseTests: true`)
+- Framework-agnostic indexer: Pattern detection moved into framework analyzers
+- Test files now parsed for pattern detection
 
 ### Removed
 - `get_analyzer_info` tool: Provided no user value—pure implementation details that wasted context window
@@ -67,8 +68,3 @@ Initial release.
 - LanceDB vector storage
 - Auto-indexes on startup
 - No API keys required, runs 100% locally
-
-**Known limitations:**
-
-- Angular only (React/Vue analyzers not yet implemented)
-- Full re-index on every restart (no incremental indexing yet)
