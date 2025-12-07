@@ -125,11 +125,13 @@ AGENTS.md tells the AI what you *want*. We show what you *actually do*—and sur
   Signals, etc.)       components)
 ```
 
-**Framework-agnostic core** with specialized analyzers:
+**Pluggable analyzer architecture** with a generic base:
 
-- **Generic Analyzer**: Works on ANY project (JS, TS, Python, Java, Go, Rust, etc.)
+- **Generic Analyzer**: Handles any JS/TS project (import graph, patterns, usage tracking). For other languages (Python, Go, Rust), basic chunking works but deep pattern detection requires dedicated analyzers.
 - **Angular Analyzer**: Specialized patterns (inject, signals, standalone, etc.)
-- **Future**: React, Vue analyzers planned
+- **Future**: React, Vue analyzers planned; tree-sitter integration for true multi-language AST support.
+
+> **Current focus**: JS/TS codebases with Angular as the primary specialized analyzer. The architecture is designed to be language-agnostic with pluggable analyzers—that's the mid-term vision.
 
 File watcher auto-enabled by default. Disable with `WATCH_FILES=false`.
 
@@ -205,11 +207,10 @@ We stay focused. Here's what we deliberately exclude:
 
 ## Known Limitations
 
-Being honest about what this can't do (yet):
-
 | Limitation | Status | What to do about it |
 |------------|--------|---------------------|
-| **Specialized patterns are Angular-only** | MVP | Generic analyzer works on any JS/TS. React/Vue specialists are planned. |
+| **Deep patterns are JS/TS only** | MVP | Generic analyzer handles any language for search/chunking, but real AST-based pattern detection uses TypeScript parser. Tree-sitter integration planned for multi-language support. |
+| **Specialized patterns are Angular-only** | MVP | React/Vue specialists are planned. The pluggable architecture makes this extensible. |
 | **Single repo** | MVP | Multi-repo (Nx workspaces) planned. For now, point it at one repo at a time. |
 | **Pattern frequency ≠ correctness** | By design | We show team consensus, not "right" patterns. 97% inject() usage doesn't mean inject() is correct—it means that's what your team does. Combine with AGENTS.md for intent. |
 | **Index goes stale** | MVP | Re-index manually with `refresh_index` or restart the MCP. File watcher catches most changes, but major refactors need a full re-index. Lazy incremental indexing planned. |
