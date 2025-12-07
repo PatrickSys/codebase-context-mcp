@@ -21,7 +21,7 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
   private ready = false;
   private initPromise: Promise<void> | null = null;
 
-  constructor(modelName: string = "Xenova/bge-base-en-v1.5") {
+  constructor(modelName: string = "Xenova/bge-small-en-v1.5") {
     this.modelName = modelName;
     this.dimensions = MODEL_CONFIGS[modelName]?.dimensions || 384;
   }
@@ -83,7 +83,7 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
     const embeddings: number[][] = [];
 
     // Process in smaller batches to manage memory
-    const batchSize = 8;
+    const batchSize = 32;
     for (let i = 0; i < texts.length; i += batchSize) {
       const batch = texts.slice(i, i + batchSize);
 
@@ -97,8 +97,7 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
       // Log progress for large batches
       if (texts.length > 100 && (i + batchSize) % 100 === 0) {
         console.error(
-          `Embedded ${Math.min(i + batchSize, texts.length)}/${
-            texts.length
+          `Embedded ${Math.min(i + batchSize, texts.length)}/${texts.length
           } chunks`
         );
       }

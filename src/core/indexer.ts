@@ -96,6 +96,7 @@ export class CodebaseIndexer {
         model: "Xenova/bge-base-en-v1.5",
         batchSize: 100,
       },
+      skipEmbedding: false,
       storage: {
         provider: "lancedb",
         path: "./codebase-index",
@@ -297,64 +298,72 @@ export class CodebaseIndexer {
       }
 
       // Phase 3: Embedding
-      this.updateProgress("embedding", 50);
-      console.error(`Creating embeddings for ${chunksToEmbed.length} chunks...`);
+      let chunksWithEmbeddings: CodeChunkWithEmbedding[] = [];
 
-      // Initialize embedding provider
-      const embeddingProvider = await getEmbeddingProvider();
+      if (!this.config.skipEmbedding) {
+        this.updateProgress("embedding", 50);
+        console.error(`Creating embeddings for ${chunksToEmbed.length} chunks...`);
 
-      // Generate embeddings for all chunks
-      const chunksWithEmbeddings: CodeChunkWithEmbedding[] = [];
-      const batchSize = 32;
+        // Initialize embedding provider
+        const embeddingProvider = await getEmbeddingProvider(this.config.embedding);
 
-      for (let i = 0; i < chunksToEmbed.length; i += batchSize) {
-        const batch = chunksToEmbed.slice(i, i + batchSize);
-        const texts = batch.map((chunk) => {
-          // Create a searchable text representation
-          const parts = [chunk.content];
-          if (chunk.metadata?.componentName) {
-            parts.unshift(`Component: ${chunk.metadata.componentName}`);
-          }
-          if (chunk.componentType) {
-            parts.unshift(`Type: ${chunk.componentType}`);
-          }
-          return parts.join("\n");
-        });
+        // Generate embeddings for all chunks
+        const batchSize = this.config.embedding?.batchSize || 32;
 
-        const embeddings = await embeddingProvider.embedBatch(texts);
-
-        for (let j = 0; j < batch.length; j++) {
-          chunksWithEmbeddings.push({
-            ...batch[j],
-            embedding: embeddings[j],
+        for (let i = 0; i < chunksToEmbed.length; i += batchSize) {
+          const batch = chunksToEmbed.slice(i, i + batchSize);
+          const texts = batch.map((chunk) => {
+            // Create a searchable text representation
+            const parts = [chunk.content];
+            if (chunk.metadata?.componentName) {
+              parts.unshift(`Component: ${chunk.metadata.componentName}`);
+            }
+            if (chunk.componentType) {
+              parts.unshift(`Type: ${chunk.componentType}`);
+            }
+            return parts.join("\n");
           });
-        }
 
-        // Update progress
-        const embeddingProgress =
-          50 + Math.round((i / chunksToEmbed.length) * 25);
-        this.updateProgress("embedding", embeddingProgress);
+          const embeddings = await embeddingProvider.embedBatch(texts);
 
-        if (
-          (i + batchSize) % 100 === 0 ||
-          i + batchSize >= chunksToEmbed.length
-        ) {
-          console.error(
-            `Embedded ${Math.min(i + batchSize, chunksToEmbed.length)}/${chunksToEmbed.length
-            } chunks`
-          );
+          for (let j = 0; j < batch.length; j++) {
+            chunksWithEmbeddings.push({
+              ...batch[j],
+              embedding: embeddings[j],
+            });
+          }
+
+          // Update progress
+          const embeddingProgress =
+            50 + Math.round((i / chunksToEmbed.length) * 25);
+          this.updateProgress("embedding", embeddingProgress);
+
+          if (
+            (i + batchSize) % 100 === 0 ||
+            i + batchSize >= chunksToEmbed.length
+          ) {
+            console.error(
+              `Embedded ${Math.min(i + batchSize, chunksToEmbed.length)}/${chunksToEmbed.length
+              } chunks`
+            );
+          }
         }
+      } else {
+        console.error("Skipping embedding generation (skipEmbedding=true)");
       }
 
       // Phase 4: Storing
       this.updateProgress("storing", 75);
-      console.error(`Storing ${chunksToEmbed.length} chunks...`);
 
-      // Store in LanceDB for vector search
-      const storagePath = path.join(this.rootPath, ".codebase-index");
-      const storageProvider = await getStorageProvider({ path: storagePath });
-      await storageProvider.clear(); // Clear existing index
-      await storageProvider.store(chunksWithEmbeddings);
+      if (!this.config.skipEmbedding) {
+        console.error(`Storing ${chunksToEmbed.length} chunks...`);
+
+        // Store in LanceDB for vector search
+        const storagePath = path.join(this.rootPath, ".codebase-index");
+        const storageProvider = await getStorageProvider({ path: storagePath });
+        await storageProvider.clear(); // Clear existing index
+        await storageProvider.store(chunksWithEmbeddings);
+      }
 
       // Also save JSON for keyword search (Fuse.js) - use chunksToEmbed for consistency
       const indexPath = path.join(this.rootPath, ".codebase-index.json");

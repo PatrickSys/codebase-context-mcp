@@ -459,10 +459,13 @@ export interface CodebaseConfig {
 
   // Embedding
   embedding?: {
-    provider?: 'transformers' | 'openai' | 'voyage' | 'ollama' | 'custom';
+    provider?: 'transformers' | 'openai' | 'ollama' | 'custom';
     model?: string;
     batchSize?: number;
   };
+
+  // Optimization flags
+  skipEmbedding?: boolean;
 
   // Storage
   storage?: {
