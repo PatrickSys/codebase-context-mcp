@@ -10,7 +10,7 @@ AI coding assistants (Copilot, Cursor, Claude) can generate instruction files (`
 
 **But they can't tell the AI about your internal libraries.**
 
-Your team wraps PrimeNG with `@mycompany/ui-toolkit`. You have utilities at `@mycompany/utils`. The AI has no way to know these exist—they're not in any Angular doc or Stack Overflow answer. So it suggests `primeng/button` when it should suggest `@mycompany/ui-toolkit/button`.
+Your team wraps Material with `@company/ui-components`. You have utilities at `@company/utils`. The AI has no way to know these exist—they're not in any Angular doc or Stack Overflow answer. So it suggests `@angular/material/button` when it should suggest `@company/ui-components/button`.
 
 That's the gap we fill.
 
@@ -163,13 +163,31 @@ npx codebase-context-mcp /path/to/your/project
 Or if installed globally:
 
 ```json
+```json
 {
   "codebase-context-mcp": {
     "command": "codebase-context",
-    "args": ["/path/to/your/project"]
+    "args": ["/path/to/your/project"],
+    "env": {
+      "EMBEDDING_PROVIDER": "openai",
+      "OPENAI_API_KEY": "sk-..."
+    }
   }
 }
 ```
+
+### Configuration (Environment Variables)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `EMBEDDING_PROVIDER` | `transformers` | Set to `openai` to use OpenAI's API (faster, lighter) or `transformers` for local (private, free). |
+| `OPENAI_API_KEY` | - | Required if provider is `openai`. |
+| `WATCH_FILES` | `true` | Set to `false` to disable the file watcher. |
+
+**Why use OpenAI?**
+- **Faster**: No need to download/run local 100MB+ models.
+- **Lighter**: Significantly less RAM usage for the MCP server.
+- **Cost**: `text-embedding-3-small` is extremely cheap ($0.02 per 1M tokens), but technically not free like local.
 
 ---
 

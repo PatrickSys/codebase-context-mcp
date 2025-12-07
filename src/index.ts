@@ -404,11 +404,18 @@ async function performIndexing(): Promise<void> {
   console.error(`Indexing: ${ROOT_PATH}`);
 
   try {
+    let lastLoggedProgress = { phase: "", percentage: -1 };
     const indexer = new CodebaseIndexer({
       rootPath: ROOT_PATH,
       onProgress: (progress) => {
-        if (progress.percentage % 10 === 0) {
+        // Only log when phase or percentage actually changes (prevents duplicate logs)
+        const shouldLog =
+          progress.phase !== lastLoggedProgress.phase ||
+          (progress.percentage % 10 === 0 && progress.percentage !== lastLoggedProgress.percentage);
+
+        if (shouldLog) {
           console.error(`[${progress.phase}] ${progress.percentage}%`);
+          lastLoggedProgress = { phase: progress.phase, percentage: progress.percentage };
         }
       },
     });
