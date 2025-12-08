@@ -35,11 +35,29 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
       // Connect to database
       this.db = await lancedb.connect(storagePath);
 
-      // Check if table exists
+      // Check if table exists and has valid schema
       const tableNames = await this.db.tableNames();
       if (tableNames.includes('code_chunks')) {
         this.table = await this.db.openTable('code_chunks');
-        console.error('Opened existing LanceDB table');
+
+        // Validate schema has vector column (required for semantic search)
+        try {
+          const schema = await this.table.schema();
+          const hasVectorColumn = schema.fields.some((f: any) => f.name === 'vector');
+
+          if (!hasVectorColumn) {
+            console.error('Stale index detected (missing vector column). Rebuilding...');
+            await this.db.dropTable('code_chunks');
+            this.table = null;
+          } else {
+            console.error('Opened existing LanceDB table');
+          }
+        } catch (schemaError) {
+          // If schema check fails, table is likely corrupted - drop and rebuild
+          console.error('Failed to validate table schema, rebuilding index...');
+          await this.db.dropTable('code_chunks');
+          this.table = null;
+        }
       }
 
       this.initialized = true;

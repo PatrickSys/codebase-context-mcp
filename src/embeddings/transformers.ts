@@ -1,11 +1,5 @@
-/**
- * Transformers.js Embedding Provider
- * Uses local models via @xenova/transformers
- */
+import { EmbeddingProvider, DEFAULT_MODEL } from "./types.js";
 
-import { EmbeddingProvider } from "./types.js";
-
-// Model configurations
 const MODEL_CONFIGS: Record<string, { dimensions: number }> = {
   "Xenova/bge-small-en-v1.5": { dimensions: 384 },
   "Xenova/all-MiniLM-L6-v2": { dimensions: 384 },
@@ -21,7 +15,7 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
   private ready = false;
   private initPromise: Promise<void> | null = null;
 
-  constructor(modelName: string = "Xenova/bge-small-en-v1.5") {
+  constructor(modelName: string = DEFAULT_MODEL) {
     this.modelName = modelName;
     this.dimensions = MODEL_CONFIGS[modelName]?.dimensions || 384;
   }
@@ -39,12 +33,10 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
       console.error(`Loading embedding model: ${this.modelName}`);
       console.error("(First run will download ~130MB model)");
 
-      // Dynamic import to avoid issues at require time
       const { pipeline } = await import("@xenova/transformers");
 
-      // Create feature extraction pipeline
       this.pipeline = await pipeline("feature-extraction", this.modelName, {
-        quantized: true, // Use quantized model for speed
+        quantized: true,
       });
 
       this.ready = true;
@@ -61,13 +53,11 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
     }
 
     try {
-      // Get embeddings
       const output = await this.pipeline(text, {
         pooling: "mean",
         normalize: true,
       });
 
-      // Convert to array
       return Array.from(output.data);
     } catch (error) {
       console.error("Failed to generate embedding:", error);
@@ -81,24 +71,19 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
     }
 
     const embeddings: number[][] = [];
-
-    // Process in smaller batches to manage memory
     const batchSize = 32;
+
     for (let i = 0; i < texts.length; i += batchSize) {
       const batch = texts.slice(i, i + batchSize);
-
-      // Process batch
       const batchEmbeddings = await Promise.all(
         batch.map((text) => this.embed(text))
       );
 
       embeddings.push(...batchEmbeddings);
 
-      // Log progress for large batches
       if (texts.length > 100 && (i + batchSize) % 100 === 0) {
         console.error(
-          `Embedded ${Math.min(i + batchSize, texts.length)}/${texts.length
-          } chunks`
+          `Embedded ${Math.min(i + batchSize, texts.length)}/${texts.length} chunks`
         );
       }
     }
@@ -111,13 +96,11 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
   }
 }
 
-/**
- * Create an embedding provider based on config
- */
 export async function createEmbeddingProvider(
-  modelName: string = "Xenova/bge-base-en-v1.5"
+  modelName: string = DEFAULT_MODEL
 ): Promise<EmbeddingProvider> {
   const provider = new TransformersEmbeddingProvider(modelName);
   await provider.initialize();
   return provider;
 }
+

@@ -75,6 +75,7 @@ const server = new Server(
     capabilities: {
       tools: {},
       resources: {},
+      logging: {}, // Enable structured logging for clients that support it
     },
   }
 );
