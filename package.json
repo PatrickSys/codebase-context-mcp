@@ -58,12 +58,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/PatrickSys/codebase-context-mcp.git"
+    "url": "git+https://github.com/PatrickSys/codebase-context.git"
   },
   "bugs": {
-    "url": "https://github.com/PatrickSys/codebase-context-mcp/issues"
+    "url": "https://github.com/PatrickSys/codebase-context/issues"
   },
-  "homepage": "https://github.com/PatrickSys/codebase-context-mcp#readme",
+  "homepage": "https://github.com/PatrickSys/codebase-context#readme",
   "author": {
     "name": "Patrick Rosselló",
     "email": "rossellocolompatrick@gmail.com",

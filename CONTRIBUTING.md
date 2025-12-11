@@ -3,8 +3,8 @@
 ## Setup
 
 ```bash
-git clone https://github.com/PatrickSys/codebase-context-mcp.git
-cd codebase-context-mcp
+git clone https://github.com/PatrickSys/codebase-context.git
+cd codebase-context
 npm install
 npm run build
 ```
