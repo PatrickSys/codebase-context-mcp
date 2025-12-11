@@ -63,6 +63,13 @@ Now the agent checks patterns automatically instead of waiting for you to ask.
 | `EMBEDDING_PROVIDER` | `transformers` | `openai` (fast, cloud) or `transformers` (local, private) |
 | `OPENAI_API_KEY` | - | Required if provider is `openai` |
 
+## Performance Note
+
+This tool runs **locally** on your machine using your hardware.
+- **Initial Indexing**: The first run works hard. It may take several minutes (e.g., ~2-5 mins for 30k files) to compute embeddings for your entire codebase.
+- **Caching**: Subsequent queries are instant (milliseconds).
+- **Updates**: Currently, `refresh_index` re-scans the codebase. True incremental indexing (processing only changed files) is on the roadmap.
+
 ## Links
 
 - 📄 [Motivation](./MOTIVATION.md) — Why this exists, research, learnings
