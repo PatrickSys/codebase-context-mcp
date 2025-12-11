@@ -9,20 +9,9 @@ npm install
 npm run build
 ```
 
-## Using the Published Package
+## Using the Package
 
-If you just want to use the tool (not develop it):
-
-```bash
-npm install -g codebase-context-mcp
-codebase-context /path/to/your/project
-```
-
-Or use npx:
-
-```bash
-npx codebase-context-mcp /path/to/your/project
-```
+This is an MCP server, not a CLI tool. See [README.md](./README.md) for configuration with Claude Desktop, VS Code, Cursor, etc.
 
 ## Project Structure
 

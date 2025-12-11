@@ -10,10 +10,11 @@
 
 | Pain Point | Evidence |
 |------------|----------|
-| **"AI doesn't know my codebase"** | 63.3% of developers cite lack of codebase understanding as top AI limitation ([Stack Overflow 2024](https://survey.stackoverflow.co/2024/ai)) |
+| **"AI doesn't know my codebase"** | 64.7% of developers cite lack of codebase context as top AI challenge ([Stack Overflow 2024](https://survey.stackoverflow.co/2024/ai)) |
 | **"AI suggests generic patterns"** | AI suggests Material UI when team uses PrimeNG. Suggests constructor injection when team uses inject(). |
-| **"Vibe coding" creates churn** | AI-generated code doubled code churn in 2024, 8x increase in duplicated code ([GitClear 2024](https://www.gitclear.com/)), DORA recognizes code churn as negative predictor of defects ([State of DevOps 2024](https://dora.dev/research/2024/dora-report/)) |
-| **Time spent correcting AI** | Developers repeatedly correct same patterns: "use inject()", "use our wrapper", "write tests like we do" |
+| **"Vibe coding" creates tech debt** | Code churn doubled, code duplication up 8x, refactored code down from 24% to 9.5% ([GitClear 2024](https://www.gitclear.com/)) |
+| **Trust gap** | Only 29% of developers trust AI output (down from 40% prior year). Only 30% of AI-suggested code is accepted. |
+| **Efficiency illusion** | Developers believe +20% faster, but objective measurement shows -19% due to fix time (METR study, DORA 2025) |
 
 ### What Existing Tools Don't Solve
 
@@ -26,9 +27,9 @@
 
 ---
 
-## Our Solution
+## What This Does
 
-### What We Provide
+### Features
 
 | Feature | Why It Matters |
 |---------|----------------|
@@ -37,7 +38,7 @@
 | **Golden Files** | Real examples showing patterns in context, not isolated snippets |
 | **Testing Framework Detection** | "Write Jest tests, not Jasmine" - detected from actual spec files |
 
-### Complementary Positioning
+### Works with AGENTS.md
 
 > **AGENTS.md tells AI what team WANTS. We show what they DO.**
 
@@ -52,7 +53,7 @@ We're honest about what we don't solve:
 | Limitation | Status |
 |------------|--------|
 | **Pattern frequency ≠ pattern quality** | 97% usage could be technical debt. We show consensus, not correctness. |
-| **Stale index risk** | Manual re-indexing required. Lazy indexing planned (Phase 1.6). |
+| **Stale index risk** | Manual re-indexing required. Incremental indexing planned. |
 | **Framework coverage** | Angular-specialized now. React/Vue analyzers extensible. |
 | **LLM context placement** | We provide structured data. How the AI uses it depends on the client (Cursor, Claude, etc.). |
 
@@ -64,9 +65,9 @@ We're honest about what we don't solve:
 
 2. **Complementary, not replacement** - We work WITH AGENTS.md, not against it. Different layers of context.
 
-3. **Simplicity beats completeness** - Dropped features that added complexity without clear value (dependency graphs, violation detection). Focus on core patterns.
+3. **Simplicity beats completeness** - Dropped features that added complexity without clear value. Static instruction files (AGENTS.md) provide good pattern guidance with minimal complexity.
 
-4. **Human-led, not autonomous** - Research shows autonomous agents have ~30-35% success rate on multi-step tasks ([Thoughtworks Technology Radar](https://www.thoughtworks.com/radar), arXiv papers). We optimize for human+AI collaboration.
+4. **Discovery vs Enforcement** - MCP excels at discovery (finding internal libraries, quantifying patterns). For enforcement (making AI follow patterns), well-written instruction files are often sufficient.
 
 ---
 
