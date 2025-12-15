@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.1.0 (2025-12-15)
+
+### Features
+
+- **Pattern Momentum**: Detect migration direction via git history. Each pattern in `get_team_patterns` now includes:
+  - `newestFileDate`: ISO timestamp of the most recent file using this pattern
+  - `trend`: `Rising` (≤60 days), `Stable`, or `Declining` (≥180 days)
+- This solves the "3% Problem" — AI can now distinguish between legacy patterns being phased out vs. new patterns being adopted
+
+### Technical
+
+- New `src/utils/git-dates.ts`: Extracts file commit dates via single `git log` command
+- Updated `PatternDetector` to track temporal data per pattern
+- Graceful fallback for non-git repositories
+
 ## 1.0.1 (2025-12-11)
 
 ### Fixed

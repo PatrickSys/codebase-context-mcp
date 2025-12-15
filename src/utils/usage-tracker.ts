@@ -10,6 +10,8 @@ export interface LibraryUsageStats {
   };
 }
 
+export type PatternTrend = 'Rising' | 'Declining' | 'Stable';
+
 export interface PatternUsageStats {
   [patternName: string]: {
     primary: {
@@ -18,11 +20,15 @@ export interface PatternUsageStats {
       frequency: string;
       examples: string[];
       canonicalExample?: { file: string; snippet: string };
+      newestFileDate?: string;
+      trend?: PatternTrend;
     };
     alsoDetected?: Array<{
       name: string;
       count: number;
       frequency: string;
+      newestFileDate?: string;
+      trend?: PatternTrend;
     }>;
   };
 }
@@ -212,9 +218,12 @@ const DEFAULT_TEST_FRAMEWORK_CONFIGS: TestFrameworkConfig[] = [
   { name: 'Generic Test', type: 'unit', indicators: ['describe(', 'it(', 'expect('], priority: 10 },
 ];
 
+import { calculateTrend } from "./git-dates.js";
+
 export class PatternDetector {
   private patterns: Map<string, Map<string, number>> = new Map();
   private canonicalExamples: Map<string, { file: string; snippet: string }> = new Map();
+  private patternFileDates: Map<string, Date> = new Map(); // Track newest file date per pattern
   private goldenFiles: GoldenFile[] = [];
   private testFrameworkConfigs: TestFrameworkConfig[];
 
@@ -222,13 +231,22 @@ export class PatternDetector {
     this.testFrameworkConfigs = customConfigs || DEFAULT_TEST_FRAMEWORK_CONFIGS;
   }
 
-  track(category: string, patternName: string, example?: { file: string; snippet: string }): void {
+  track(category: string, patternName: string, example?: { file: string; snippet: string }, fileDate?: Date): void {
     if (!this.patterns.has(category)) {
       this.patterns.set(category, new Map());
     }
 
     const categoryPatterns = this.patterns.get(category)!;
     categoryPatterns.set(patternName, (categoryPatterns.get(patternName) || 0) + 1);
+
+    // Track newest file date for this pattern
+    if (fileDate) {
+      const dateKey = `${category}:${patternName}`;
+      const existing = this.patternFileDates.get(dateKey);
+      if (!existing || fileDate > existing) {
+        this.patternFileDates.set(dateKey, fileDate);
+      }
+    }
 
     // Smart Canonical Example Selection
     const exampleKey = `${category}:${patternName}`;
@@ -300,6 +318,10 @@ export class PatternDetector {
     const exampleKey = `${category}:${primaryName}`;
     const canonicalExample = this.canonicalExamples.get(exampleKey);
 
+    // Get temporal data for primary pattern
+    const primaryDate = this.patternFileDates.get(exampleKey);
+    const primaryTrend = calculateTrend(primaryDate);
+
     const result: PatternUsageStats[string] = {
       primary: {
         name: primaryName,
@@ -307,19 +329,29 @@ export class PatternDetector {
         frequency: `${primaryFreq}%`,
         examples: canonicalExample ? [canonicalExample.file] : [],
         canonicalExample: canonicalExample,
+        newestFileDate: primaryDate?.toISOString(),
+        trend: primaryTrend,
       },
     };
 
     if (sorted.length > 1) {
-      result.alsoDetected = sorted.slice(1, 3).map(([name, count]) => ({
-        name,
-        count,
-        frequency: `${Math.round((count / total) * 100)}%`,
-      }));
+      result.alsoDetected = sorted.slice(1, 3).map(([name, count]) => {
+        const altKey = `${category}:${name}`;
+        const altDate = this.patternFileDates.get(altKey);
+        const altTrend = calculateTrend(altDate);
+        return {
+          name,
+          count,
+          frequency: `${Math.round((count / total) * 100)}%`,
+          newestFileDate: altDate?.toISOString(),
+          trend: altTrend,
+        };
+      });
     }
 
     return result;
   }
+
 
   getAllPatterns(): PatternUsageStats {
     const stats: PatternUsageStats = {};

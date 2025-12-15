@@ -28,6 +28,7 @@ import {
   CodeChunkWithEmbedding,
 } from "../storage/index.js";
 import { LibraryUsageTracker, PatternDetector, ImportGraph } from "../utils/usage-tracker.js";
+import { getFileCommitDates } from "../utils/git-dates.js";
 
 export interface IndexerOptions {
   rootPath: string;
@@ -173,6 +174,9 @@ export class CodebaseIndexer {
       const patternDetector = new PatternDetector();
       const importGraph = new ImportGraph();
 
+      // Fetch git commit dates for pattern momentum analysis
+      const fileDates = await getFileCommitDates(this.rootPath);
+
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         this.progress.currentFile = file;
@@ -212,6 +216,11 @@ export class CodebaseIndexer {
 
             const relPath = file.split(/[\\/]/).slice(-3).join('/');
 
+            // Get file date for pattern momentum tracking
+            // Try multiple path formats since git uses forward slashes
+            const normalizedRelPath = path.relative(this.rootPath, file).replace(/\\/g, '/');
+            const fileDate = fileDates.get(normalizedRelPath);
+
             // GENERIC PATTERN FORWARDING
             // Framework analyzers return detectedPatterns in metadata - we just forward them
             // This keeps the indexer framework-agnostic
@@ -221,7 +230,7 @@ export class CodebaseIndexer {
                 const snippetPattern = this.getSnippetPatternFor(pattern.category, pattern.name);
                 const snippet = snippetPattern ? extractSnippet(snippetPattern) : undefined;
                 patternDetector.track(pattern.category, pattern.name,
-                  snippet ? { file: relPath, snippet } : undefined);
+                  snippet ? { file: relPath, snippet } : undefined, fileDate);
               }
             }
 

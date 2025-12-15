@@ -21,6 +21,7 @@ Add this to your MCP client config (Claude Desktop, VS Code, Cursor, etc.).
 
 - **Internal library discovery** → `@mycompany/ui-toolkit`: 847 uses vs `primeng`: 3 uses
 - **Pattern frequencies** → `inject()`: 97%, `constructor()`: 3%
+- **Pattern momentum** → `Signals`: Rising (last used 2 days ago) vs `RxJS`: Declining (180+ days)
 - **Golden file examples** → Real implementations showing all patterns together
 - **Testing conventions** → `Jest`: 74%, `Playwright`: 6%
 - **Framework patterns** → Angular signals, standalone components, etc.
