@@ -39,6 +39,13 @@ export class CodebaseSearcher {
 
   private initialized = false;
 
+  // v1.2: Pattern intelligence for trend detection
+  private patternIntelligence: {
+    decliningPatterns: Set<string>;
+    risingPatterns: Set<string>;
+    patternWarnings: Map<string, string>;
+  } | null = null;
+
   constructor(rootPath: string) {
     this.rootPath = rootPath;
     this.storagePath = path.join(rootPath, ".codebase-index");
@@ -49,6 +56,7 @@ export class CodebaseSearcher {
 
     try {
       await this.loadKeywordIndex();
+      await this.loadPatternIntelligence();
 
       this.embeddingProvider = await getEmbeddingProvider();
       this.storageProvider = await getStorageProvider({
@@ -88,6 +96,85 @@ export class CodebaseSearcher {
       this.chunks = [];
       this.fuseIndex = null;
     }
+  }
+
+  /**
+   * v1.2: Load pattern intelligence for trend detection and warnings
+   */
+  private async loadPatternIntelligence(): Promise<void> {
+    try {
+      const intelligencePath = path.join(this.rootPath, ".codebase-intelligence.json");
+      const content = await fs.readFile(intelligencePath, "utf-8");
+      const intelligence = JSON.parse(content);
+
+      const decliningPatterns = new Set<string>();
+      const risingPatterns = new Set<string>();
+      const patternWarnings = new Map<string, string>();
+
+      // Extract pattern indicators from intelligence data
+      if (intelligence.patterns) {
+        for (const [category, data] of Object.entries(intelligence.patterns)) {
+          const patternData = data as any;
+
+          // Track primary pattern
+          if (patternData.primary?.trend === 'Rising') {
+            risingPatterns.add(patternData.primary.name.toLowerCase());
+          }
+
+          // Track declining alternatives
+          if (patternData.alsoDetected) {
+            for (const alt of patternData.alsoDetected) {
+              if (alt.trend === 'Declining') {
+                decliningPatterns.add(alt.name.toLowerCase());
+                patternWarnings.set(
+                  alt.name.toLowerCase(),
+                  `⚠️ Uses declining pattern: ${alt.name} (${alt.guidance || 'consider modern alternatives'})`
+                );
+              } else if (alt.trend === 'Rising') {
+                risingPatterns.add(alt.name.toLowerCase());
+              }
+            }
+          }
+        }
+      }
+
+      this.patternIntelligence = { decliningPatterns, risingPatterns, patternWarnings };
+      console.error(`[search] Loaded pattern intelligence: ${decliningPatterns.size} declining, ${risingPatterns.size} rising patterns`);
+    } catch (error) {
+      console.warn("Pattern intelligence load failed (will proceed without trend detection):", error);
+      this.patternIntelligence = null;
+    }
+  }
+
+  /**
+   * v1.2: Detect pattern trend from chunk content
+   */
+  private detectChunkTrend(chunk: CodeChunk): { trend: 'Rising' | 'Stable' | 'Declining' | undefined; warning?: string } {
+    if (!this.patternIntelligence) {
+      return { trend: undefined };
+    }
+
+    const content = chunk.content.toLowerCase();
+    const { decliningPatterns, risingPatterns, patternWarnings } = this.patternIntelligence;
+
+    // Check for declining patterns
+    for (const pattern of decliningPatterns) {
+      if (content.includes(pattern)) {
+        return {
+          trend: 'Declining',
+          warning: patternWarnings.get(pattern)
+        };
+      }
+    }
+
+    // Check for rising patterns
+    for (const pattern of risingPatterns) {
+      if (content.includes(pattern)) {
+        return { trend: 'Rising' };
+      }
+    }
+
+    return { trend: 'Stable' };
   }
 
   async search(
@@ -184,6 +271,14 @@ export class CodebaseSearcher {
           combinedScore = Math.min(1.0, combinedScore * 1.1);
         }
 
+        // v1.2: Detect pattern trend and apply momentum boost
+        const { trend, warning } = this.detectChunkTrend(chunk);
+        if (trend === 'Rising') {
+          combinedScore = Math.min(1.0, combinedScore * 1.15); // +15% for modern patterns
+        } else if (trend === 'Declining') {
+          combinedScore = combinedScore * 0.90; // -10% for legacy patterns
+        }
+
         const summary = this.generateSummary(chunk);
         const snippet = this.generateSnippet(chunk.content);
 
@@ -200,6 +295,9 @@ export class CodebaseSearcher {
           componentType: chunk.componentType,
           layer: chunk.layer,
           metadata: chunk.metadata,
+          // v1.2: Pattern momentum awareness
+          trend,
+          patternWarning: warning,
         } as SearchResult;
       })
       .sort((a, b) => b.score - a.score)

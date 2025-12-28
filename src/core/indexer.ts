@@ -27,7 +27,7 @@ import {
   VectorStorageProvider,
   CodeChunkWithEmbedding,
 } from "../storage/index.js";
-import { LibraryUsageTracker, PatternDetector, ImportGraph } from "../utils/usage-tracker.js";
+import { LibraryUsageTracker, PatternDetector, ImportGraph, InternalFileGraph, FileExport } from "../utils/usage-tracker.js";
 import { getFileCommitDates } from "../utils/git-dates.js";
 
 export interface IndexerOptions {
@@ -173,6 +173,7 @@ export class CodebaseIndexer {
       const libraryTracker = new LibraryUsageTracker();
       const patternDetector = new PatternDetector();
       const importGraph = new ImportGraph();
+      const internalFileGraph = new InternalFileGraph(this.rootPath);
 
       // Fetch git commit dates for pattern momentum analysis
       const fileDates = await getFileCommitDates(this.rootPath);
@@ -198,6 +199,35 @@ export class CodebaseIndexer {
             for (const imp of result.imports) {
               libraryTracker.track(imp.source, file);
               importGraph.trackImport(imp.source, file, imp.line || 1);
+
+              // Track internal file-to-file imports (relative paths)
+              if (imp.source.startsWith('.')) {
+                // Resolve the relative import to an absolute path
+                const fileDir = path.dirname(file);
+                let resolvedPath = path.resolve(fileDir, imp.source);
+
+                // Try common extensions if not already specified
+                const ext = path.extname(resolvedPath);
+                if (!ext) {
+                  for (const tryExt of ['.ts', '.tsx', '.js', '.jsx']) {
+                    const withExt = resolvedPath + tryExt;
+                    // We don't check if file exists for performance - just track what's referenced
+                    resolvedPath = withExt;
+                    break;
+                  }
+                }
+
+                internalFileGraph.trackImport(file, resolvedPath, imp.imports);
+              }
+            }
+
+            // Track exports for unused export detection
+            if (result.exports && result.exports.length > 0) {
+              const fileExports: FileExport[] = result.exports.map(exp => ({
+                name: exp.name,
+                type: exp.isDefault ? 'default' : (exp.type as FileExport['type']) || 'other',
+              }));
+              internalFileGraph.trackExports(file, fileExports);
             }
 
             // Detect generic patterns from code
@@ -408,6 +438,8 @@ export class CodebaseIndexer {
           usages: importGraph.getAllUsages(),
           topUsed: importGraph.getTopUsed(30),
         },
+        // Internal file graph for circular dependency and unused export detection
+        internalFileGraph: internalFileGraph.toJSON(),
         generatedAt: new Date().toISOString(),
       };
       await fs.writeFile(intelligencePath, JSON.stringify(intelligence, null, 2));

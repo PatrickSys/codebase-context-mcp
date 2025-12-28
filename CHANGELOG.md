@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.2.0 (2025-12-29)
+
+### Features
+
+- **Actionable Guidance**: `get_team_patterns` now returns a `guidance` field with pre-computed decisions:
+  - `"USE: inject() – 97% adoption, stable"`
+  - `"AVOID: constructor DI – 3%, declining (legacy)"`
+- **Pattern-Aware Search**: `search_codebase` results now include:
+  - `trend`: `Rising` | `Stable` | `Declining` for each result
+  - `patternWarning`: Warning message for results using declining patterns
+- **Search Boosting**: Results are re-ranked based on pattern modernity:
+  - +15% score boost for Rising patterns
+  - -10% score penalty for Declining patterns
+
+### Purpose
+
+This release addresses **Search Contamination** — the proven problem where AI agents copy legacy code from search results. By adding trend awareness and actionable guidance, AI agents can now prioritize modern patterns over legacy code.
+
 ## 1.1.0 (2025-12-15)
 
 ### Features

@@ -24,6 +24,7 @@ import { CodebaseSearcher } from "./core/search.js";
 import { analyzerRegistry } from "./core/analyzer-registry.js";
 import { AngularAnalyzer } from "./analyzers/angular/index.js";
 import { GenericAnalyzer } from "./analyzers/generic/index.js";
+import { InternalFileGraph } from "./utils/usage-tracker.js";
 
 
 analyzerRegistry.register(new AngularAnalyzer());
@@ -224,6 +225,22 @@ const TOOLS: Tool[] = [
         },
       },
       required: ["name"],
+    },
+  },
+  {
+    name: "detect_circular_dependencies",
+    description:
+      "Analyze the import graph to detect circular dependencies between files. " +
+      "Circular dependencies can cause initialization issues, tight coupling, and maintenance problems. " +
+      "Returns all detected cycles sorted by length (shorter cycles are often more problematic).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        scope: {
+          type: "string",
+          description: "Optional path prefix to limit analysis (e.g., 'src/features', 'libs/shared')",
+        },
+      },
     },
   },
 ];
@@ -499,6 +516,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     componentType: r.componentType,
                     layer: r.layer,
                     framework: r.framework,
+                    // v1.2: Pattern momentum awareness
+                    trend: r.trend,
+                    patternWarning: r.patternWarning,
                   })),
                   totalResults: results.length,
                 },
@@ -853,6 +873,79 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               text: JSON.stringify({
                 status: "error",
                 message: "Failed to get component usage. Run indexing first.",
+                error: error instanceof Error ? error.message : String(error),
+              }, null, 2),
+            }],
+          };
+        }
+      }
+
+      case "detect_circular_dependencies": {
+        const { scope } = args as { scope?: string };
+
+        try {
+          const intelligencePath = path.join(ROOT_PATH, ".codebase-intelligence.json");
+          const content = await fs.readFile(intelligencePath, "utf-8");
+          const intelligence = JSON.parse(content);
+
+          if (!intelligence.internalFileGraph) {
+            return {
+              content: [{
+                type: "text",
+                text: JSON.stringify({
+                  status: "error",
+                  message: "Internal file graph not found. Please run refresh_index to rebuild the index with cycle detection support.",
+                }, null, 2),
+              }],
+            };
+          }
+
+          // Reconstruct the graph from stored data
+          const graph = InternalFileGraph.fromJSON(intelligence.internalFileGraph, ROOT_PATH);
+          const cycles = graph.findCycles(scope);
+          const graphStats = intelligence.internalFileGraph.stats || graph.getStats();
+
+          if (cycles.length === 0) {
+            return {
+              content: [{
+                type: "text",
+                text: JSON.stringify({
+                  status: "success",
+                  message: scope
+                    ? `No circular dependencies detected in scope: ${scope}`
+                    : "No circular dependencies detected in the codebase.",
+                  scope,
+                  graphStats,
+                }, null, 2),
+              }],
+            };
+          }
+
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                status: "warning",
+                message: `Found ${cycles.length} circular dependency cycle(s).`,
+                scope,
+                cycles: cycles.map(c => ({
+                  files: c.files,
+                  length: c.length,
+                  severity: c.length === 2 ? "high" : c.length <= 3 ? "medium" : "low",
+                })),
+                count: cycles.length,
+                graphStats,
+                advice: "Shorter cycles (length 2-3) are typically more problematic. Consider breaking the cycle by extracting shared dependencies.",
+              }, null, 2),
+            }],
+          };
+        } catch (error) {
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                status: "error",
+                message: "Failed to detect circular dependencies. Run indexing first.",
                 error: error instanceof Error ? error.message : String(error),
               }, null, 2),
             }],

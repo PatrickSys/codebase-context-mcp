@@ -345,6 +345,12 @@ export interface SearchResult {
   layer?: ArchitecturalLayer;
   metadata: ChunkMetadata;
 
+  // v1.2: Pattern Momentum awareness
+  /** Pattern trend for this chunk: Rising (modern), Stable, or Declining (legacy) */
+  trend?: 'Rising' | 'Stable' | 'Declining';
+  /** Warning if this result uses declining/legacy patterns */
+  patternWarning?: string;
+
   // Optional detailed context (for agent to request if needed)
   fullContent?: string; // Only included if explicitly requested
   relatedChunks?: CodeChunk[];

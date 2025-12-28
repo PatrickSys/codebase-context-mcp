@@ -25,6 +25,8 @@ Add this to your MCP client config (Claude Desktop, VS Code, Cursor, etc.).
 - **Golden file examples** → Real implementations showing all patterns together
 - **Testing conventions** → `Jest`: 74%, `Playwright`: 6%
 - **Framework patterns** → Angular signals, standalone components, etc.
+- **Circular dependency detection** → Find toxic import cycles between files
+
 
 ## How It Works
 
@@ -55,7 +57,9 @@ Now the agent checks patterns automatically instead of waiting for you to ask.
 | `get_team_patterns` | Pattern frequencies + canonical examples |
 | `get_codebase_metadata` | Project structure overview |
 | `get_style_guide` | Query style guide rules |
+| `detect_circular_dependencies` | Find import cycles between files |
 | `refresh_index` | Re-index the codebase |
+
 
 ## Configuration
 
