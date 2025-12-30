@@ -7,6 +7,7 @@
 
 import { promises as fs } from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import { glob } from "glob";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -1044,13 +1045,24 @@ async function main() {
 // Export server components for programmatic use
 export { server, performIndexing, resolveRootPath, shouldReindex, TOOLS };
 
-// Only auto-start when run directly as CLI (not when imported as module)
-// Check if this module is the entry point
-const isDirectRun =
-  process.argv[1]?.replace(/\\/g, "/").endsWith("index.js") ||
-  process.argv[1]?.replace(/\\/g, "/").endsWith("index.ts");
+// Auto-start behavior:
+// - When executed directly (node dist/index.js ...)
+// - When launched under stdio (common for MCP clients that use `node -e "import(...)"`)
+// Can be disabled by setting CODEBASE_CONTEXT_DISABLE_AUTOSTART=1
+const disableAutostart = ["1", "true", "yes"].includes(
+  (process.env.CODEBASE_CONTEXT_DISABLE_AUTOSTART ?? "").toLowerCase()
+);
 
-if (isDirectRun) {
+const entryArgv = process.argv[1];
+const isEntrypoint =
+  typeof entryArgv === "string" &&
+  path.resolve(entryArgv) === path.resolve(fileURLToPath(import.meta.url));
+
+// For stdio-based MCP, stdin is typically a pipe.
+// In Node, `process.stdin.isTTY` is `true` for terminals, and otherwise commonly `undefined`.
+const isStdio = process.stdin?.isTTY !== true;
+
+if (!disableAutostart && (isEntrypoint || isStdio)) {
   main().catch((error) => {
     console.error("Fatal:", error);
     process.exit(1);

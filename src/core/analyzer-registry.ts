@@ -16,7 +16,12 @@ export class AnalyzerRegistry {
     this.sortedAnalyzers = Array.from(this.analyzers.values())
       .sort((a, b) => b.priority - a.priority);
 
-    console.error(`Registered analyzer: ${analyzer.name} (priority: ${analyzer.priority})`);
+    // Avoid noisy logging on MCP startup unless explicitly requested.
+    if (process.env.CODEBASE_CONTEXT_DEBUG) {
+      console.error(
+        `Registered analyzer: ${analyzer.name} (priority: ${analyzer.priority})`
+      );
+    }
   }
 
   unregister(name: string): boolean {
