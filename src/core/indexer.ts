@@ -622,18 +622,49 @@ export class CodebaseIndexer {
       stateManagement: {
         'RxJS': /BehaviorSubject|ReplaySubject|Subject|Observable/,
         'Signals': /\bsignal\s*[<(]/,
+        'React Context': /\bcreateContext\s*\(|\buseContext\s*\(/,
+        'redux-toolkit': /@reduxjs\/toolkit|configureStore|createSlice/,
       },
       reactivity: {
         'Effect': /\beffect\s*\(/,
         'Computed': /\bcomputed\s*[<(]/,
+        'Suspense': /<Suspense\b|React\.Suspense/,
+        'Memoization': /\buseMemo\s*\(|\buseCallback\s*\(|\bmemo\s*\(/,
       },
       componentStyle: {
         'Standalone': /standalone\s*:\s*true/,
         'NgModule-based': /@(?:Component|Directive|Pipe)\s*\(/,
+        '"use client"': /^\s*['"]use client['"]\s*;?/,
+        'memo()': /\bmemo\s*\(/,
       },
       componentInputs: {
         'Signal-based inputs': /\binput\s*[<(]/,
         'Decorator-based @Input': /@Input\(\)/,
+      },
+      routing: {
+        'Next.js App Router': /\/app\//,
+        'Next.js Pages Router': /\/pages\//,
+        'Route Handler': /\bexport\s+(?:async\s+)?function\s+(GET|POST|PUT|DELETE|PATCH|OPTIONS|HEAD)\b/,
+        'API Route': /\/pages\/api\//,
+      },
+      metadata: {
+        'Next.js metadata': /\bexport\s+(?:const|function)\s+(metadata|generateMetadata)\b/,
+      },
+      forms: {
+        'react-hook-form': /\buseForm\s*\(|from\s+['"]react-hook-form['"]/,
+      },
+      validation: {
+        'zod': /\bz\.\w+|from\s+['"]zod['"]/,
+      },
+      data: {
+        'tanstack-query': /from\s+['"]@tanstack\/react-query['"]/,
+      },
+      styling: {
+        'tailwind': /tailwindcss|className\s*=\s*['"][^'"]*(?:bg-|text-|p-|m-)/,
+      },
+      reactHooks: {
+        'Built-in hooks': /\buse(?:State|Effect|Memo|Callback|Reducer|Ref|Context)\s*\(/,
+        'Custom hooks': /\bfunction\s+use[A-Z0-9]\w*\s*\(|\bconst\s+use[A-Z0-9]\w*\s*=/,
       },
     };
     return patterns[category]?.[name] || null;

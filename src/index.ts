@@ -25,10 +25,15 @@ import { CodebaseSearcher } from "./core/search.js";
 import { analyzerRegistry } from "./core/analyzer-registry.js";
 import { AngularAnalyzer } from "./analyzers/angular/index.js";
 import { GenericAnalyzer } from "./analyzers/generic/index.js";
+import { ReactAnalyzer } from "./analyzers/react/index.js";
+import { NextJsAnalyzer } from "./analyzers/nextjs/index.js";
+import { EcosystemAnalyzer } from "./analyzers/orchestration/ecosystem.js";
 import { InternalFileGraph } from "./utils/usage-tracker.js";
 
-
+analyzerRegistry.register(new EcosystemAnalyzer());
 analyzerRegistry.register(new AngularAnalyzer());
+analyzerRegistry.register(new NextJsAnalyzer());
+analyzerRegistry.register(new ReactAnalyzer());
 analyzerRegistry.register(new GenericAnalyzer());
 
 // Resolve root path with validation
@@ -107,7 +112,7 @@ const TOOLS: Tool[] = [
           properties: {
             framework: {
               type: "string",
-              description: "Filter by framework (angular, react, vue)",
+              description: "Filter by framework (angular, react, nextjs, vue, generic)",
             },
             language: {
               type: "string",
@@ -992,9 +997,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 async function main() {
-  console.error("Codebase Context MCP Server");
-  console.error(`Root: ${ROOT_PATH}`);
-  console.error(
+  const shouldLogStartup = ["1", "true", "yes"].includes(
+    (process.env.CODEBASE_CONTEXT_DEBUG ?? "").toLowerCase()
+  );
+
+  const logStartup = (...args: unknown[]) => {
+    if (shouldLogStartup) console.error(...args);
+  };
+
+  logStartup("Codebase Context MCP Server");
+  logStartup(`Root: ${ROOT_PATH}`);
+  logStartup(
     `Analyzers: ${analyzerRegistry
       .getAll()
       .map((a) => a.name)
@@ -1018,20 +1031,18 @@ async function main() {
   // Check for package.json to confirm it's a project root
   try {
     await fs.access(path.join(ROOT_PATH, "package.json"));
-    console.error(`Project detected: ${path.basename(ROOT_PATH)}`);
+    logStartup(`Project detected: ${path.basename(ROOT_PATH)}`);
   } catch {
-    console.error(
-      `WARNING: No package.json found. This may not be a project root.`
-    );
+    logStartup(`WARNING: No package.json found. This may not be a project root.`);
   }
 
   const needsIndex = await shouldReindex();
 
   if (needsIndex) {
-    console.error("Starting indexing...");
+    logStartup("Starting indexing...");
     performIndexing();
   } else {
-    console.error("Index found. Ready.");
+    logStartup("Index found. Ready.");
     indexState.status = "ready";
     indexState.lastIndexed = new Date();
   }
@@ -1039,7 +1050,7 @@ async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
-  console.error("Server ready");
+  logStartup("Server ready");
 }
 
 // Export server components for programmatic use

@@ -62,6 +62,9 @@ export {
 // Framework analyzers
 export { AngularAnalyzer } from "./analyzers/angular/index.js";
 export { GenericAnalyzer } from "./analyzers/generic/index.js";
+export { ReactAnalyzer } from "./analyzers/react/index.js";
+export { NextJsAnalyzer } from "./analyzers/nextjs/index.js";
+export { EcosystemAnalyzer } from "./analyzers/orchestration/ecosystem.js";
 
 // Utilities
 export {

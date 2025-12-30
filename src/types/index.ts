@@ -195,7 +195,7 @@ export interface CodebaseMetadata {
 export interface FrameworkInfo {
   name: string;
   version: string;
-  type: 'angular' | 'react' | 'vue' | 'svelte' | 'solid' | 'other';
+  type: 'angular' | 'react' | 'nextjs' | 'vue' | 'svelte' | 'solid' | 'other';
   variant?: string; // 'standalone', 'module-based', 'class-components', etc.
   stateManagement?: string[]; // 'ngrx', 'redux', 'zustand', 'pinia', etc.
   uiLibraries?: string[];
