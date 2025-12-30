@@ -18,6 +18,14 @@
       "import": "./dist/analyzers/angular/index.js",
       "types": "./dist/analyzers/angular/index.d.ts"
     },
+    "./analyzers/react": {
+      "import": "./dist/analyzers/react/index.js",
+      "types": "./dist/analyzers/react/index.d.ts"
+    },
+    "./analyzers/nextjs": {
+      "import": "./dist/analyzers/nextjs/index.js",
+      "types": "./dist/analyzers/nextjs/index.d.ts"
+    },
     "./analyzers/generic": {
       "import": "./dist/analyzers/generic/index.js",
       "types": "./dist/analyzers/generic/index.d.ts"
@@ -75,7 +83,12 @@
     "prepublishOnly": "npm run build",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
-    "watch": "tsc -w"
+    "test": "vitest run",
+    "watch": "tsc -w",
+    "smoke": "vitest run tests/nextjs-analyzer.test.ts tests/react-analyzer.test.ts",
+    "smoke:nextjs": "vitest run tests/nextjs-analyzer.test.ts",
+    "smoke:react": "vitest run tests/react-analyzer.test.ts",
+    "smoke:build": "npm run build && npm run smoke"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^0.6.0",
