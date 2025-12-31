@@ -1,6 +1,16 @@
 # Changelog
 
+
+## 1.2.2 (2025-12-31)
+
+### Fixed
+
+- **Critical Startup Crash**: Fixed immediate "Exit Code 1" silent crash on Windows by handling unhandled rejections during startup
+- **MCPJam Compatibility**: Removed `logging` capability (which was unimplemented) to support strict MCP clients like MCPJam
+- **Silent Failure**: Added global exception handlers to stderr to prevent silent failures in the future
+
 ## 1.2.1 (2025-12-31)
+
 
 ### Fixed
 
