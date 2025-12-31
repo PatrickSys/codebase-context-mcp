@@ -39,13 +39,13 @@ function resolveRootPath(): string {
   let rootPath = arg || envPath || process.cwd();
   rootPath = path.resolve(rootPath);
 
-  // Warn if using cwd as fallback
-  if (!arg && !envPath) {
+  // Warn if using cwd as fallback (guarded to avoid stderr during MCP STDIO handshake)
+  if (!arg && !envPath && process.env.CODEBASE_CONTEXT_DEBUG) {
     console.error(
-      `WARNING: No project path specified. Using current directory: ${rootPath}`
+      `[DEBUG] No project path specified. Using current directory: ${rootPath}`
     );
     console.error(
-      `Hint: Specify path as CLI argument or set CODEBASE_ROOT env var`
+      `[DEBUG] Hint: Specify path as CLI argument or set CODEBASE_ROOT env var`
     );
   }
 
@@ -991,14 +991,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 async function main() {
-  console.error("Codebase Context MCP Server");
-  console.error(`Root: ${ROOT_PATH}`);
-  console.error(
-    `Analyzers: ${analyzerRegistry
-      .getAll()
-      .map((a) => a.name)
-      .join(", ")}`
-  );
+  // Server startup banner (guarded to avoid stderr during MCP STDIO handshake)
+  if (process.env.CODEBASE_CONTEXT_DEBUG) {
+    console.error("[DEBUG] Codebase Context MCP Server");
+    console.error(`[DEBUG] Root: ${ROOT_PATH}`);
+    console.error(
+      `[DEBUG] Analyzers: ${analyzerRegistry
+        .getAll()
+        .map((a) => a.name)
+        .join(", ")}`
+    );
+  }
 
   // Validate root path exists and is a directory
   try {
@@ -1014,23 +1017,25 @@ async function main() {
     process.exit(1);
   }
 
-  // Check for package.json to confirm it's a project root
-  try {
-    await fs.access(path.join(ROOT_PATH, "package.json"));
-    console.error(`Project detected: ${path.basename(ROOT_PATH)}`);
-  } catch {
-    console.error(
-      `WARNING: No package.json found. This may not be a project root.`
-    );
+  // Check for package.json to confirm it's a project root (guarded to avoid stderr during handshake)
+  if (process.env.CODEBASE_CONTEXT_DEBUG) {
+    try {
+      await fs.access(path.join(ROOT_PATH, "package.json"));
+      console.error(`[DEBUG] Project detected: ${path.basename(ROOT_PATH)}`);
+    } catch {
+      console.error(
+        `[DEBUG] WARNING: No package.json found. This may not be a project root.`
+      );
+    }
   }
 
   const needsIndex = await shouldReindex();
 
   if (needsIndex) {
-    console.error("Starting indexing...");
+    if (process.env.CODEBASE_CONTEXT_DEBUG) console.error("[DEBUG] Starting indexing...");
     performIndexing();
   } else {
-    console.error("Index found. Ready.");
+    if (process.env.CODEBASE_CONTEXT_DEBUG) console.error("[DEBUG] Index found. Ready.");
     indexState.status = "ready";
     indexState.lastIndexed = new Date();
   }
@@ -1038,7 +1043,7 @@ async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
-  console.error("Server ready");
+  if (process.env.CODEBASE_CONTEXT_DEBUG) console.error("[DEBUG] Server ready");
 }
 
 // Export server components for programmatic use

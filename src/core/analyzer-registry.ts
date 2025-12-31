@@ -16,7 +16,10 @@ export class AnalyzerRegistry {
     this.sortedAnalyzers = Array.from(this.analyzers.values())
       .sort((a, b) => b.priority - a.priority);
 
-    console.error(`Registered analyzer: ${analyzer.name} (priority: ${analyzer.priority})`);
+    // Debug logging guarded by env var - avoids stderr output during MCP STDIO handshake
+    if (process.env.CODEBASE_CONTEXT_DEBUG) {
+      console.error(`[DEBUG] Registered analyzer: ${analyzer.name} (priority: ${analyzer.priority})`);
+    }
   }
 
   unregister(name: string): boolean {

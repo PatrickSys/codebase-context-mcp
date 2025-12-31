@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.1 (2025-12-31)
+
+### Fixed
+
+- **MCP Protocol Compatibility**: Fixed stderr output during MCP STDIO handshake for strict clients
+  - All startup `console.error` calls now guarded with `CODEBASE_CONTEXT_DEBUG` env var
+  - Zero stderr output during JSON-RPC handshake (required by Warp, OpenCode, MCPJam)
+  - Debug logs available via `CODEBASE_CONTEXT_DEBUG=1` environment variable
+  - Minimal implementation: 2 files changed, 46 insertions, 25 deletions
+  - Reported by [@aolin480](https://github.com/aolin480) in [#2](https://github.com/PatrickSys/codebase-context/issues/2)
+
 ## 1.2.0 (2025-12-29)
 
 ### Features

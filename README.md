@@ -67,6 +67,7 @@ Now the agent checks patterns automatically instead of waiting for you to ask.
 |----------|---------|-------------|
 | `EMBEDDING_PROVIDER` | `transformers` | `openai` (fast, cloud) or `transformers` (local, private) |
 | `OPENAI_API_KEY` | - | Required if provider is `openai` |
+| `CODEBASE_CONTEXT_DEBUG` | - | Set to `1` to enable verbose logging (startup messages, analyzer registration) |
 
 ## Performance Note
 
