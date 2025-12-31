@@ -1,18 +1,18 @@
 /**
- * Library entry point for codebase-context-mcp
+ * Library entry point for codebase-context
  *
- * This module exports the public API for programmatic use.
- * For the MCP server, import from 'codebase-context-mcp/server' or run the CLI.
+ * This exports the core logic for use as a library.
+ * For the MCP server, import from 'codebase-context/server' or run the CLI.
  *
  * @example
  * ```typescript
  * import {
- *   CodebaseIndexer,
- *   CodebaseSearcher,
+ *   ProjectAnalyzer,
+ *   VectorStorage,
  *   analyzerRegistry,
  *   AngularAnalyzer,
  *   GenericAnalyzer
- * } from 'codebase-context-mcp';
+ * } from 'codebase-context';
  *
  * // Register analyzers
  * analyzerRegistry.register(new AngularAnalyzer());
