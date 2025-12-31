@@ -1,3 +1,6 @@
+## Props to PatrickSys for his work on the original codebase-context MCP. I needed to extend it for React/NextJS
+https://github.com/PatrickSys/codebase-context
+
 # Codebase Context (ReactJS/NextJS/+)
 
 This branch extends the original `codebase-context` MCP server with **React** and **Next.js** analyzers (while keeping Angular support) so agents can produce higher-signal, framework-aware answers across mixed codebases.
