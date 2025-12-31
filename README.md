@@ -1,3 +1,32 @@
+# codebase-context-react-nextjs (ReactJS/NextJS/+)
+
+This branch extends the original `codebase-context` MCP server with **React** and **Next.js** analyzers (while keeping Angular support) so agents can produce higher-signal, framework-aware answers across mixed codebases.
+
+**What’s new in this fork**
+- **Ecosystem detection**: package.json-driven detection of Angular / React / Next.js and common libraries (forms, validation, data, state, styling).
+- **React analyzer**: detects components (function + class), built-in/custom hooks, Context usage, memoization, and Suspense patterns.
+- **Next.js analyzer**: detects App Router vs Pages Router, route kinds (`page`/`layout`/`route`/`api`), route paths, `"use client"`, and metadata exports.
+- **Quieter startup by default**: set `CODEBASE_CONTEXT_DEBUG=1` only when you want startup/index logs.
+
+## Quick Start (GitHub branch)
+
+Add this to your MCP client config (Claude Desktop, VS Code, Cursor, etc.).
+
+```json
+"mcpServers": {
+  "codebase-context": {
+    "command": "npx",
+    "args": [
+      "-y",
+      "github:aolin480/codebase-context-react-nextjs#feature/reactjs-nextjs-analyzers",
+      "/path/to/your/project"
+    ]
+  }
+}
+```
+
+---
+
 # codebase-context
 
 **AI coding agents don't know your codebase. This MCP fixes that.**
@@ -12,7 +41,11 @@ Add this to your MCP client config (Claude Desktop, VS Code, Cursor, etc.).
 "mcpServers": {
   "codebase-context": {
     "command": "npx",
-    "args": ["codebase-context", "/path/to/your/project"]
+    "args": [
+      "-y",
+      "github:aolin480/codebase-context-react-nextjs#feature/reactjs-nextjs-analyzers",
+      "/path/to/your/project"
+    ]
   }
 }
 ```
