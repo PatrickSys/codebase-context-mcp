@@ -13,3 +13,4 @@ dist/
 internal-docs/
 internal-docs.zip
 .codebase-intelligence.json
+.idea

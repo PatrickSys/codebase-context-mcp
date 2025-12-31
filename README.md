@@ -1,4 +1,4 @@
-# codebase-context-react-nextjs (ReactJS/NextJS/+)
+# Codebase Context (ReactJS/NextJS/+)
 
 This branch extends the original `codebase-context` MCP server with **React** and **Next.js** analyzers (while keeping Angular support) so agents can produce higher-signal, framework-aware answers across mixed codebases.
 
@@ -10,11 +10,32 @@ This branch extends the original `codebase-context` MCP server with **React** an
 
 ## Quick Start (GitHub branch)
 
-Add this to your MCP client config (Claude Desktop, VS Code, Cursor, etc.).
+### Claude Desktop / VS Code / Cursor
+
+Add this to your MCP client config:
 
 ```json
-"mcpServers": {
-  "codebase-context": {
+{
+  "mcpServers": {
+    "codebase-context-react-nextjs": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "github:aolin480/codebase-context-react-nextjs#feature/reactjs-nextjs-analyzers",
+        "/path/to/your/project"
+      ]
+    }
+  }
+}
+```
+
+### Warp
+
+Add this to your Warp MCP configuration:
+
+```json
+{
+  "codebase-context-react-nextjs": {
     "command": "npx",
     "args": [
       "-y",
@@ -23,6 +44,69 @@ Add this to your MCP client config (Claude Desktop, VS Code, Cursor, etc.).
     ]
   }
 }
+```
+
+### Codex
+
+Add this to your Codex MCP configuration:
+
+```toml
+[mcp_servers.codebase-context-react-nextjs]
+command = "npx"
+args = [
+  "-y",
+  "github:aolin480/codebase-context-react-nextjs#feature/reactjs-nextjs-analyzers",
+  "/path/to/your/project"
+]
+```
+
+### Gemini
+
+Add this to your Gemini MCP configuration:
+
+```json
+{
+  "codebase-context-react-nextjs": {
+    "command": "npx",
+    "args": [
+      "-y",
+      "github:aolin480/codebase-context-react-nextjs#feature/reactjs-nextjs-analyzers",
+      "/path/to/your/project"
+    ]
+  }
+}
+```
+
+### OpenCode
+
+Add this to your OpenCode MCP configuration:
+
+```json
+{
+  "mcp": {
+    "codebase-context-react-nextjs": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "github:aolin480/codebase-context-react-nextjs#feature/reactjs-nextjs-analyzers",
+        "/path/to/your/project"
+      ],
+      "enabled": true
+    }
+  }
+}
+```
+
+## Smoke Tests
+
+From this repo root:
+
+```bash
+npm run smoke:build
+npm run smoke
+npm run smoke:nextjs
+npm run smoke:react
 ```
 
 ---
