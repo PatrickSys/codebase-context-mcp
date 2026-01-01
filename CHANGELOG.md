@@ -1,6 +1,27 @@
 # Changelog
 
 
+## [1.3.0] - 2026-01-01
+
+### Added
+- **Workspace Detection**: Monorepo support for Nx, Turborepo, Lerna, and pnpm workspaces
+  - New utility: `src/utils/workspace-detection.ts`
+  - Functions: `scanWorkspacePackageJsons()`, `detectWorkspaceType()`, `aggregateWorkspaceDependencies()`
+- **Testing Infrastructure**: Vitest smoke tests for core utilities
+  - Tests for workspace detection, analyzer registry, and indexer metadata
+  - CI/CD workflow via GitHub Actions
+- **Dependency Detection**: Added `@nx/` and `@nrwl/` prefix matching for build tools
+
+### Fixed
+- **detectMetadata() bug**: All registered analyzers now contribute to codebase metadata (previously only the first analyzer was called)
+  - Added `mergeMetadata()` helper with proper array deduplication and layer merging
+
+### Changed
+- Updated roadmap: v1.3 is now "Extensible Architecture Foundation"
+
+### Acknowledgements
+Thanks to [@aolin480](https://github.com/aolin480) for accelerating the workspace detection roadmap and identifying the detectMetadata() limitation in their fork.
+
 ## 1.2.2 (2025-12-31)
 
 ### Fixed

@@ -536,58 +536,65 @@ export class CodebaseIndexer {
   }
 
   async detectMetadata(): Promise<CodebaseMetadata> {
-    // Try to use the most specific analyzer for metadata detection
-    const primaryAnalyzer = analyzerRegistry.getAll()[0]; // Highest priority
+    // Get all registered analyzers (sorted by priority, highest first)
+    const analyzers = analyzerRegistry.getAll();
 
-    let metadata: CodebaseMetadata;
-    if (primaryAnalyzer) {
-      metadata = await primaryAnalyzer.detectCodebaseMetadata(this.rootPath);
-    } else {
-      // Fallback metadata
-      metadata = {
-        name: path.basename(this.rootPath),
-        rootPath: this.rootPath,
-        languages: [],
-        dependencies: [],
-        architecture: {
-          type: "mixed",
-          layers: {
-            presentation: 0,
-            business: 0,
-            data: 0,
-            state: 0,
-            core: 0,
-            shared: 0,
-            feature: 0,
-            infrastructure: 0,
-            unknown: 0,
-          },
-          patterns: [],
+    // Start with base metadata template
+    let metadata: CodebaseMetadata = {
+      name: path.basename(this.rootPath),
+      rootPath: this.rootPath,
+      languages: [],
+      dependencies: [],
+      architecture: {
+        type: "mixed",
+        layers: {
+          presentation: 0,
+          business: 0,
+          data: 0,
+          state: 0,
+          core: 0,
+          shared: 0,
+          feature: 0,
+          infrastructure: 0,
+          unknown: 0,
         },
-        styleGuides: [],
-        documentation: [],
-        projectStructure: {
-          type: "single-app",
+        patterns: [],
+      },
+      styleGuides: [],
+      documentation: [],
+      projectStructure: {
+        type: "single-app",
+      },
+      statistics: {
+        totalFiles: 0,
+        totalLines: 0,
+        totalComponents: 0,
+        componentsByType: {},
+        componentsByLayer: {
+          presentation: 0,
+          business: 0,
+          data: 0,
+          state: 0,
+          core: 0,
+          shared: 0,
+          feature: 0,
+          infrastructure: 0,
+          unknown: 0,
         },
-        statistics: {
-          totalFiles: 0,
-          totalLines: 0,
-          totalComponents: 0,
-          componentsByType: {},
-          componentsByLayer: {
-            presentation: 0,
-            business: 0,
-            data: 0,
-            state: 0,
-            core: 0,
-            shared: 0,
-            feature: 0,
-            infrastructure: 0,
-            unknown: 0,
-          },
-        },
-        customMetadata: {},
-      };
+      },
+      customMetadata: {},
+    };
+
+    // Loop through all analyzers (highest priority first) and merge their metadata
+    // Higher priority analyzers' values win on conflicts
+    for (const analyzer of analyzers) {
+      try {
+        const analyzerMeta = await analyzer.detectCodebaseMetadata(this.rootPath);
+        metadata = this.mergeMetadata(metadata, analyzerMeta);
+      } catch (error) {
+        // Analyzer failed, continue with next
+        console.warn(`Analyzer ${analyzer.name} failed to detect metadata:`, error);
+      }
     }
 
     // Load intelligence data if available
@@ -608,6 +615,70 @@ export class CodebaseIndexer {
 
     return metadata;
   }
+
+  /**
+   * Merge two CodebaseMetadata objects.
+   * The 'incoming' metadata takes precedence for non-empty values.
+   */
+  private mergeMetadata(base: CodebaseMetadata, incoming: CodebaseMetadata): CodebaseMetadata {
+    return {
+      name: incoming.name || base.name,
+      rootPath: incoming.rootPath || base.rootPath,
+      languages: [...new Set([...base.languages, ...incoming.languages])], // Merge and deduplicate
+      dependencies: this.mergeDependencies(base.dependencies, incoming.dependencies),
+      framework: incoming.framework || base.framework, // Framework from higher priority analyzer wins
+      architecture: {
+        type: incoming.architecture?.type || base.architecture.type,
+        layers: this.mergeLayers(base.architecture.layers, incoming.architecture?.layers),
+        patterns: [...new Set([...(base.architecture.patterns || []), ...(incoming.architecture?.patterns || [])])], // Merge and deduplicate
+      },
+      styleGuides: [...new Set([...base.styleGuides, ...incoming.styleGuides])], // Merge and deduplicate
+      documentation: [...new Set([...base.documentation, ...incoming.documentation])], // Merge and deduplicate
+      projectStructure: incoming.projectStructure?.type !== 'single-app'
+        ? incoming.projectStructure
+        : base.projectStructure,
+      statistics: this.mergeStatistics(base.statistics, incoming.statistics),
+      customMetadata: { ...base.customMetadata, ...incoming.customMetadata },
+    };
+  }
+
+  private mergeDependencies(base: any[], incoming: any[]): any[] {
+    const seen = new Set(base.map(d => d.name));
+    const result = [...base];
+    for (const dep of incoming) {
+      if (!seen.has(dep.name)) {
+        result.push(dep);
+        seen.add(dep.name);
+      }
+    }
+    return result;
+  }
+
+  private mergeLayers(base: any, incoming?: any): any {
+    if (!incoming) return base;
+    return {
+      presentation: Math.max(base.presentation || 0, incoming.presentation || 0),
+      business: Math.max(base.business || 0, incoming.business || 0),
+      data: Math.max(base.data || 0, incoming.data || 0),
+      state: Math.max(base.state || 0, incoming.state || 0),
+      core: Math.max(base.core || 0, incoming.core || 0),
+      shared: Math.max(base.shared || 0, incoming.shared || 0),
+      feature: Math.max(base.feature || 0, incoming.feature || 0),
+      infrastructure: Math.max(base.infrastructure || 0, incoming.infrastructure || 0),
+      unknown: Math.max(base.unknown || 0, incoming.unknown || 0),
+    };
+  }
+
+  private mergeStatistics(base: any, incoming: any): any {
+    return {
+      totalFiles: Math.max(base.totalFiles || 0, incoming.totalFiles || 0),
+      totalLines: Math.max(base.totalLines || 0, incoming.totalLines || 0),
+      totalComponents: Math.max(base.totalComponents || 0, incoming.totalComponents || 0),
+      componentsByType: { ...base.componentsByType, ...incoming.componentsByType },
+      componentsByLayer: this.mergeLayers(base.componentsByLayer, incoming.componentsByLayer),
+    };
+  }
+
 
   /**
    * Get regex pattern for extracting code snippets based on pattern category and name
