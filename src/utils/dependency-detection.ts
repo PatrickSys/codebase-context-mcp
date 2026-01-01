@@ -52,11 +52,11 @@ export const LIBRARY_CATEGORIES: Record<string, Dependency['category']> = {
     'valibot': 'utility',
 
     // Backend / API
-    'express': 'backend',
-    'fastify': 'backend',
-    'nest.js': 'backend',
-    'prisma': 'backend',
-    'mongoose': 'backend',
+    'express': 'other',
+    'fastify': 'other',
+    'nest.js': 'other',
+    'prisma': 'other',
+    'mongoose': 'other',
 
     // Testing
     'jest': 'testing',
