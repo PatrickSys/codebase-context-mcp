@@ -17,6 +17,12 @@ import {
 } from '../../types/index.js';
 import { createChunksFromCode } from '../../utils/chunking.js';
 import { detectLanguage } from '../../utils/language-detection.js';
+import {
+  detectWorkspaceType,
+  scanWorkspacePackageJsons,
+  aggregateWorkspaceDependencies,
+  categorizeDependency
+} from '../../utils/dependency-detection.js';
 
 export class GenericAnalyzer implements FrameworkAnalyzer {
   readonly name = 'generic';
@@ -113,30 +119,42 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
     let projectName = path.basename(rootPath);
     let dependencies: Dependency[] = [];
 
+    let workspaceType: string = 'single';
+    let workspacePackages: any[] = [];
+
     try {
-      const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf-8'));
-      projectName = packageJson.name || projectName;
+      workspaceType = await detectWorkspaceType(rootPath);
+      workspacePackages = workspaceType !== 'single'
+        ? await scanWorkspacePackageJsons(rootPath)
+        : [];
 
-      // Extract dependencies
-      const allDeps = {
-        ...packageJson.dependencies,
-        ...packageJson.devDependencies,
-      };
+      const pkgPath = path.join(rootPath, 'package.json');
+      let packageJson: any = {};
+      try {
+        packageJson = JSON.parse(await fs.readFile(pkgPath, 'utf-8'));
+        projectName = packageJson.name || projectName;
+      } catch {
+        // no root package.json
+      }
 
-      dependencies = Object.entries(allDeps).map(([name, version]) => ({
+      const rawDeps = workspaceType !== 'single'
+        ? aggregateWorkspaceDependencies(workspacePackages)
+        : { ...packageJson.dependencies, ...packageJson.devDependencies };
+
+      dependencies = Object.entries(rawDeps).map(([name, version]) => ({
         name,
         version: version as string,
-        category: this.categorizeDependency(name),
+        category: categorizeDependency(name),
       }));
     } catch (error) {
-      // No package.json or failed to read
+      // skip
     }
 
-    return {
+    const metadata: CodebaseMetadata = {
       name: projectName,
       rootPath,
       languages: [],
-      dependencies,
+      dependencies: dependencies as any,
       architecture: {
         type: 'mixed',
         layers: {
@@ -155,7 +173,13 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
       styleGuides: [],
       documentation: [],
       projectStructure: {
-        type: 'single-app',
+        type: workspaceType === 'single' ? 'single-app' : 'monorepo',
+        packages: workspacePackages.map(p => ({
+          name: p.name || path.basename(path.dirname(p.filePath)),
+          path: path.relative(rootPath, path.dirname(p.filePath)),
+          type: 'app', // default to app
+        })),
+        workspaces: workspaceType !== 'single' ? [workspaceType] : undefined,
       },
       statistics: {
         totalFiles: 0,
@@ -174,8 +198,12 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
           unknown: 0,
         },
       },
-      customMetadata: {},
+      customMetadata: {
+        monorepoType: workspaceType !== 'single' ? workspaceType : undefined,
+      },
     };
+
+    return metadata;
   }
 
   private async parseJSTSFile(
