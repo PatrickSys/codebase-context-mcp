@@ -1,0 +1,5 @@
+packages:
+  - '.'
+
+minimum-release-age: 1440
+verify-store-integrity: true
