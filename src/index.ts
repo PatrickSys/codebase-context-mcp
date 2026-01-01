@@ -68,7 +68,9 @@ const indexState: IndexState = {
 };
 
 
-const server = new Server(
+import type { Server as MCPServer } from "@modelcontextprotocol/sdk/server/index.js";
+
+const server: MCPServer = new Server(
   {
     name: "codebase-context",
     version: "1.3.0",
