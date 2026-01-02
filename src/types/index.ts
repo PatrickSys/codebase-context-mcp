@@ -89,24 +89,24 @@ export interface Dependency {
 }
 
 export type DependencyCategory =
-  | 'framework'      // Angular, React, Vue core
-  | 'state'          // State management (NgRx, Redux, Pinia)
-  | 'ui'             // UI libraries (Material, Ant Design)
-  | 'routing'        // Routing libraries
-  | 'http'           // HTTP clients
-  | 'testing'        // Testing frameworks
-  | 'utility'        // Utility libraries
-  | 'build'          // Build tools
+  | 'framework' // Angular, React, Vue core
+  | 'state' // State management (NgRx, Redux, Pinia)
+  | 'ui' // UI libraries (Material, Ant Design)
+  | 'routing' // Routing libraries
+  | 'http' // HTTP clients
+  | 'testing' // Testing frameworks
+  | 'utility' // Utility libraries
+  | 'build' // Build tools
   | 'other';
 
 export type ArchitecturalLayer =
-  | 'presentation'   // UI components, views
-  | 'business'       // Business logic, services
-  | 'data'          // Data access, API calls
-  | 'state'         // State management
-  | 'core'          // Core services, guards
-  | 'shared'        // Shared utilities
-  | 'feature'       // Feature modules
+  | 'presentation' // UI components, views
+  | 'business' // Business logic, services
+  | 'data' // Data access, API calls
+  | 'state' // State management
+  | 'core' // Core services, guards
+  | 'shared' // Shared utilities
+  | 'feature' // Feature modules
   | 'infrastructure' // Infrastructure code
   | 'unknown';
 

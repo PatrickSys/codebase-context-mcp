@@ -45,4 +45,3 @@ export async function getEmbeddingProvider(
 
   return provider;
 }
-

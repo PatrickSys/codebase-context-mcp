@@ -13,7 +13,7 @@ import {
   CodeComponent,
   ImportStatement,
   ExportStatement,
-  Dependency,
+  Dependency
 } from '../../types/index.js';
 import { createChunksFromCode } from '../../utils/chunking.js';
 import { detectLanguage } from '../../utils/language-detection.js';
@@ -29,13 +29,26 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
   readonly version = '1.0.0';
   readonly supportedExtensions = [
     // JavaScript/TypeScript
-    '.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs',
+    '.js',
+    '.jsx',
+    '.ts',
+    '.tsx',
+    '.mjs',
+    '.cjs',
     // Python
-    '.py', '.pyi',
+    '.py',
+    '.pyi',
     // Java/Kotlin
-    '.java', '.kt', '.kts',
+    '.java',
+    '.kt',
+    '.kts',
     // C/C++
-    '.c', '.cpp', '.cc', '.cxx', '.h', '.hpp',
+    '.c',
+    '.cpp',
+    '.cc',
+    '.cxx',
+    '.h',
+    '.hpp',
     // C#
     '.cs',
     // Go
@@ -51,17 +64,29 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
     // Scala
     '.scala',
     // Shell
-    '.sh', '.bash', '.zsh',
+    '.sh',
+    '.bash',
+    '.zsh',
     // Config
-    '.json', '.yaml', '.yml', '.toml', '.xml',
+    '.json',
+    '.yaml',
+    '.yml',
+    '.toml',
+    '.xml',
     // Markup
-    '.html', '.htm', '.md', '.mdx',
+    '.html',
+    '.htm',
+    '.md',
+    '.mdx',
     // Styles
-    '.css', '.scss', '.sass', '.less',
+    '.css',
+    '.scss',
+    '.sass',
+    '.less'
   ];
   readonly priority = 10; // Low priority - fallback analyzer
 
-  canAnalyze(filePath: string, content?: string): boolean {
+  canAnalyze(filePath: string, _content?: string): boolean {
     const ext = path.extname(filePath).toLowerCase();
     return this.supportedExtensions.includes(ext);
   }
@@ -108,14 +133,13 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
       metadata: {
         analyzer: this.name,
         fileSize: content.length,
-        lineCount: content.split('\n').length,
+        lineCount: content.split('\n').length
       },
-      chunks,
+      chunks
     };
   }
 
   async detectCodebaseMetadata(rootPath: string): Promise<CodebaseMetadata> {
-    const packageJsonPath = path.join(rootPath, 'package.json');
     let projectName = path.basename(rootPath);
     let dependencies: Dependency[] = [];
 
@@ -124,9 +148,8 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
 
     try {
       workspaceType = await detectWorkspaceType(rootPath);
-      workspacePackages = workspaceType !== 'single'
-        ? await scanWorkspacePackageJsons(rootPath)
-        : [];
+      workspacePackages =
+        workspaceType !== 'single' ? await scanWorkspacePackageJsons(rootPath) : [];
 
       const pkgPath = path.join(rootPath, 'package.json');
       let packageJson: any = {};
@@ -137,16 +160,17 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
         // no root package.json
       }
 
-      const rawDeps = workspaceType !== 'single'
-        ? aggregateWorkspaceDependencies(workspacePackages)
-        : { ...packageJson.dependencies, ...packageJson.devDependencies };
+      const rawDeps =
+        workspaceType !== 'single'
+          ? aggregateWorkspaceDependencies(workspacePackages)
+          : { ...packageJson.dependencies, ...packageJson.devDependencies };
 
       dependencies = Object.entries(rawDeps).map(([name, version]) => ({
         name,
         version: version as string,
-        category: categorizeDependency(name),
+        category: categorizeDependency(name)
       }));
-    } catch (error) {
+    } catch (_error) {
       // skip
     }
 
@@ -166,20 +190,20 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
           shared: 0,
           feature: 0,
           infrastructure: 0,
-          unknown: 0,
+          unknown: 0
         },
-        patterns: [],
+        patterns: []
       },
       styleGuides: [],
       documentation: [],
       projectStructure: {
         type: workspaceType === 'single' ? 'single-app' : 'monorepo',
-        packages: workspacePackages.map(p => ({
+        packages: workspacePackages.map((p) => ({
           name: p.name || path.basename(path.dirname(p.filePath)),
           path: path.relative(rootPath, path.dirname(p.filePath)),
-          type: 'app', // default to app
+          type: 'app' // default to app
         })),
-        workspaces: workspaceType !== 'single' ? [workspaceType] : undefined,
+        workspaces: workspaceType !== 'single' ? [workspaceType] : undefined
       },
       statistics: {
         totalFiles: 0,
@@ -195,12 +219,12 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
           shared: 0,
           feature: 0,
           infrastructure: 0,
-          unknown: 0,
-        },
+          unknown: 0
+        }
       },
       customMetadata: {
-        monorepoType: workspaceType !== 'single' ? workspaceType : undefined,
-      },
+        monorepoType: workspaceType !== 'single' ? workspaceType : undefined
+      }
     };
 
     return metadata;
@@ -209,7 +233,7 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
   private async parseJSTSFile(
     filePath: string,
     content: string,
-    language: 'typescript' | 'javascript'
+    _language: 'typescript' | 'javascript'
   ): Promise<{
     components: CodeComponent[];
     imports: ImportStatement[];
@@ -226,7 +250,7 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
         loc: true,
         range: true,
         comment: true,
-        jsx: filePath.endsWith('x'),
+        jsx: filePath.endsWith('x')
       });
 
       // Extract imports
@@ -241,7 +265,7 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
             }),
             isDefault: node.specifiers.some((s: any) => s.type === 'ImportDefaultSpecifier'),
             isDynamic: false,
-            line: node.loc?.start.line,
+            line: node.loc?.start.line
           });
         }
 
@@ -252,7 +276,7 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
             type: 'class',
             startLine: node.loc!.start.line,
             endLine: node.loc!.end.line,
-            metadata: {},
+            metadata: {}
           });
         }
 
@@ -262,7 +286,7 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
             type: 'function',
             startLine: node.loc!.start.line,
             endLine: node.loc!.end.line,
-            metadata: {},
+            metadata: {}
           });
         }
 
@@ -270,7 +294,8 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
           for (const decl of node.declarations) {
             if (decl.id.type === 'Identifier') {
               // Check if it's an arrow function or function expression
-              const isFunction = decl.init &&
+              const isFunction =
+                decl.init &&
                 (decl.init.type === 'ArrowFunctionExpression' ||
                   decl.init.type === 'FunctionExpression');
 
@@ -279,7 +304,7 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
                 type: isFunction ? 'function' : 'variable',
                 startLine: decl.loc!.start.line,
                 endLine: decl.loc!.end.line,
-                metadata: {},
+                metadata: {}
               });
             }
           }
@@ -294,7 +319,7 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
                   exports.push({
                     name: decl.id.name,
                     isDefault: false,
-                    type: 'named',
+                    type: 'named'
                   });
                 }
               }
@@ -302,7 +327,7 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
               exports.push({
                 name: (node.declaration.id as any).name,
                 isDefault: false,
-                type: 'named',
+                type: 'named'
               });
             }
           }
@@ -313,7 +338,7 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
                 exports.push({
                   name: spec.exported.name,
                   isDefault: false,
-                  type: 'named',
+                  type: 'named'
                 });
               }
             }
@@ -321,13 +346,11 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
         }
 
         if (node.type === 'ExportDefaultDeclaration') {
-          const name = node.declaration.type === 'Identifier'
-            ? node.declaration.name
-            : 'default';
+          const name = node.declaration.type === 'Identifier' ? node.declaration.name : 'default';
           exports.push({
             name,
             isDefault: true,
-            type: 'default',
+            type: 'default'
           });
         }
       }
@@ -349,7 +372,10 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
       // Classes: class, struct
       { regex: /(?:^|\s)(?:class|struct|interface|trait)\s+(\w+)/i, type: 'class' },
       // Methods: pub fn, pub fn, private func
-      { regex: /(?:pub|public|private|protected)?\s*(?:fn|func|function|def|method)\s+(\w+)/i, type: 'method' },
+      {
+        regex: /(?:pub|public|private|protected)?\s*(?:fn|func|function|def|method)\s+(\w+)/i,
+        type: 'method'
+      }
     ];
 
     lines.forEach((line, index) => {
@@ -361,7 +387,7 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
             type: pattern.type,
             startLine: index + 1,
             endLine: index + 1, // Will be updated if we find end
-            metadata: {},
+            metadata: {}
           });
         }
       }
@@ -412,7 +438,9 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
     // Fallback to first meaningful line
     const firstLine = content
       .split('\n')
-      .find(line => line.trim() && !line.trim().startsWith('import') && !line.trim().startsWith('//'));
+      .find(
+        (line) => line.trim() && !line.trim().startsWith('import') && !line.trim().startsWith('//')
+      );
 
     return `${language} code in ${fileName}: ${firstLine ? firstLine.trim().slice(0, 60) + '...' : 'code definition'}`;
   }

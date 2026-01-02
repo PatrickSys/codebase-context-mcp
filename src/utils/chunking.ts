@@ -7,15 +7,15 @@ import { v4 as uuidv4 } from 'uuid';
 import { CodeChunk, CodeComponent } from '../types/index.js';
 
 export interface ChunkingOptions {
-  maxChunkSize?: number;      // Max lines per chunk
-  overlapSize?: number;       // Lines of overlap between chunks
+  maxChunkSize?: number; // Max lines per chunk
+  overlapSize?: number; // Lines of overlap between chunks
   preserveBoundaries?: boolean; // Try to chunk at function/class boundaries
 }
 
 const DEFAULT_OPTIONS: ChunkingOptions = {
   maxChunkSize: 100,
   overlapSize: 10,
-  preserveBoundaries: true,
+  preserveBoundaries: true
 };
 
 /**
@@ -30,11 +30,13 @@ export async function createChunksFromCode(
   metadata?: Record<string, any>
 ): Promise<CodeChunk[]> {
   const chunks: CodeChunk[] = [];
-  const lines = content.split('\n');
+  const _lines = content.split('\n');
 
   // If we have components, create component-aware chunks
   if (components.length > 0) {
-    chunks.push(...createComponentChunks(content, filePath, relativePath, language, components, metadata));
+    chunks.push(
+      ...createComponentChunks(content, filePath, relativePath, language, components, metadata)
+    );
   } else {
     // Fall back to line-based chunking
     chunks.push(...createLineChunks(content, filePath, relativePath, language, metadata));
@@ -109,8 +111,8 @@ function createComponentChunks(
         componentType: component.componentType,
         complexity,
         importSection, // Keep imports as context in metadata
-        lifecycle: component.lifecycle,
-      },
+        lifecycle: component.lifecycle
+      }
     });
   }
 
@@ -157,8 +159,8 @@ function createLineChunks(
       tags: [],
       metadata: {
         ...metadata,
-        complexity,
-      },
+        complexity
+      }
     });
 
     // Move to next chunk with overlap
@@ -185,9 +187,9 @@ export function calculateComplexity(code: string): number {
     /\bwhile\s*\(/g,
     /\bcase\s+/g,
     /\bcatch\s*\(/g,
-    /\b\?\s*[^:]/g,  // Ternary operator
+    /\b\?\s*[^:]/g, // Ternary operator
     /&&/g,
-    /\|\|/g,
+    /\|\|/g
   ];
 
   for (const pattern of patterns) {
@@ -274,8 +276,8 @@ export function mergeSmallChunks(chunks: CodeChunk[], minSize: number = 20): Cod
         endLine: next.endLine,
         metadata: {
           ...current.metadata,
-          merged: true,
-        },
+          merged: true
+        }
       };
     } else {
       merged.push(current);

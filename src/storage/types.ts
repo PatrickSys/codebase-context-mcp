@@ -59,5 +59,5 @@ export interface StorageConfig {
 
 export const DEFAULT_STORAGE_CONFIG: StorageConfig = {
   provider: 'lancedb',
-  path: '.codebase-index',
+  path: '.codebase-index'
 };

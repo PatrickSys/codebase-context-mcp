@@ -3,13 +3,8 @@
  * Embedded vector database for storing and searching code embeddings
  */
 
-import path from 'path';
 import { promises as fs } from 'fs';
-import {
-  VectorStorageProvider,
-  CodeChunkWithEmbedding,
-  VectorSearchResult,
-} from './types.js';
+import { VectorStorageProvider, CodeChunkWithEmbedding, VectorSearchResult } from './types.js';
 import { CodeChunk, SearchFilters } from '../types/index.js';
 
 export class LanceDBStorageProvider implements VectorStorageProvider {
@@ -52,7 +47,7 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
           } else {
             console.error('Opened existing LanceDB table');
           }
-        } catch (schemaError) {
+        } catch (_schemaError) {
           // If schema check fails, table is likely corrupted - drop and rebuild
           console.error('Failed to validate table schema, rebuilding index...');
           await this.db.dropTable('code_chunks');
@@ -77,7 +72,7 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
 
     try {
       // Convert chunks to LanceDB format
-      const records = chunks.map(chunk => ({
+      const records = chunks.map((chunk) => ({
         id: chunk.id,
         vector: chunk.embedding,
         content: chunk.content,
@@ -93,7 +88,7 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
         imports: JSON.stringify(chunk.imports),
         exports: JSON.stringify(chunk.exports),
         tags: JSON.stringify(chunk.tags),
-        metadata: JSON.stringify(chunk.metadata),
+        metadata: JSON.stringify(chunk.metadata)
       }));
 
       // Create or overwrite table
@@ -103,7 +98,7 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
       } else {
         // Create new table
         this.table = await this.db.createTable('code_chunks', records, {
-          mode: 'overwrite',
+          mode: 'overwrite'
         });
       }
 
@@ -169,10 +164,10 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
           imports: JSON.parse(result.imports || '[]'),
           exports: JSON.parse(result.exports || '[]'),
           tags: JSON.parse(result.tags || '[]'),
-          metadata: JSON.parse(result.metadata || '{}'),
+          metadata: JSON.parse(result.metadata || '{}')
         } as CodeChunk,
         score: 1 - (result._distance || 0), // Convert distance to similarity
-        distance: result._distance || 0,
+        distance: result._distance || 0
       }));
     } catch (error) {
       console.error('Failed to search:', error);
@@ -220,9 +215,7 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
 /**
  * Create a LanceDB storage provider
  */
-export async function createLanceDBStorage(
-  storagePath: string
-): Promise<VectorStorageProvider> {
+export async function createLanceDBStorage(storagePath: string): Promise<VectorStorageProvider> {
   const provider = new LanceDBStorageProvider();
   await provider.initialize(storagePath);
   return provider;

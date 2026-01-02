@@ -3,32 +3,30 @@
  * Scans files, delegates to analyzers, creates embeddings, stores in vector DB
  */
 
-import { promises as fs } from "fs";
-import path from "path";
-import { glob } from "glob";
-import ignore from "ignore";
+import { promises as fs } from 'fs';
+import path from 'path';
+import { glob } from 'glob';
+import ignore from 'ignore';
 import {
   CodebaseMetadata,
   CodeChunk,
   IndexingProgress,
   IndexingStats,
   IndexingPhase,
-  CodebaseConfig,
-  AnalysisResult,
-} from "../types/index.js";
-import { analyzerRegistry } from "./analyzer-registry.js";
-import { isCodeFile, isBinaryFile } from "../utils/language-detection.js";
+  CodebaseConfig
+} from '../types/index.js';
+import { analyzerRegistry } from './analyzer-registry.js';
+import { isCodeFile, isBinaryFile } from '../utils/language-detection.js';
+import { getEmbeddingProvider } from '../embeddings/index.js';
+import { getStorageProvider, CodeChunkWithEmbedding } from '../storage/index.js';
 import {
-  getEmbeddingProvider,
-  EmbeddingProvider,
-} from "../embeddings/index.js";
-import {
-  getStorageProvider,
-  VectorStorageProvider,
-  CodeChunkWithEmbedding,
-} from "../storage/index.js";
-import { LibraryUsageTracker, PatternDetector, ImportGraph, InternalFileGraph, FileExport } from "../utils/usage-tracker.js";
-import { getFileCommitDates } from "../utils/git-dates.js";
+  LibraryUsageTracker,
+  PatternDetector,
+  ImportGraph,
+  InternalFileGraph,
+  FileExport
+} from '../utils/usage-tracker.js';
+import { getFileCommitDates } from '../utils/git-dates.js';
 
 export interface IndexerOptions {
   rootPath: string;
@@ -48,13 +46,13 @@ export class CodebaseIndexer {
     this.onProgressCallback = options.onProgress;
 
     this.progress = {
-      phase: "initializing",
+      phase: 'initializing',
       percentage: 0,
       filesProcessed: 0,
       totalFiles: 0,
       chunksCreated: 0,
       errors: [],
-      startedAt: new Date(),
+      startedAt: new Date()
     };
   }
 
@@ -64,44 +62,38 @@ export class CodebaseIndexer {
         angular: { enabled: true, priority: 100 },
         react: { enabled: false, priority: 90 },
         vue: { enabled: false, priority: 90 },
-        generic: { enabled: true, priority: 10 },
+        generic: { enabled: true, priority: 10 }
       },
-      include: ["**/*.{ts,tsx,js,jsx,html,css,scss,sass,less}"],
-      exclude: [
-        "node_modules/**",
-        "dist/**",
-        "build/**",
-        ".git/**",
-        "coverage/**",
-      ],
+      include: ['**/*.{ts,tsx,js,jsx,html,css,scss,sass,less}'],
+      exclude: ['node_modules/**', 'dist/**', 'build/**', '.git/**', 'coverage/**'],
       respectGitignore: true,
       parsing: {
         maxFileSize: 1048576, // 1MB
         chunkSize: 100,
         chunkOverlap: 10,
         parseTests: true,
-        parseNodeModules: false,
+        parseNodeModules: false
       },
       styleGuides: {
         autoDetect: true,
-        paths: ["STYLE_GUIDE.md", "docs/style-guide.md", "ARCHITECTURE.md"],
-        parseMarkdown: true,
+        paths: ['STYLE_GUIDE.md', 'docs/style-guide.md', 'ARCHITECTURE.md'],
+        parseMarkdown: true
       },
       documentation: {
         autoDetect: true,
         includeReadmes: true,
-        includeChangelogs: false,
+        includeChangelogs: false
       },
       embedding: {
-        provider: "transformers",
-        model: "Xenova/bge-base-en-v1.5",
-        batchSize: 100,
+        provider: 'transformers',
+        model: 'Xenova/bge-base-en-v1.5',
+        batchSize: 100
       },
       skipEmbedding: false,
       storage: {
-        provider: "lancedb",
-        path: "./codebase-index",
-      },
+        provider: 'lancedb',
+        path: './codebase-index'
+      }
     };
 
     return {
@@ -112,10 +104,10 @@ export class CodebaseIndexer {
       styleGuides: { ...defaultConfig.styleGuides, ...userConfig?.styleGuides },
       documentation: {
         ...defaultConfig.documentation,
-        ...userConfig?.documentation,
+        ...userConfig?.documentation
       },
       embedding: { ...defaultConfig.embedding, ...userConfig?.embedding },
-      storage: { ...defaultConfig.storage, ...userConfig?.storage },
+      storage: { ...defaultConfig.storage, ...userConfig?.storage }
     };
   }
 
@@ -139,15 +131,15 @@ export class CodebaseIndexer {
         shared: 0,
         feature: 0,
         infrastructure: 0,
-        unknown: 0,
+        unknown: 0
       },
       errors: [],
-      startedAt: new Date(),
+      startedAt: new Date()
     };
 
     try {
       // Phase 1: Scanning
-      this.updateProgress("scanning", 0);
+      this.updateProgress('scanning', 0);
       let files = await this.scanFiles();
 
       // Memory safety: limit total files to prevent heap exhaustion
@@ -168,7 +160,7 @@ export class CodebaseIndexer {
       console.error(`Found ${files.length} files to index`);
 
       // Phase 2: Analyzing & Parsing
-      this.updateProgress("analyzing", 0);
+      this.updateProgress('analyzing', 0);
       const allChunks: CodeChunk[] = [];
       const libraryTracker = new LibraryUsageTracker();
       const patternDetector = new PatternDetector();
@@ -186,14 +178,14 @@ export class CodebaseIndexer {
 
         try {
           // Normalize line endings to \n for consistent cross-platform output
-          const rawContent = await fs.readFile(file, "utf-8");
-          const content = rawContent.replace(/\r\n/g, "\n");
+          const rawContent = await fs.readFile(file, 'utf-8');
+          const content = rawContent.replace(/\r\n/g, '\n');
           const result = await analyzerRegistry.analyzeFile(file, content);
 
           if (result) {
             allChunks.push(...result.chunks);
             stats.indexedFiles++;
-            stats.totalLines += content.split("\n").length;
+            stats.totalLines += content.split('\n').length;
 
             // Track library usage AND import graph from imports
             for (const imp of result.imports) {
@@ -223,9 +215,9 @@ export class CodebaseIndexer {
 
             // Track exports for unused export detection
             if (result.exports && result.exports.length > 0) {
-              const fileExports: FileExport[] = result.exports.map(exp => ({
+              const fileExports: FileExport[] = result.exports.map((exp) => ({
                 name: exp.name,
-                type: exp.isDefault ? 'default' : (exp.type as FileExport['type']) || 'other',
+                type: exp.isDefault ? 'default' : (exp.type as FileExport['type']) || 'other'
               }));
               internalFileGraph.trackExports(file, fileExports);
             }
@@ -234,7 +226,11 @@ export class CodebaseIndexer {
             patternDetector.detectFromCode(content, file);
 
             // Helper to extract code snippet around a pattern
-            const extractSnippet = (pattern: RegExp, linesBefore = 1, linesAfter = 3): string | undefined => {
+            const extractSnippet = (
+              pattern: RegExp,
+              linesBefore = 1,
+              linesAfter = 3
+            ): string | undefined => {
               const match = content.match(pattern);
               if (!match) return undefined;
               const lines = content.split('\n');
@@ -259,25 +255,30 @@ export class CodebaseIndexer {
                 // Try to extract a relevant snippet for the pattern
                 const snippetPattern = this.getSnippetPatternFor(pattern.category, pattern.name);
                 const snippet = snippetPattern ? extractSnippet(snippetPattern) : undefined;
-                patternDetector.track(pattern.category, pattern.name,
-                  snippet ? { file: relPath, snippet } : undefined, fileDate);
+                patternDetector.track(
+                  pattern.category,
+                  pattern.name,
+                  snippet ? { file: relPath, snippet } : undefined,
+                  fileDate
+                );
               }
             }
 
             // Track file for Golden File scoring (framework-agnostic based on patterns)
             const detectedPatterns = result.metadata?.detectedPatterns || [];
             const hasPattern = (category: string, name: string) =>
-              detectedPatterns.some((p: { category: string; name: string }) =>
-                p.category === category && p.name === name);
+              detectedPatterns.some(
+                (p: { category: string; name: string }) =>
+                  p.category === category && p.name === name
+              );
 
-            const patternScore = (
+            const patternScore =
               (hasPattern('dependencyInjection', 'inject() function') ? 1 : 0) +
               (hasPattern('stateManagement', 'Signals') ? 1 : 0) +
               (hasPattern('reactivity', 'Computed') ? 1 : 0) +
               (hasPattern('reactivity', 'Effect') ? 1 : 0) +
               (hasPattern('componentStyle', 'Standalone') ? 1 : 0) +
-              (hasPattern('componentInputs', 'Signal-based inputs') ? 1 : 0)
-            );
+              (hasPattern('componentInputs', 'Signal-based inputs') ? 1 : 0);
             if (patternScore >= 3) {
               patternDetector.trackGoldenFile(relPath, patternScore, {
                 inject: hasPattern('dependencyInjection', 'inject() function'),
@@ -285,7 +286,7 @@ export class CodebaseIndexer {
                 computed: hasPattern('reactivity', 'Computed'),
                 effect: hasPattern('reactivity', 'Effect'),
                 standalone: hasPattern('componentStyle', 'Standalone'),
-                signalInputs: hasPattern('componentInputs', 'Signal-based inputs'),
+                signalInputs: hasPattern('componentInputs', 'Signal-based inputs')
               });
             }
 
@@ -307,8 +308,8 @@ export class CodebaseIndexer {
           stats.errors.push({
             filePath: file,
             error: error instanceof Error ? error.message : String(error),
-            phase: "analyzing",
-            timestamp: new Date(),
+            phase: 'analyzing',
+            timestamp: new Date()
           });
         }
 
@@ -320,10 +321,7 @@ export class CodebaseIndexer {
       stats.totalChunks = allChunks.length;
       stats.avgChunkSize =
         allChunks.length > 0
-          ? Math.round(
-            allChunks.reduce((sum, c) => sum + c.content.length, 0) /
-            allChunks.length
-          )
+          ? Math.round(allChunks.reduce((sum, c) => sum + c.content.length, 0) / allChunks.length)
           : 0;
 
       // Memory safety: limit chunks to prevent embedding memory issues
@@ -337,10 +335,10 @@ export class CodebaseIndexer {
       }
 
       // Phase 3: Embedding
-      let chunksWithEmbeddings: CodeChunkWithEmbedding[] = [];
+      const chunksWithEmbeddings: CodeChunkWithEmbedding[] = [];
 
       if (!this.config.skipEmbedding) {
-        this.updateProgress("embedding", 50);
+        this.updateProgress('embedding', 50);
         console.error(`Creating embeddings for ${chunksToEmbed.length} chunks...`);
 
         // Initialize embedding provider
@@ -360,7 +358,7 @@ export class CodebaseIndexer {
             if (chunk.componentType) {
               parts.unshift(`Type: ${chunk.componentType}`);
             }
-            return parts.join("\n");
+            return parts.join('\n');
           });
 
           const embeddings = await embeddingProvider.embedBatch(texts);
@@ -368,62 +366,61 @@ export class CodebaseIndexer {
           for (let j = 0; j < batch.length; j++) {
             chunksWithEmbeddings.push({
               ...batch[j],
-              embedding: embeddings[j],
+              embedding: embeddings[j]
             });
           }
 
           // Update progress
-          const embeddingProgress =
-            50 + Math.round((i / chunksToEmbed.length) * 25);
-          this.updateProgress("embedding", embeddingProgress);
+          const embeddingProgress = 50 + Math.round((i / chunksToEmbed.length) * 25);
+          this.updateProgress('embedding', embeddingProgress);
 
-          if (
-            (i + batchSize) % 100 === 0 ||
-            i + batchSize >= chunksToEmbed.length
-          ) {
+          if ((i + batchSize) % 100 === 0 || i + batchSize >= chunksToEmbed.length) {
             console.error(
-              `Embedded ${Math.min(i + batchSize, chunksToEmbed.length)}/${chunksToEmbed.length
+              `Embedded ${Math.min(i + batchSize, chunksToEmbed.length)}/${
+                chunksToEmbed.length
               } chunks`
             );
           }
         }
       } else {
-        console.error("Skipping embedding generation (skipEmbedding=true)");
+        console.error('Skipping embedding generation (skipEmbedding=true)');
       }
 
       // Phase 4: Storing
-      this.updateProgress("storing", 75);
+      this.updateProgress('storing', 75);
 
       if (!this.config.skipEmbedding) {
         console.error(`Storing ${chunksToEmbed.length} chunks...`);
 
         // Store in LanceDB for vector search
-        const storagePath = path.join(this.rootPath, ".codebase-index");
+        const storagePath = path.join(this.rootPath, '.codebase-index');
         const storageProvider = await getStorageProvider({ path: storagePath });
         await storageProvider.clear(); // Clear existing index
         await storageProvider.store(chunksWithEmbeddings);
       }
 
       // Also save JSON for keyword search (Fuse.js) - use chunksToEmbed for consistency
-      const indexPath = path.join(this.rootPath, ".codebase-index.json");
+      const indexPath = path.join(this.rootPath, '.codebase-index.json');
       // Write without pretty-printing to save memory
       await fs.writeFile(indexPath, JSON.stringify(chunksToEmbed));
 
       // Save library usage and pattern stats
-      const intelligencePath = path.join(this.rootPath, ".codebase-intelligence.json");
+      const intelligencePath = path.join(this.rootPath, '.codebase-intelligence.json');
       const libraryStats = libraryTracker.getStats();
 
       // Extract tsconfig paths for AI to understand import aliases
       let tsconfigPaths: Record<string, string[]> | undefined;
       try {
-        const tsconfigPath = path.join(this.rootPath, "tsconfig.json");
-        const tsconfigContent = await fs.readFile(tsconfigPath, "utf-8");
+        const tsconfigPath = path.join(this.rootPath, 'tsconfig.json');
+        const tsconfigContent = await fs.readFile(tsconfigPath, 'utf-8');
         const tsconfig = JSON.parse(tsconfigContent);
         if (tsconfig.compilerOptions?.paths) {
           tsconfigPaths = tsconfig.compilerOptions.paths;
-          console.error(`Found ${Object.keys(tsconfigPaths!).length} path aliases in tsconfig.json`);
+          console.error(
+            `Found ${Object.keys(tsconfigPaths!).length} path aliases in tsconfig.json`
+          );
         }
-      } catch (error) {
+      } catch (_error) {
         // No tsconfig.json or no paths defined
       }
 
@@ -436,33 +433,31 @@ export class CodebaseIndexer {
         tsconfigPaths,
         importGraph: {
           usages: importGraph.getAllUsages(),
-          topUsed: importGraph.getTopUsed(30),
+          topUsed: importGraph.getTopUsed(30)
         },
         // Internal file graph for circular dependency and unused export detection
         internalFileGraph: internalFileGraph.toJSON(),
-        generatedAt: new Date().toISOString(),
+        generatedAt: new Date().toISOString()
       };
       await fs.writeFile(intelligencePath, JSON.stringify(intelligence, null, 2));
 
       // Phase 5: Complete
-      this.updateProgress("complete", 100);
+      this.updateProgress('complete', 100);
 
       stats.duration = Date.now() - startTime;
       stats.completedAt = new Date();
 
       console.error(`Indexing complete in ${stats.duration}ms`);
-      console.error(
-        `Indexed ${stats.indexedFiles} files, ${stats.totalChunks} chunks`
-      );
+      console.error(`Indexed ${stats.indexedFiles} files, ${stats.totalChunks} chunks`);
 
       return stats;
     } catch (error) {
-      this.progress.phase = "error";
+      this.progress.phase = 'error';
       stats.errors.push({
         filePath: this.rootPath,
         error: error instanceof Error ? error.message : String(error),
         phase: this.progress.phase,
-        timestamp: new Date(),
+        timestamp: new Date()
       });
       throw error;
     }
@@ -475,16 +470,16 @@ export class CodebaseIndexer {
     let ig: ReturnType<typeof ignore.default> | null = null;
     if (this.config.respectGitignore) {
       try {
-        const gitignorePath = path.join(this.rootPath, ".gitignore");
-        const gitignoreContent = await fs.readFile(gitignorePath, "utf-8");
+        const gitignorePath = path.join(this.rootPath, '.gitignore');
+        const gitignoreContent = await fs.readFile(gitignorePath, 'utf-8');
         ig = ignore.default().add(gitignoreContent);
-      } catch (error) {
+      } catch (_error) {
         // No .gitignore or couldn't read it
       }
     }
 
     // Scan with glob
-    const includePatterns = this.config.include || ["**/*"];
+    const includePatterns = this.config.include || ['**/*'];
     const excludePatterns = this.config.exclude || [];
 
     for (const pattern of includePatterns) {
@@ -492,7 +487,7 @@ export class CodebaseIndexer {
         cwd: this.rootPath,
         absolute: true,
         ignore: excludePatterns,
-        nodir: true,
+        nodir: true
       });
 
       for (const file of matches) {
@@ -515,7 +510,7 @@ export class CodebaseIndexer {
             console.warn(`Skipping large file: ${file} (${stats.size} bytes)`);
             continue;
           }
-        } catch (error) {
+        } catch (_error) {
           continue;
         }
 
@@ -546,7 +541,7 @@ export class CodebaseIndexer {
       languages: [],
       dependencies: [],
       architecture: {
-        type: "mixed",
+        type: 'mixed',
         layers: {
           presentation: 0,
           business: 0,
@@ -556,14 +551,14 @@ export class CodebaseIndexer {
           shared: 0,
           feature: 0,
           infrastructure: 0,
-          unknown: 0,
+          unknown: 0
         },
-        patterns: [],
+        patterns: []
       },
       styleGuides: [],
       documentation: [],
       projectStructure: {
-        type: "single-app",
+        type: 'single-app'
       },
       statistics: {
         totalFiles: 0,
@@ -579,10 +574,10 @@ export class CodebaseIndexer {
           shared: 0,
           feature: 0,
           infrastructure: 0,
-          unknown: 0,
-        },
+          unknown: 0
+        }
       },
-      customMetadata: {},
+      customMetadata: {}
     };
 
     // Loop through all analyzers (highest priority first) and merge their metadata
@@ -599,17 +594,17 @@ export class CodebaseIndexer {
 
     // Load intelligence data if available
     try {
-      const intelligencePath = path.join(this.rootPath, ".codebase-intelligence.json");
-      const intelligenceContent = await fs.readFile(intelligencePath, "utf-8");
+      const intelligencePath = path.join(this.rootPath, '.codebase-intelligence.json');
+      const intelligenceContent = await fs.readFile(intelligencePath, 'utf-8');
       const intelligence = JSON.parse(intelligenceContent);
 
       metadata.customMetadata = {
         ...metadata.customMetadata,
         libraryUsage: intelligence.libraryUsage,
         patterns: intelligence.patterns,
-        intelligenceGeneratedAt: intelligence.generatedAt,
+        intelligenceGeneratedAt: intelligence.generatedAt
       };
-    } catch (error) {
+    } catch (_error) {
       // Intelligence file doesn't exist yet (indexing not run)
     }
 
@@ -630,20 +625,26 @@ export class CodebaseIndexer {
       architecture: {
         type: incoming.architecture?.type || base.architecture.type,
         layers: this.mergeLayers(base.architecture.layers, incoming.architecture?.layers),
-        patterns: [...new Set([...(base.architecture.patterns || []), ...(incoming.architecture?.patterns || [])])], // Merge and deduplicate
+        patterns: [
+          ...new Set([
+            ...(base.architecture.patterns || []),
+            ...(incoming.architecture?.patterns || [])
+          ])
+        ] // Merge and deduplicate
       },
       styleGuides: [...new Set([...base.styleGuides, ...incoming.styleGuides])], // Merge and deduplicate
       documentation: [...new Set([...base.documentation, ...incoming.documentation])], // Merge and deduplicate
-      projectStructure: incoming.projectStructure?.type !== 'single-app'
-        ? incoming.projectStructure
-        : base.projectStructure,
+      projectStructure:
+        incoming.projectStructure?.type !== 'single-app'
+          ? incoming.projectStructure
+          : base.projectStructure,
       statistics: this.mergeStatistics(base.statistics, incoming.statistics),
-      customMetadata: { ...base.customMetadata, ...incoming.customMetadata },
+      customMetadata: { ...base.customMetadata, ...incoming.customMetadata }
     };
   }
 
   private mergeDependencies(base: any[], incoming: any[]): any[] {
-    const seen = new Set(base.map(d => d.name));
+    const seen = new Set(base.map((d) => d.name));
     const result = [...base];
     for (const dep of incoming) {
       if (!seen.has(dep.name)) {
@@ -665,7 +666,7 @@ export class CodebaseIndexer {
       shared: Math.max(base.shared || 0, incoming.shared || 0),
       feature: Math.max(base.feature || 0, incoming.feature || 0),
       infrastructure: Math.max(base.infrastructure || 0, incoming.infrastructure || 0),
-      unknown: Math.max(base.unknown || 0, incoming.unknown || 0),
+      unknown: Math.max(base.unknown || 0, incoming.unknown || 0)
     };
   }
 
@@ -675,10 +676,9 @@ export class CodebaseIndexer {
       totalLines: Math.max(base.totalLines || 0, incoming.totalLines || 0),
       totalComponents: Math.max(base.totalComponents || 0, incoming.totalComponents || 0),
       componentsByType: { ...base.componentsByType, ...incoming.componentsByType },
-      componentsByLayer: this.mergeLayers(base.componentsByLayer, incoming.componentsByLayer),
+      componentsByLayer: this.mergeLayers(base.componentsByLayer, incoming.componentsByLayer)
     };
   }
-
 
   /**
    * Get regex pattern for extracting code snippets based on pattern category and name
@@ -688,24 +688,24 @@ export class CodebaseIndexer {
     const patterns: Record<string, Record<string, RegExp>> = {
       dependencyInjection: {
         'inject() function': /\binject\s*[<(]/,
-        'Constructor injection': /constructor\s*\(/,
+        'Constructor injection': /constructor\s*\(/
       },
       stateManagement: {
-        'RxJS': /BehaviorSubject|ReplaySubject|Subject|Observable/,
-        'Signals': /\bsignal\s*[<(]/,
+        RxJS: /BehaviorSubject|ReplaySubject|Subject|Observable/,
+        Signals: /\bsignal\s*[<(]/
       },
       reactivity: {
-        'Effect': /\beffect\s*\(/,
-        'Computed': /\bcomputed\s*[<(]/,
+        Effect: /\beffect\s*\(/,
+        Computed: /\bcomputed\s*[<(]/
       },
       componentStyle: {
-        'Standalone': /standalone\s*:\s*true/,
-        'NgModule-based': /@(?:Component|Directive|Pipe)\s*\(/,
+        Standalone: /standalone\s*:\s*true/,
+        'NgModule-based': /@(?:Component|Directive|Pipe)\s*\(/
       },
       componentInputs: {
         'Signal-based inputs': /\binput\s*[<(]/,
-        'Decorator-based @Input': /@Input\(\)/,
-      },
+        'Decorator-based @Input': /@Input\(\)/
+      }
     };
     return patterns[category]?.[name] || null;
   }

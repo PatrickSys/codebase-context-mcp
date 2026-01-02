@@ -4,8 +4,8 @@
  * Detects state management patterns, architectural layers, and Angular-specific patterns
  */
 
-import { promises as fs } from "fs";
-import path from "path";
+import { promises as fs } from 'fs';
+import path from 'path';
 import {
   FrameworkAnalyzer,
   AnalysisResult,
@@ -14,25 +14,15 @@ import {
   CodeComponent,
   ImportStatement,
   ExportStatement,
-  Dependency,
-  FrameworkInfo,
-  ArchitecturalLayer,
-} from "../../types/index.js";
-import { parse } from "@typescript-eslint/typescript-estree";
-import { createChunksFromCode } from "../../utils/chunking.js";
+  ArchitecturalLayer
+} from '../../types/index.js';
+import { parse } from '@typescript-eslint/typescript-estree';
+import { createChunksFromCode } from '../../utils/chunking.js';
 
 export class AngularAnalyzer implements FrameworkAnalyzer {
-  readonly name = "angular";
-  readonly version = "1.0.0";
-  readonly supportedExtensions = [
-    ".ts",
-    ".js",
-    ".html",
-    ".scss",
-    ".css",
-    ".sass",
-    ".less",
-  ];
+  readonly name = 'angular';
+  readonly version = '1.0.0';
+  readonly supportedExtensions = ['.ts', '.js', '.html', '.scss', '.css', '.sass', '.less'];
   readonly priority = 100; // Highest priority for Angular files
 
   private angularPatterns = {
@@ -44,19 +34,17 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
     // Guards: Check for interface implementation OR method signature OR functional guard
     guard:
       /(?:implements\s+(?:CanActivate|CanDeactivate|CanLoad|CanMatch)|canActivate\s*\(|canDeactivate\s*\(|canLoad\s*\(|canMatch\s*\(|CanActivateFn|CanDeactivateFn|CanMatchFn)/,
-    interceptor:
-      /(?:implements\s+HttpInterceptor|intercept\s*\(|HttpInterceptorFn)/,
+    interceptor: /(?:implements\s+HttpInterceptor|intercept\s*\(|HttpInterceptorFn)/,
     resolver: /(?:implements\s+Resolve|resolve\s*\(|ResolveFn)/,
-    validator: /(?:implements\s+(?:Validator|AsyncValidator)|validate\s*\()/,
+    validator: /(?:implements\s+(?:Validator|AsyncValidator)|validate\s*\()/
   };
 
   private stateManagementPatterns = {
     ngrx: /@ngrx\/store|createAction|createReducer|createSelector/,
     akita: /@datorama\/akita|Query|Store\.update/,
     elf: /@ngneat\/elf|createStore|withEntities/,
-    signals:
-      /\bsignal\s*[<(]|\bcomputed\s*[<(]|\beffect\s*\(|\blinkedSignal\s*[<(]/,
-    rxjsState: /BehaviorSubject|ReplaySubject|shareReplay/,
+    signals: /\bsignal\s*[<(]|\bcomputed\s*[<(]|\beffect\s*\(|\blinkedSignal\s*[<(]/,
+    rxjsState: /BehaviorSubject|ReplaySubject|shareReplay/
   };
 
   private modernAngularPatterns = {
@@ -71,7 +59,7 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
     controlFlowFor: /@for\s*\(/,
     controlFlowSwitch: /@switch\s*\(/,
     controlFlowDefer: /@defer\s*[({]/,
-    injectFunction: /\binject\s*[<(]/,
+    injectFunction: /\binject\s*[<(]/
   };
 
   canAnalyze(filePath: string, content?: string): boolean {
@@ -81,16 +69,14 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
     }
 
     // For TypeScript files, check if it contains Angular decorators
-    if (ext === ".ts" && content) {
-      return Object.values(this.angularPatterns).some((pattern) =>
-        pattern.test(content)
-      );
+    if (ext === '.ts' && content) {
+      return Object.values(this.angularPatterns).some((pattern) => pattern.test(content));
     }
 
     // Angular component templates and styles
-    if ([".html", ".scss", ".css", ".sass", ".less"].includes(ext)) {
+    if (['.html', '.scss', '.css', '.sass', '.less'].includes(ext)) {
       // Check if there's a corresponding .ts file
-      const baseName = filePath.replace(/\.(html|scss|css|sass|less)$/, "");
+      // const baseName = filePath.replace(/\.(html|scss|css|sass|less)$/, '');
       return true; // We'll verify during analysis
     }
 
@@ -101,25 +87,25 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
     const ext = path.extname(filePath).toLowerCase();
     const relativePath = path.relative(process.cwd(), filePath);
 
-    if (ext === ".ts") {
+    if (ext === '.ts') {
       return this.analyzeTypeScriptFile(filePath, content, relativePath);
-    } else if (ext === ".html") {
+    } else if (ext === '.html') {
       return this.analyzeTemplateFile(filePath, content, relativePath);
-    } else if ([".scss", ".css", ".sass", ".less"].includes(ext)) {
+    } else if (['.scss', '.css', '.sass', '.less'].includes(ext)) {
       return this.analyzeStyleFile(filePath, content, relativePath);
     }
 
     // Fallback
     return {
       filePath,
-      language: "unknown",
-      framework: "angular",
+      language: 'unknown',
+      framework: 'angular',
       components: [],
       imports: [],
       exports: [],
       dependencies: [],
       metadata: {},
-      chunks: [],
+      chunks: []
     };
   }
 
@@ -137,44 +123,39 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
       const ast = parse(content, {
         loc: true,
         range: true,
-        comment: true,
+        comment: true
       });
 
       // Extract imports
       for (const node of ast.body) {
-        if (node.type === "ImportDeclaration" && node.source.value) {
+        if (node.type === 'ImportDeclaration' && node.source.value) {
           const source = node.source.value as string;
           imports.push({
             source,
             imports: node.specifiers.map((s: any) => {
-              if (s.type === "ImportDefaultSpecifier") return "default";
-              if (s.type === "ImportNamespaceSpecifier") return "*";
+              if (s.type === 'ImportDefaultSpecifier') return 'default';
+              if (s.type === 'ImportNamespaceSpecifier') return '*';
               return s.imported?.name || s.local.name;
             }),
-            isDefault: node.specifiers.some(
-              (s: any) => s.type === "ImportDefaultSpecifier"
-            ),
+            isDefault: node.specifiers.some((s: any) => s.type === 'ImportDefaultSpecifier'),
             isDynamic: false,
-            line: node.loc?.start.line,
+            line: node.loc?.start.line
           });
 
           // Track dependencies
-          if (!source.startsWith(".") && !source.startsWith("/")) {
-            dependencies.push(source.split("/")[0]);
+          if (!source.startsWith('.') && !source.startsWith('/')) {
+            dependencies.push(source.split('/')[0]);
           }
         }
 
         // Extract class declarations with decorators
         if (
-          node.type === "ExportNamedDeclaration" &&
-          node.declaration?.type === "ClassDeclaration"
+          node.type === 'ExportNamedDeclaration' &&
+          node.declaration?.type === 'ClassDeclaration'
         ) {
           const classNode = node.declaration;
           if (classNode.id && classNode.decorators) {
-            const component = await this.extractAngularComponent(
-              classNode,
-              content
-            );
+            const component = await this.extractAngularComponent(classNode, content);
             if (component) {
               components.push(component);
             }
@@ -182,7 +163,7 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
         }
 
         // Handle direct class exports
-        if (node.type === "ClassDeclaration" && node.id && node.decorators) {
+        if (node.type === 'ClassDeclaration' && node.id && node.decorators) {
           const component = await this.extractAngularComponent(node, content);
           if (component) {
             components.push(component);
@@ -190,38 +171,29 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
         }
 
         // Extract exports
-        if (node.type === "ExportNamedDeclaration") {
+        if (node.type === 'ExportNamedDeclaration') {
           if (node.declaration) {
-            if (
-              node.declaration.type === "ClassDeclaration" &&
-              node.declaration.id
-            ) {
+            if (node.declaration.type === 'ClassDeclaration' && node.declaration.id) {
               exports.push({
                 name: node.declaration.id.name,
                 isDefault: false,
-                type: "class",
+                type: 'class'
               });
             }
           }
         }
 
-        if (node.type === "ExportDefaultDeclaration") {
-          const name =
-            node.declaration.type === "Identifier"
-              ? node.declaration.name
-              : "default";
+        if (node.type === 'ExportDefaultDeclaration') {
+          const name = node.declaration.type === 'Identifier' ? node.declaration.name : 'default';
           exports.push({
             name,
             isDefault: true,
-            type: "default",
+            type: 'default'
           });
         }
       }
     } catch (error) {
-      console.warn(
-        `Failed to parse Angular TypeScript file ${filePath}:`,
-        error
-      );
+      console.warn(`Failed to parse Angular TypeScript file ${filePath}:`, error);
     }
 
     // Detect state management
@@ -238,14 +210,14 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
       content,
       filePath,
       relativePath,
-      "typescript",
+      'typescript',
       components,
       {
-        framework: "angular",
+        framework: 'angular',
         layer,
         statePattern,
         dependencies,
-        modernPatterns,
+        modernPatterns
       }
     );
 
@@ -253,27 +225,30 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
     const detectedPatterns: Array<{ category: string; name: string }> = [];
 
     // Dependency Injection pattern
-    if (modernPatterns.includes("injectFunction")) {
-      detectedPatterns.push({ category: "dependencyInjection", name: "inject() function" });
-    } else if (content.includes("constructor(") && content.includes("private") &&
-      (relativePath.endsWith(".service.ts") || relativePath.endsWith(".component.ts"))) {
-      detectedPatterns.push({ category: "dependencyInjection", name: "Constructor injection" });
+    if (modernPatterns.includes('injectFunction')) {
+      detectedPatterns.push({ category: 'dependencyInjection', name: 'inject() function' });
+    } else if (
+      content.includes('constructor(') &&
+      content.includes('private') &&
+      (relativePath.endsWith('.service.ts') || relativePath.endsWith('.component.ts'))
+    ) {
+      detectedPatterns.push({ category: 'dependencyInjection', name: 'Constructor injection' });
     }
 
     // State Management pattern
     if (/BehaviorSubject|ReplaySubject|Subject|Observable/.test(content)) {
-      detectedPatterns.push({ category: "stateManagement", name: "RxJS" });
+      detectedPatterns.push({ category: 'stateManagement', name: 'RxJS' });
     }
-    if (modernPatterns.some((p) => p.startsWith("signal"))) {
-      detectedPatterns.push({ category: "stateManagement", name: "Signals" });
+    if (modernPatterns.some((p) => p.startsWith('signal'))) {
+      detectedPatterns.push({ category: 'stateManagement', name: 'Signals' });
     }
 
     // Reactivity patterns
     if (/\beffect\s*\(/.test(content)) {
-      detectedPatterns.push({ category: "reactivity", name: "Effect" });
+      detectedPatterns.push({ category: 'reactivity', name: 'Effect' });
     }
     if (/\bcomputed\s*[<(]/.test(content)) {
-      detectedPatterns.push({ category: "reactivity", name: "Computed" });
+      detectedPatterns.push({ category: 'reactivity', name: 'Computed' });
     }
 
     // Component Style pattern detection
@@ -281,41 +256,46 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
     //        explicit standalone: false → NgModule-based
     //        no explicit flag + uses modern patterns (inject, signals) → likely Standalone (Angular v19+ default)
     //        no explicit flag + no modern patterns → ambiguous, don't classify
-    const hasExplicitStandalone = content.includes("standalone: true");
-    const hasExplicitNgModule = content.includes("standalone: false");
-    const usesModernPatterns = modernPatterns.includes("injectFunction") ||
-      modernPatterns.some(p => p.startsWith("signal"));
+    const hasExplicitStandalone = content.includes('standalone: true');
+    const hasExplicitNgModule = content.includes('standalone: false');
+    const usesModernPatterns =
+      modernPatterns.includes('injectFunction') ||
+      modernPatterns.some((p) => p.startsWith('signal'));
 
-    if (relativePath.endsWith("component.ts") || relativePath.endsWith("directive.ts") || relativePath.endsWith("pipe.ts")) {
+    if (
+      relativePath.endsWith('component.ts') ||
+      relativePath.endsWith('directive.ts') ||
+      relativePath.endsWith('pipe.ts')
+    ) {
       if (hasExplicitStandalone) {
-        detectedPatterns.push({ category: "componentStyle", name: "Standalone" });
+        detectedPatterns.push({ category: 'componentStyle', name: 'Standalone' });
       } else if (hasExplicitNgModule) {
-        detectedPatterns.push({ category: "componentStyle", name: "NgModule-based" });
+        detectedPatterns.push({ category: 'componentStyle', name: 'NgModule-based' });
       } else if (usesModernPatterns) {
         // No explicit flag but uses modern patterns → likely v19+ standalone default
-        detectedPatterns.push({ category: "componentStyle", name: "Standalone" });
+        detectedPatterns.push({ category: 'componentStyle', name: 'Standalone' });
       }
       // If no explicit flag and no modern patterns, don't classify (ambiguous)
     }
 
     // Input style pattern
-    if (modernPatterns.includes("signalInput")) {
-      detectedPatterns.push({ category: "componentInputs", name: "Signal-based inputs" });
-    } else if (content.includes("@Input()")) {
-      detectedPatterns.push({ category: "componentInputs", name: "Decorator-based @Input" });
+    if (modernPatterns.includes('signalInput')) {
+      detectedPatterns.push({ category: 'componentInputs', name: 'Signal-based inputs' });
+    } else if (content.includes('@Input()')) {
+      detectedPatterns.push({ category: 'componentInputs', name: 'Decorator-based @Input' });
     }
 
     return {
       filePath,
-      language: "typescript",
-      framework: "angular",
+      language: 'typescript',
+      framework: 'angular',
       components,
       imports,
       exports,
       dependencies: dependencies.map((name) => ({
         name,
         category: this.categorizeDependency(name),
-        layer,
+        layer
       })),
       metadata: {
         analyzer: this.name,
@@ -323,26 +303,24 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
         statePattern,
         modernPatterns,
         // isStandalone: true if explicit standalone: true, or if uses modern patterns (implying v19+ default)
-        isStandalone: content.includes("standalone: true") ||
-          (!content.includes("standalone: false") &&
-            (modernPatterns.includes("injectFunction") || modernPatterns.some(p => p.startsWith("signal")))),
-        hasRoutes:
-          content.includes("RouterModule") || content.includes("routes"),
+        isStandalone:
+          content.includes('standalone: true') ||
+          (!content.includes('standalone: false') &&
+            (modernPatterns.includes('injectFunction') ||
+              modernPatterns.some((p) => p.startsWith('signal')))),
+        hasRoutes: content.includes('RouterModule') || content.includes('routes'),
         usesSignals:
-          modernPatterns.length > 0 &&
-          modernPatterns.some((p) => p.startsWith("signal")),
-        usesControlFlow: modernPatterns.some((p) =>
-          p.startsWith("controlFlow")
-        ),
-        usesInject: modernPatterns.includes("injectFunction"),
+          modernPatterns.length > 0 && modernPatterns.some((p) => p.startsWith('signal')),
+        usesControlFlow: modernPatterns.some((p) => p.startsWith('controlFlow')),
+        usesInject: modernPatterns.includes('injectFunction'),
         usesRxJS: /BehaviorSubject|ReplaySubject|Subject|Observable/.test(content),
         usesEffect: /\beffect\s*\(/.test(content),
         usesComputed: /\bcomputed\s*[<(]/.test(content),
         componentType: components.length > 0 ? components[0].metadata.angularType : undefined,
         // NEW: Patterns for the indexer to forward generically
-        detectedPatterns,
+        detectedPatterns
       },
-      chunks,
+      chunks
     };
   }
 
@@ -352,9 +330,7 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
   private detectModernAngularPatterns(content: string): string[] {
     const detected: string[] = [];
 
-    for (const [patternName, regex] of Object.entries(
-      this.modernAngularPatterns
-    )) {
+    for (const [patternName, regex] of Object.entries(this.modernAngularPatterns)) {
       if (regex.test(content)) {
         detected.push(patternName);
       }
@@ -372,71 +348,64 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
     }
 
     const decorator = classNode.decorators[0];
-    const decoratorName =
-      decorator.expression.callee?.name || decorator.expression.name;
+    const decoratorName = decorator.expression.callee?.name || decorator.expression.name;
 
     let componentType: string | undefined;
     let angularType: string | undefined;
 
     // Determine Angular component type
-    if (decoratorName === "Component") {
-      componentType = "component";
-      angularType = "component";
-    } else if (decoratorName === "Directive") {
-      componentType = "directive";
-      angularType = "directive";
-    } else if (decoratorName === "Pipe") {
-      componentType = "pipe";
-      angularType = "pipe";
-    } else if (decoratorName === "NgModule") {
-      componentType = "module";
-      angularType = "module";
-    } else if (decoratorName === "Injectable") {
+    if (decoratorName === 'Component') {
+      componentType = 'component';
+      angularType = 'component';
+    } else if (decoratorName === 'Directive') {
+      componentType = 'directive';
+      angularType = 'directive';
+    } else if (decoratorName === 'Pipe') {
+      componentType = 'pipe';
+      angularType = 'pipe';
+    } else if (decoratorName === 'NgModule') {
+      componentType = 'module';
+      angularType = 'module';
+    } else if (decoratorName === 'Injectable') {
       // For @Injectable, check if it's actually a guard/interceptor/resolver/validator
       // before defaulting to 'service'
-      const classContent = content.substring(
-        classNode.range[0],
-        classNode.range[1]
-      );
+      const classContent = content.substring(classNode.range[0], classNode.range[1]);
 
       if (this.angularPatterns.guard.test(classContent)) {
-        componentType = "guard";
-        angularType = "guard";
+        componentType = 'guard';
+        angularType = 'guard';
       } else if (this.angularPatterns.interceptor.test(classContent)) {
-        componentType = "interceptor";
-        angularType = "interceptor";
+        componentType = 'interceptor';
+        angularType = 'interceptor';
       } else if (this.angularPatterns.resolver.test(classContent)) {
-        componentType = "resolver";
-        angularType = "resolver";
+        componentType = 'resolver';
+        angularType = 'resolver';
       } else if (this.angularPatterns.validator.test(classContent)) {
-        componentType = "validator";
-        angularType = "validator";
+        componentType = 'validator';
+        angularType = 'validator';
       } else {
         // Default to service if no specific pattern matches
-        componentType = "service";
-        angularType = "service";
+        componentType = 'service';
+        angularType = 'service';
       }
     }
 
     // If still no type, check patterns one more time (for classes without decorators)
     if (!componentType) {
-      const classContent = content.substring(
-        classNode.range[0],
-        classNode.range[1]
-      );
+      const classContent = content.substring(classNode.range[0], classNode.range[1]);
 
       if (this.angularPatterns.guard.test(classContent)) {
-        componentType = "guard";
-        angularType = "guard";
+        componentType = 'guard';
+        angularType = 'guard';
       } else if (this.angularPatterns.interceptor.test(classContent)) {
-        componentType = "interceptor";
-        angularType = "interceptor";
+        componentType = 'interceptor';
+        angularType = 'interceptor';
       } else if (this.angularPatterns.resolver.test(classContent)) {
-        componentType = "resolver";
-        angularType = "resolver";
+        componentType = 'resolver';
+        angularType = 'resolver';
       } else if (this.angularPatterns.validator.test(classContent)) {
-        componentType = "validator";
-        angularType = "validator";
+        componentType = 'validator';
+        angularType = 'validator';
       }
     }
 
@@ -455,15 +424,15 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
 
     return {
       name: classNode.id.name,
-      type: "class",
+      type: 'class',
       componentType,
       startLine: classNode.loc.start.line,
       endLine: classNode.loc.end.line,
       decorators: [
         {
           name: decoratorName,
-          properties: decoratorMetadata,
-        },
+          properties: decoratorMetadata
+        }
       ],
       lifecycle,
       dependencies: injectedServices,
@@ -476,8 +445,8 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
         templateUrl: decoratorMetadata.templateUrl,
         styleUrls: decoratorMetadata.styleUrls,
         inputs: inputs.map((i) => i.name),
-        outputs: outputs.map((o) => o.name),
-      },
+        outputs: outputs.map((o) => o.name)
+      }
     };
   }
 
@@ -488,18 +457,18 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
       if (decorator.expression.arguments && decorator.expression.arguments[0]) {
         const arg = decorator.expression.arguments[0];
 
-        if (arg.type === "ObjectExpression") {
+        if (arg.type === 'ObjectExpression') {
           for (const prop of arg.properties) {
             if (prop.key && prop.value) {
               const key = prop.key.name || prop.key.value;
 
-              if (prop.value.type === "Literal") {
+              if (prop.value.type === 'Literal') {
                 metadata[key] = prop.value.value;
-              } else if (prop.value.type === "ArrayExpression") {
+              } else if (prop.value.type === 'ArrayExpression') {
                 metadata[key] = prop.value.elements
-                  .map((el: any) => (el.type === "Literal" ? el.value : null))
+                  .map((el: any) => (el.type === 'Literal' ? el.value : null))
                   .filter(Boolean);
-              } else if (prop.value.type === "Identifier") {
+              } else if (prop.value.type === 'Identifier') {
                 metadata[key] = prop.value.name;
               }
             }
@@ -507,7 +476,7 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
         }
       }
     } catch (error) {
-      console.warn("Failed to extract decorator metadata:", error);
+      console.warn('Failed to extract decorator metadata:', error);
     }
 
     return metadata;
@@ -516,19 +485,19 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
   private extractLifecycleHooks(classNode: any): string[] {
     const hooks: string[] = [];
     const lifecycleHooks = [
-      "ngOnChanges",
-      "ngOnInit",
-      "ngDoCheck",
-      "ngAfterContentInit",
-      "ngAfterContentChecked",
-      "ngAfterViewInit",
-      "ngAfterViewChecked",
-      "ngOnDestroy",
+      'ngOnChanges',
+      'ngOnInit',
+      'ngDoCheck',
+      'ngAfterContentInit',
+      'ngAfterContentChecked',
+      'ngAfterViewInit',
+      'ngAfterViewChecked',
+      'ngOnDestroy'
     ];
 
     if (classNode.body && classNode.body.body) {
       for (const member of classNode.body.body) {
-        if (member.type === "MethodDefinition" && member.key) {
+        if (member.type === 'MethodDefinition' && member.key) {
           const methodName = member.key.name;
           if (lifecycleHooks.includes(methodName)) {
             hooks.push(methodName);
@@ -546,16 +515,11 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
     // Look for constructor parameters
     if (classNode.body && classNode.body.body) {
       for (const member of classNode.body.body) {
-        if (
-          member.type === "MethodDefinition" &&
-          member.kind === "constructor"
-        ) {
+        if (member.type === 'MethodDefinition' && member.kind === 'constructor') {
           if (member.value.params) {
             for (const param of member.value.params) {
               if (param.typeAnnotation?.typeAnnotation?.typeName) {
-                services.push(
-                  param.typeAnnotation.typeAnnotation.typeName.name
-                );
+                services.push(param.typeAnnotation.typeAnnotation.typeName.name);
               }
             }
           }
@@ -571,20 +535,18 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
 
     if (classNode.body && classNode.body.body) {
       for (const member of classNode.body.body) {
-        if (member.type === "PropertyDefinition") {
+        if (member.type === 'PropertyDefinition') {
           // Check for decorator-based @Input()
           if (member.decorators) {
             const hasInput = member.decorators.some(
-              (d: any) =>
-                d.expression?.callee?.name === "Input" ||
-                d.expression?.name === "Input"
+              (d: any) => d.expression?.callee?.name === 'Input' || d.expression?.name === 'Input'
             );
 
             if (hasInput && member.key) {
               inputs.push({
                 name: member.key.name,
-                type: member.typeAnnotation?.typeAnnotation?.type || "any",
-                style: "decorator",
+                type: member.typeAnnotation?.typeAnnotation?.type || 'any',
+                style: 'decorator'
               });
             }
           }
@@ -592,16 +554,16 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
           // Check for signal-based input() (Angular v17.1+)
           if (member.value && member.key) {
             const valueStr =
-              member.value.type === "CallExpression"
+              member.value.type === 'CallExpression'
                 ? member.value.callee?.name || member.value.callee?.object?.name
                 : null;
 
-            if (valueStr === "input") {
+            if (valueStr === 'input') {
               inputs.push({
                 name: member.key.name,
-                type: "InputSignal",
-                style: "signal",
-                required: member.value.callee?.property?.name === "required",
+                type: 'InputSignal',
+                style: 'signal',
+                required: member.value.callee?.property?.name === 'required'
               });
             }
           }
@@ -617,20 +579,18 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
 
     if (classNode.body && classNode.body.body) {
       for (const member of classNode.body.body) {
-        if (member.type === "PropertyDefinition") {
+        if (member.type === 'PropertyDefinition') {
           // Check for decorator-based @Output()
           if (member.decorators) {
             const hasOutput = member.decorators.some(
-              (d: any) =>
-                d.expression?.callee?.name === "Output" ||
-                d.expression?.name === "Output"
+              (d: any) => d.expression?.callee?.name === 'Output' || d.expression?.name === 'Output'
             );
 
             if (hasOutput && member.key) {
               outputs.push({
                 name: member.key.name,
-                type: "EventEmitter",
-                style: "decorator",
+                type: 'EventEmitter',
+                style: 'decorator'
               });
             }
           }
@@ -638,15 +598,13 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
           // Check for signal-based output() (Angular v17.1+)
           if (member.value && member.key) {
             const valueStr =
-              member.value.type === "CallExpression"
-                ? member.value.callee?.name
-                : null;
+              member.value.type === 'CallExpression' ? member.value.callee?.name : null;
 
-            if (valueStr === "output") {
+            if (valueStr === 'output') {
               outputs.push({
                 name: member.key.name,
-                type: "OutputEmitterRef",
-                style: "signal",
+                type: 'OutputEmitterRef',
+                style: 'signal'
               });
             }
           }
@@ -663,38 +621,30 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
     relativePath: string
   ): Promise<AnalysisResult> {
     // Find corresponding component file
-    const componentPath = filePath.replace(/\.html$/, ".ts");
+    const componentPath = filePath.replace(/\.html$/, '.ts');
 
     // Detect legacy vs modern control flow
     const hasLegacyDirectives = /\*ng(?:If|For|Switch)/.test(content);
-    const hasModernControlFlow = /@(?:if|for|switch|defer)\s*[({]/.test(
-      content
-    );
+    const hasModernControlFlow = /@(?:if|for|switch|defer)\s*[({]/.test(content);
 
     return {
       filePath,
-      language: "html",
-      framework: "angular",
+      language: 'html',
+      framework: 'angular',
       components: [],
       imports: [],
       exports: [],
       dependencies: [],
       metadata: {
         analyzer: this.name,
-        type: "template",
+        type: 'template',
         componentPath,
         hasLegacyDirectives,
         hasModernControlFlow,
         hasBindings: /\[|\(|{{/.test(content),
-        hasDefer: /@defer\s*[({]/.test(content),
+        hasDefer: /@defer\s*[({]/.test(content)
       },
-      chunks: await createChunksFromCode(
-        content,
-        filePath,
-        relativePath,
-        "html",
-        []
-      ),
+      chunks: await createChunksFromCode(content, filePath, relativePath, 'html', [])
     };
   }
 
@@ -709,29 +659,21 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
     return {
       filePath,
       language,
-      framework: "angular",
+      framework: 'angular',
       components: [],
       imports: [],
       exports: [],
       dependencies: [],
       metadata: {
         analyzer: this.name,
-        type: "style",
+        type: 'style'
       },
-      chunks: await createChunksFromCode(
-        content,
-        filePath,
-        relativePath,
-        language,
-        []
-      ),
+      chunks: await createChunksFromCode(content, filePath, relativePath, language, [])
     };
   }
 
   private detectStateManagement(content: string): string | undefined {
-    for (const [pattern, regex] of Object.entries(
-      this.stateManagementPatterns
-    )) {
+    for (const [pattern, regex] of Object.entries(this.stateManagementPatterns)) {
       if (regex.test(content)) {
         return pattern;
       }
@@ -739,105 +681,89 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
     return undefined;
   }
 
-  private determineLayer(
-    filePath: string,
-    components: CodeComponent[]
-  ): ArchitecturalLayer {
+  private determineLayer(filePath: string, components: CodeComponent[]): ArchitecturalLayer {
     const lowerPath = filePath.toLowerCase();
 
     // Check path-based patterns
     if (
-      lowerPath.includes("/component") ||
-      lowerPath.includes("/view") ||
-      lowerPath.includes("/page")
+      lowerPath.includes('/component') ||
+      lowerPath.includes('/view') ||
+      lowerPath.includes('/page')
     ) {
-      return "presentation";
+      return 'presentation';
     }
-    if (lowerPath.includes("/service")) {
-      return "business";
+    if (lowerPath.includes('/service')) {
+      return 'business';
     }
     if (
-      lowerPath.includes("/data") ||
-      lowerPath.includes("/repository") ||
-      lowerPath.includes("/api")
+      lowerPath.includes('/data') ||
+      lowerPath.includes('/repository') ||
+      lowerPath.includes('/api')
     ) {
-      return "data";
+      return 'data';
     }
     if (
-      lowerPath.includes("/store") ||
-      lowerPath.includes("/state") ||
-      lowerPath.includes("/ngrx")
+      lowerPath.includes('/store') ||
+      lowerPath.includes('/state') ||
+      lowerPath.includes('/ngrx')
     ) {
-      return "state";
+      return 'state';
     }
-    if (lowerPath.includes("/core")) {
-      return "core";
+    if (lowerPath.includes('/core')) {
+      return 'core';
     }
-    if (lowerPath.includes("/shared")) {
-      return "shared";
+    if (lowerPath.includes('/shared')) {
+      return 'shared';
     }
-    if (lowerPath.includes("/feature")) {
-      return "feature";
+    if (lowerPath.includes('/feature')) {
+      return 'feature';
     }
 
     // Check component types
     for (const component of components) {
       if (
-        component.componentType === "component" ||
-        component.componentType === "directive" ||
-        component.componentType === "pipe"
+        component.componentType === 'component' ||
+        component.componentType === 'directive' ||
+        component.componentType === 'pipe'
       ) {
-        return "presentation";
+        return 'presentation';
       }
-      if (component.componentType === "service") {
-        return lowerPath.includes("http") || lowerPath.includes("api")
-          ? "data"
-          : "business";
+      if (component.componentType === 'service') {
+        return lowerPath.includes('http') || lowerPath.includes('api') ? 'data' : 'business';
       }
-      if (
-        component.componentType === "guard" ||
-        component.componentType === "interceptor"
-      ) {
-        return "core";
+      if (component.componentType === 'guard' || component.componentType === 'interceptor') {
+        return 'core';
       }
     }
 
-    return "unknown";
+    return 'unknown';
   }
 
   private categorizeDependency(name: string): any {
-    if (name.startsWith("@angular/")) {
-      return "framework";
+    if (name.startsWith('@angular/')) {
+      return 'framework';
+    }
+    if (name.includes('ngrx') || name.includes('akita') || name.includes('elf')) {
+      return 'state';
+    }
+    if (name.includes('material') || name.includes('primeng') || name.includes('ng-bootstrap')) {
+      return 'ui';
+    }
+    if (name.includes('router')) {
+      return 'routing';
+    }
+    if (name.includes('http') || name.includes('common/http')) {
+      return 'http';
     }
     if (
-      name.includes("ngrx") ||
-      name.includes("akita") ||
-      name.includes("elf")
+      name.includes('test') ||
+      name.includes('jest') ||
+      name.includes('jasmine') ||
+      name.includes('karma')
     ) {
-      return "state";
+      return 'testing';
     }
-    if (
-      name.includes("material") ||
-      name.includes("primeng") ||
-      name.includes("ng-bootstrap")
-    ) {
-      return "ui";
-    }
-    if (name.includes("router")) {
-      return "routing";
-    }
-    if (name.includes("http") || name.includes("common/http")) {
-      return "http";
-    }
-    if (
-      name.includes("test") ||
-      name.includes("jest") ||
-      name.includes("jasmine") ||
-      name.includes("karma")
-    ) {
-      return "testing";
-    }
-    return "other";
+    return 'other';
   }
 
   async detectCodebaseMetadata(rootPath: string): Promise<CodebaseMetadata> {
@@ -847,7 +773,7 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
       languages: [],
       dependencies: [],
       architecture: {
-        type: "feature-based",
+        type: 'feature-based',
         layers: {
           presentation: 0,
           business: 0,
@@ -857,14 +783,14 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
           shared: 0,
           feature: 0,
           infrastructure: 0,
-          unknown: 0,
+          unknown: 0
         },
-        patterns: [],
+        patterns: []
       },
       styleGuides: [],
       documentation: [],
       projectStructure: {
-        type: "single-app",
+        type: 'single-app'
       },
       statistics: {
         totalFiles: 0,
@@ -880,85 +806,75 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
           shared: 0,
           feature: 0,
           infrastructure: 0,
-          unknown: 0,
-        },
+          unknown: 0
+        }
       },
-      customMetadata: {},
+      customMetadata: {}
     };
 
     try {
       // Read package.json
-      const packageJsonPath = path.join(rootPath, "package.json");
-      const packageJson = JSON.parse(
-        await fs.readFile(packageJsonPath, "utf-8")
-      );
+      const packageJsonPath = path.join(rootPath, 'package.json');
+      const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf-8'));
 
       metadata.name = packageJson.name || metadata.name;
 
       // Extract Angular version and dependencies
       const allDeps = {
         ...packageJson.dependencies,
-        ...packageJson.devDependencies,
+        ...packageJson.devDependencies
       };
 
-      const angularVersion =
-        allDeps["@angular/core"]?.replace(/[\^~]/, "") || "unknown";
+      const angularVersion = allDeps['@angular/core']?.replace(/[\^~]/, '') || 'unknown';
 
       // Detect state management
       const stateManagement: string[] = [];
-      if (allDeps["@ngrx/store"]) stateManagement.push("ngrx");
-      if (allDeps["@datorama/akita"]) stateManagement.push("akita");
-      if (allDeps["@ngneat/elf"]) stateManagement.push("elf");
+      if (allDeps['@ngrx/store']) stateManagement.push('ngrx');
+      if (allDeps['@datorama/akita']) stateManagement.push('akita');
+      if (allDeps['@ngneat/elf']) stateManagement.push('elf');
 
       // Detect UI libraries
       const uiLibraries: string[] = [];
-      if (allDeps["@angular/material"]) uiLibraries.push("Angular Material");
-      if (allDeps["primeng"]) uiLibraries.push("PrimeNG");
-      if (allDeps["@ng-bootstrap/ng-bootstrap"])
-        uiLibraries.push("ng-bootstrap");
+      if (allDeps['@angular/material']) uiLibraries.push('Angular Material');
+      if (allDeps['primeng']) uiLibraries.push('PrimeNG');
+      if (allDeps['@ng-bootstrap/ng-bootstrap']) uiLibraries.push('ng-bootstrap');
 
       // Detect testing frameworks
       const testingFrameworks: string[] = [];
-      if (allDeps["jasmine-core"]) testingFrameworks.push("Jasmine");
-      if (allDeps["karma"]) testingFrameworks.push("Karma");
-      if (allDeps["jest"]) testingFrameworks.push("Jest");
+      if (allDeps['jasmine-core']) testingFrameworks.push('Jasmine');
+      if (allDeps['karma']) testingFrameworks.push('Karma');
+      if (allDeps['jest']) testingFrameworks.push('Jest');
 
       metadata.framework = {
-        name: "Angular",
+        name: 'Angular',
         version: angularVersion,
-        type: "angular",
-        variant: "unknown", // Will be determined during analysis
+        type: 'angular',
+        variant: 'unknown', // Will be determined during analysis
         stateManagement,
         uiLibraries,
-        testingFrameworks,
+        testingFrameworks
       };
 
       // Convert dependencies
-      metadata.dependencies = Object.entries(allDeps).map(
-        ([name, version]) => ({
-          name,
-          version: version as string,
-          category: this.categorizeDependency(name),
-        })
-      );
+      metadata.dependencies = Object.entries(allDeps).map(([name, version]) => ({
+        name,
+        version: version as string,
+        category: this.categorizeDependency(name)
+      }));
     } catch (error) {
-      console.warn("Failed to read Angular project metadata:", error);
+      console.warn('Failed to read Angular project metadata:', error);
     }
 
     // Calculate statistics from existing index if available
     try {
-      const indexPath = path.join(rootPath, ".codebase-index.json");
-      const indexContent = await fs.readFile(indexPath, "utf-8");
+      const indexPath = path.join(rootPath, '.codebase-index.json');
+      const indexContent = await fs.readFile(indexPath, 'utf-8');
       const chunks = JSON.parse(indexContent);
 
-      console.error(
-        `Loading statistics from ${indexPath}: ${chunks.length} chunks`
-      );
+      console.error(`Loading statistics from ${indexPath}: ${chunks.length} chunks`);
 
       if (Array.isArray(chunks) && chunks.length > 0) {
-        metadata.statistics.totalFiles = new Set(
-          chunks.map((c: any) => c.filePath)
-        ).size;
+        metadata.statistics.totalFiles = new Set(chunks.map((c: any) => c.filePath)).size;
         metadata.statistics.totalLines = chunks.reduce(
           (sum: number, c: any) => sum + (c.endLine - c.startLine + 1),
           0
@@ -975,13 +891,12 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
           shared: 0,
           feature: 0,
           infrastructure: 0,
-          unknown: 0,
+          unknown: 0
         };
 
         for (const chunk of chunks) {
           if (chunk.componentType) {
-            componentCounts[chunk.componentType] =
-              (componentCounts[chunk.componentType] || 0) + 1;
+            componentCounts[chunk.componentType] = (componentCounts[chunk.componentType] || 0) + 1;
             metadata.statistics.totalComponents++;
           }
 
@@ -997,7 +912,7 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
       }
     } catch (error) {
       // Index doesn't exist yet, keep statistics at 0
-      console.warn("Failed to calculate statistics from index:", error);
+      console.warn('Failed to calculate statistics from index:', error);
     }
 
     return metadata;
@@ -1015,45 +930,52 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
     const className = classMatch ? classMatch[1] : fileName;
 
     switch (componentType) {
-      case "component":
-        const selector = metadata.decorator?.selector || "unknown";
+      case 'component': {
+        const selector = metadata.decorator?.selector || 'unknown';
         const inputs = metadata.decorator?.inputs?.length || 0;
         const outputs = metadata.decorator?.outputs?.length || 0;
         const lifecycle = this.extractLifecycleMethods(content);
-        return `Angular component '${className}' (selector: ${selector})${lifecycle ? ` with ${lifecycle}` : ""
-          }${inputs ? `, ${inputs} inputs` : ""}${outputs ? `, ${outputs} outputs` : ""
-          }.`;
+        return `Angular component '${className}' (selector: ${selector})${
+          lifecycle ? ` with ${lifecycle}` : ''
+        }${inputs ? `, ${inputs} inputs` : ''}${outputs ? `, ${outputs} outputs` : ''}.`;
+      }
 
-      case "service":
-        const providedIn = metadata.decorator?.providedIn || "unknown";
+      case 'service': {
+        const providedIn = metadata.decorator?.providedIn || 'unknown';
         const methods = this.extractPublicMethods(content);
-        return `Angular service '${className}' (providedIn: ${providedIn})${methods ? ` providing ${methods}` : ""
-          }.`;
+        return `Angular service '${className}' (providedIn: ${providedIn})${
+          methods ? ` providing ${methods}` : ''
+        }.`;
+      }
 
-      case "guard":
+      case 'guard': {
         const guardType = this.detectGuardType(content);
         return `Angular ${guardType} guard '${className}' protecting routes.`;
+      }
 
-      case "directive":
-        const directiveSelector = metadata.decorator?.selector || "unknown";
+      case 'directive': {
+        const directiveSelector = metadata.decorator?.selector || 'unknown';
         return `Angular directive '${className}' (selector: ${directiveSelector}).`;
+      }
 
-      case "pipe":
-        const pipeName = metadata.decorator?.name || "unknown";
+      case 'pipe': {
+        const pipeName = metadata.decorator?.name || 'unknown';
         return `Angular pipe '${className}' (name: ${pipeName}) for data transformation.`;
+      }
 
-      case "module":
+      case 'module': {
         const imports = metadata.decorator?.imports?.length || 0;
         const declarations = metadata.decorator?.declarations?.length || 0;
         return `Angular module '${className}' with ${declarations} declarations and ${imports} imports.`;
+      }
 
-      case "interceptor":
+      case 'interceptor':
         return `Angular HTTP interceptor '${className}' modifying HTTP requests/responses.`;
 
-      case "resolver":
+      case 'resolver':
         return `Angular resolver '${className}' pre-fetching route data.`;
 
-      case "validator":
+      case 'validator':
         return `Angular validator '${className}' for form validation.`;
 
       default:
@@ -1061,72 +983,74 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
         if (className && className !== fileName) {
           // Check for common patterns
           if (
-            content.includes("signal(") ||
-            content.includes("computed(") ||
-            content.includes("effect(")
+            content.includes('signal(') ||
+            content.includes('computed(') ||
+            content.includes('effect(')
           ) {
             return `Angular code '${className}' using signals.`;
           }
-          if (content.includes("inject(")) {
+          if (content.includes('inject(')) {
             return `Angular code '${className}' using dependency injection.`;
           }
-          if (content.includes("Observable") || content.includes("Subject")) {
+          if (content.includes('Observable') || content.includes('Subject')) {
             return `Angular code '${className}' with reactive streams.`;
           }
           return `Angular code '${className}' in ${fileName}.`;
         }
 
-        // Extract first meaningful export or declaration
-        const exportMatch = content.match(
-          /export\s+(?:const|function|class|interface|type|enum)\s+(\w+)/
-        );
-        if (exportMatch) {
-          return `Exports '${exportMatch[1]}' from ${fileName}.`;
-        }
+        {
+          // Extract first meaningful export or declaration
+          const exportMatch = content.match(
+            /export\s+(?:const|function|class|interface|type|enum)\s+(\w+)/
+          );
+          if (exportMatch) {
+            return `Exports '${exportMatch[1]}' from ${fileName}.`;
+          }
 
-        return `Angular code in ${fileName}.`;
+          return `Angular code in ${fileName}.`;
+        }
     }
   }
 
   private extractLifecycleMethods(content: string): string {
     const lifecycles = [
-      "ngOnInit",
-      "ngOnChanges",
-      "ngOnDestroy",
-      "ngAfterViewInit",
-      "ngAfterContentInit",
+      'ngOnInit',
+      'ngOnChanges',
+      'ngOnDestroy',
+      'ngAfterViewInit',
+      'ngAfterContentInit'
     ];
     const found = lifecycles.filter((method) => content.includes(method));
-    return found.length > 0 ? found.join(", ") : "";
+    return found.length > 0 ? found.join(', ') : '';
   }
 
   private extractPublicMethods(content: string): string {
     const methodMatches = content.match(/public\s+(\w+)\s*\(/g);
-    if (!methodMatches || methodMatches.length === 0) return "";
+    if (!methodMatches || methodMatches.length === 0) return '';
     const methods = methodMatches
       .slice(0, 3)
       .map((m) => m.match(/public\s+(\w+)/)?.[1])
       .filter(Boolean);
-    return methods.length > 0 ? `methods: ${methods.join(", ")}` : "";
+    return methods.length > 0 ? `methods: ${methods.join(', ')}` : '';
   }
 
   private detectGuardType(content: string): string {
-    if (content.includes("CanActivate")) return "CanActivate";
-    if (content.includes("CanDeactivate")) return "CanDeactivate";
-    if (content.includes("CanLoad")) return "CanLoad";
-    if (content.includes("CanMatch")) return "CanMatch";
-    return "route";
+    if (content.includes('CanActivate')) return 'CanActivate';
+    if (content.includes('CanDeactivate')) return 'CanDeactivate';
+    if (content.includes('CanLoad')) return 'CanLoad';
+    if (content.includes('CanMatch')) return 'CanMatch';
+    return 'route';
   }
 
   private extractFirstComment(content: string): string {
     const commentMatch = content.match(/\/\*\*\s*\n?\s*\*\s*(.+?)(?:\n|\*\/)/);
-    return commentMatch ? commentMatch[1].trim() : "";
+    return commentMatch ? commentMatch[1].trim() : '';
   }
 
   private extractFirstLine(content: string): string {
     const firstLine = content
-      .split("\n")
-      .find((line) => line.trim() && !line.trim().startsWith("import"));
-    return firstLine ? firstLine.trim().slice(0, 60) + "..." : "";
+      .split('\n')
+      .find((line) => line.trim() && !line.trim().startsWith('import'));
+    return firstLine ? firstLine.trim().slice(0, 60) + '...' : '';
   }
 }
