@@ -74,7 +74,7 @@
   "scripts": {
     "preinstall": "npx only-allow pnpm",
     "build": "tsc",
-    "prepublishOnly": "npm run build",
+    "prepublishOnly": "pnpm run build",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
     "watch": "tsc -w",
