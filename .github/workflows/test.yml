@@ -7,21 +7,44 @@ on:
     branches: [master]
 
 jobs:
-  test:
+  quality:
+    name: Quality Checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
       - uses: pnpm/action-setup@v2
         with:
           version: 10
-
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'pnpm'
-
       - run: pnpm install --frozen-lockfile
-      - run: pnpm audit
-      - run: pnpm build
-      - run: pnpm test
+      
+      - name: Lint & Format
+        run: |
+          pnpm lint
+          pnpm format:check
+
+      - name: Type Check
+        run: pnpm type-check
+
+      - name: Security Audit
+        run: pnpm audit
+
+  test:
+    name: Functional Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      
+      - name: Run Tests
+        run: pnpm test
