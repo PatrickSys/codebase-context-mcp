@@ -79,7 +79,11 @@
     "dev": "ts-node src/index.ts",
     "watch": "tsc -w",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "lint": "eslint \"src/**/*.ts\"",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\"",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@lancedb/lancedb": "^0.4.0",
@@ -94,10 +98,26 @@
     "zod": "^4.3.4"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.2",
     "@types/glob": "^8.1.0",
     "@types/node": "^20.11.24",
     "@types/uuid": "^9.0.8",
+    "@typescript-eslint/eslint-plugin": "^8.51.0",
+    "@typescript-eslint/parser": "^8.51.0",
+    "eslint": "^9.39.2",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-import": "^2.32.0",
+    "globals": "^17.0.0",
+    "prettier": "^3.7.4",
     "ts-node": "^10.9.2",
+    "typescript-eslint": "^8.51.0",
     "vitest": "^4.0.16"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "protobufjs",
+      "sharp"
+    ]
   }
 }

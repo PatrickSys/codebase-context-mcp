@@ -13,20 +13,24 @@ export class AnalyzerRegistry {
     this.analyzers.set(analyzer.name, analyzer);
 
     // Re-sort by priority (highest first)
-    this.sortedAnalyzers = Array.from(this.analyzers.values())
-      .sort((a, b) => b.priority - a.priority);
+    this.sortedAnalyzers = Array.from(this.analyzers.values()).sort(
+      (a, b) => b.priority - a.priority
+    );
 
     // Debug logging guarded by env var - avoids stderr output during MCP STDIO handshake
     if (process.env.CODEBASE_CONTEXT_DEBUG) {
-      console.error(`[DEBUG] Registered analyzer: ${analyzer.name} (priority: ${analyzer.priority})`);
+      console.error(
+        `[DEBUG] Registered analyzer: ${analyzer.name} (priority: ${analyzer.priority})`
+      );
     }
   }
 
   unregister(name: string): boolean {
     const deleted = this.analyzers.delete(name);
     if (deleted) {
-      this.sortedAnalyzers = Array.from(this.analyzers.values())
-        .sort((a, b) => b.priority - a.priority);
+      this.sortedAnalyzers = Array.from(this.analyzers.values()).sort(
+        (a, b) => b.priority - a.priority
+      );
     }
     return deleted;
   }
@@ -56,9 +60,7 @@ export class AnalyzerRegistry {
    * Find all analyzers that can handle a file
    */
   findAllAnalyzers(filePath: string, content?: string): FrameworkAnalyzer[] {
-    return this.sortedAnalyzers.filter(analyzer =>
-      analyzer.canAnalyze(filePath, content)
-    );
+    return this.sortedAnalyzers.filter((analyzer) => analyzer.canAnalyze(filePath, content));
   }
 
   /**
@@ -86,10 +88,10 @@ export class AnalyzerRegistry {
    * Get analyzer statistics
    */
   getStats(): { name: string; priority: number; extensions: string[] }[] {
-    return this.sortedAnalyzers.map(analyzer => ({
+    return this.sortedAnalyzers.map((analyzer) => ({
       name: analyzer.name,
       priority: analyzer.priority,
-      extensions: analyzer.supportedExtensions,
+      extensions: analyzer.supportedExtensions
     }));
   }
 }

@@ -48,7 +48,6 @@ export interface ComponentUsageInfo {
   usageCount: number;
 }
 
-
 export class ImportGraph {
   // Map: importSource -> files that import it
   private usages: Map<string, ImportUsage[]> = new Map();
@@ -64,7 +63,7 @@ export class ImportGraph {
     const relPath = this.toRelativePath(importingFile);
 
     // Avoid duplicates
-    if (!existing.some(u => u.file === relPath && u.line === line)) {
+    if (!existing.some((u) => u.file === relPath && u.line === line)) {
       existing.push({ file: relPath, line });
       this.usages.set(normalized, existing);
     }
@@ -101,7 +100,7 @@ export class ImportGraph {
 
     return {
       usedIn: usages,
-      usageCount: usages.length,
+      usageCount: usages.length
     };
   }
 
@@ -114,7 +113,7 @@ export class ImportGraph {
     for (const [source, usages] of this.usages.entries()) {
       result[source] = {
         usedIn: usages.slice(0, 10), // Top 10 usages
-        usageCount: usages.length,
+        usageCount: usages.length
       };
     }
 
@@ -128,7 +127,7 @@ export class ImportGraph {
     return Array.from(this.usages.entries())
       .map(([source, usages]) => ({
         source,
-        count: usages.length,
+        count: usages.length
       }))
       .sort((a, b) => b.count - a.count)
       .slice(0, n);
@@ -162,14 +161,13 @@ export class LibraryUsageTracker {
     return source;
   }
 
-
   getStats(): LibraryUsageStats {
     const stats: LibraryUsageStats = {};
 
     for (const [lib, data] of this.usage.entries()) {
       stats[lib] = {
         count: data.count,
-        examples: Array.from(data.examples).slice(0, 3),
+        examples: Array.from(data.examples).slice(0, 3)
       };
     }
 
@@ -206,23 +204,53 @@ export interface GoldenFile {
 
 const DEFAULT_TEST_FRAMEWORK_CONFIGS: TestFrameworkConfig[] = [
   // E2E
-  { name: 'Playwright', type: 'e2e', indicators: ['@playwright/test', 'page.goto(', 'page.locator('], priority: 100 },
-  { name: 'Cypress', type: 'e2e', indicators: ['cy.visit(', 'cy.get(', 'cy.request(', 'cy.window('], priority: 100 },
-  { name: 'Puppeteer', type: 'e2e', indicators: ['puppeteer.launch(', 'page.goto(', 'page.locator('], priority: 100 },
+  {
+    name: 'Playwright',
+    type: 'e2e',
+    indicators: ['@playwright/test', 'page.goto(', 'page.locator('],
+    priority: 100
+  },
+  {
+    name: 'Cypress',
+    type: 'e2e',
+    indicators: ['cy.visit(', 'cy.get(', 'cy.request(', 'cy.window('],
+    priority: 100
+  },
+  {
+    name: 'Puppeteer',
+    type: 'e2e',
+    indicators: ['puppeteer.launch(', 'page.goto(', 'page.locator('],
+    priority: 100
+  },
 
   // Unit - specific patterns
-  { name: 'Jest', type: 'unit', indicators: ['jest.mock(', 'jest.fn(', 'jest.spyOn(', '@jest/globals', 'types/jest'], priority: 100 },
+  {
+    name: 'Jest',
+    type: 'unit',
+    indicators: ['jest.mock(', 'jest.fn(', 'jest.spyOn(', '@jest/globals', 'types/jest'],
+    priority: 100
+  },
   { name: 'Vitest', type: 'unit', indicators: ['vi.mock(', 'vi.fn(', '@vitest'], priority: 100 },
-  { name: 'Jasmine', type: 'unit', indicators: ['jasmine.createSpy', 'jasmine.createSpyObj'], priority: 100 },
+  {
+    name: 'Jasmine',
+    type: 'unit',
+    indicators: ['jasmine.createSpy', 'jasmine.createSpyObj'],
+    priority: 100
+  },
 
   // Angular TestBed
-  { name: 'Angular TestBed', type: 'unit', indicators: ['TestBed.configureTestingModule'], priority: 50 },
+  {
+    name: 'Angular TestBed',
+    type: 'unit',
+    indicators: ['TestBed.configureTestingModule'],
+    priority: 50
+  },
 
   // Generic fallback
-  { name: 'Generic Test', type: 'unit', indicators: ['describe(', 'it(', 'expect('], priority: 10 },
+  { name: 'Generic Test', type: 'unit', indicators: ['describe(', 'it(', 'expect('], priority: 10 }
 ];
 
-import { calculateTrend } from "./git-dates.js";
+import { calculateTrend } from './git-dates.js';
 
 export class PatternDetector {
   private patterns: Map<string, Map<string, number>> = new Map();
@@ -235,7 +263,12 @@ export class PatternDetector {
     this.testFrameworkConfigs = customConfigs || DEFAULT_TEST_FRAMEWORK_CONFIGS;
   }
 
-  track(category: string, patternName: string, example?: { file: string; snippet: string }, fileDate?: Date): void {
+  track(
+    category: string,
+    patternName: string,
+    example?: { file: string; snippet: string },
+    fileDate?: Date
+  ): void {
     if (!this.patterns.has(category)) {
       this.patterns.set(category, new Map());
     }
@@ -290,7 +323,7 @@ export class PatternDetector {
    */
   trackGoldenFile(file: string, score: number, patterns: GoldenFile['patterns']): void {
     // Check if already tracked
-    const existing = this.goldenFiles.find(gf => gf.file === file);
+    const existing = this.goldenFiles.find((gf) => gf.file === file);
     if (existing) {
       if (score > existing.score) {
         existing.score = score;
@@ -305,15 +338,13 @@ export class PatternDetector {
    * Get top N Golden Files - files that best demonstrate all modern patterns together
    */
   getGoldenFiles(n: number = 5): GoldenFile[] {
-    return this.goldenFiles
-      .sort((a, b) => b.score - a.score)
-      .slice(0, n);
+    return this.goldenFiles.sort((a, b) => b.score - a.score).slice(0, n);
   }
 
   /**
    * Generate actionable guidance from percentage + trend.
    * This is what AI agents can directly consume.
-   * 
+   *
    * Examples:
    * - "USE: inject() – 97% adoption, stable"
    * - "CAUTION: constructor DI – 3%, declining"
@@ -341,11 +372,12 @@ export class PatternDetector {
     // Primary pattern with high adoption
     if (!isAlternative && percentage >= 80) {
       // If primary is declining, downgrade to PREFER
-      if (trend === 'Declining') return `PREFER: ${patternName} – ${percentage}% adoption, declining`;
+      if (trend === 'Declining')
+        return `PREFER: ${patternName} – ${percentage}% adoption, declining`;
       return `USE: ${patternName} – ${percentage}% adoption${trendLabel}`;
     }
 
-    // Primary pattern with moderate adoption  
+    // Primary pattern with moderate adoption
     if (!isAlternative && percentage >= 50) {
       return `PREFER: ${patternName} – ${percentage}% adoption${trendLabel}`;
     }
@@ -364,7 +396,6 @@ export class PatternDetector {
     // Default: just describe it
     return `${patternName} – ${percentage}%${trendLabel}`;
   }
-
 
   /**
    * Get robust date for a pattern (P90 percentile) to avoid "single file edit" skew
@@ -385,7 +416,7 @@ export class PatternDetector {
     // Use 90th percentile (exclude top 10% outliers)
     // For 100 files, P90 is index 10 (11th newest file)
     // This allows ~10% of legacy files to be edited without resetting the trend
-    const p90Index = Math.floor(dates.length * 0.10);
+    const p90Index = Math.floor(dates.length * 0.1);
     return new Date(dates[p90Index]);
   }
 
@@ -426,7 +457,13 @@ export class PatternDetector {
     }
 
     // Generate actionable guidance from percentage + trend, now aware of rising alternatives
-    const primaryGuidance = this.generateGuidance(primaryName, primaryFreq, primaryTrend, false, hasRisingAlternative);
+    const primaryGuidance = this.generateGuidance(
+      primaryName,
+      primaryFreq,
+      primaryTrend,
+      false,
+      hasRisingAlternative
+    );
 
     const result: PatternUsageStats[string] = {
       primary: {
@@ -437,24 +474,23 @@ export class PatternDetector {
         canonicalExample: canonicalExample,
         newestFileDate: primaryDate?.toISOString(),
         trend: primaryTrend,
-        guidance: primaryGuidance,
-      },
+        guidance: primaryGuidance
+      }
     };
 
     if (alternatives.length > 0) {
-      result.alsoDetected = alternatives.map(alt => ({
+      result.alsoDetected = alternatives.map((alt) => ({
         name: alt.name,
         count: alt.count,
         frequency: `${alt.frequency}%`,
         newestFileDate: alt.date?.toISOString(),
         trend: alt.trend,
-        guidance: this.generateGuidance(alt.name, alt.frequency, alt.trend, true),
+        guidance: this.generateGuidance(alt.name, alt.frequency, alt.trend, true)
       }));
     }
 
     return result;
   }
-
 
   getAllPatterns(): PatternUsageStats {
     const stats: PatternUsageStats = {};
@@ -473,11 +509,11 @@ export class PatternDetector {
    * Detect test framework from content using config-driven matching
    * Returns detected framework with confidence based on priority scoring
    */
-  private detectTestFramework(content: string, filePath: string): { unit?: string; e2e?: string } {
+  private detectTestFramework(content: string, _filePath: string): { unit?: string; e2e?: string } {
     const results: { type: 'unit' | 'e2e'; name: string; priority: number }[] = [];
 
     for (const config of this.testFrameworkConfigs) {
-      const matched = config.indicators.some(indicator => content.includes(indicator));
+      const matched = config.indicators.some((indicator) => content.includes(indicator));
       if (matched) {
         results.push({ type: config.type, name: config.name, priority: config.priority });
       }
@@ -486,8 +522,12 @@ export class PatternDetector {
     if (results.length === 0) return {};
 
     // Find highest priority match for each type
-    const unitMatches = results.filter(r => r.type === 'unit').sort((a, b) => b.priority - a.priority);
-    const e2eMatches = results.filter(r => r.type === 'e2e').sort((a, b) => b.priority - a.priority);
+    const unitMatches = results
+      .filter((r) => r.type === 'unit')
+      .sort((a, b) => b.priority - a.priority);
+    const e2eMatches = results
+      .filter((r) => r.type === 'e2e')
+      .sort((a, b) => b.priority - a.priority);
 
     const detected: { unit?: string; e2e?: string } = {};
 
@@ -572,13 +612,12 @@ export class PatternDetector {
   }
 }
 
-
 /**
  * InternalFileGraph - Tracks file-to-file import relationships for internal files only.
  * Used for:
  * 1. Circular dependency detection (toxic coupling)
  * 2. Unused export detection (dead code identification)
- * 
+ *
  * Unlike ImportGraph which tracks external package usage, this tracks the internal
  * dependency graph between project files.
  */
@@ -674,7 +713,7 @@ export class InternalFileGraph {
   /**
    * Find all circular dependencies in the graph using DFS with recursion stack.
    * Returns unique cycles (avoids duplicates like A->B->A and B->A->B).
-   * 
+   *
    * @param scope Optional path prefix to limit analysis (e.g., 'src/features')
    */
   findCycles(scope?: string): CyclePath[] {
@@ -686,7 +725,7 @@ export class InternalFileGraph {
     // Get all files to check
     let filesToCheck = Array.from(this.imports.keys());
     if (scope) {
-      filesToCheck = filesToCheck.filter(f => f.startsWith(scope));
+      filesToCheck = filesToCheck.filter((f) => f.startsWith(scope));
     }
 
     const dfs = (node: string, path: string[]): void => {
@@ -714,7 +753,7 @@ export class InternalFileGraph {
               cycleSignatures.add(signature);
               cycles.push({
                 files: cyclePath,
-                length: cyclePath.length - 1, // -1 because last element = first element
+                length: cyclePath.length - 1 // -1 because last element = first element
               });
             }
           }
@@ -740,7 +779,7 @@ export class InternalFileGraph {
   /**
    * Find exports that are never imported anywhere in the codebase.
    * These may indicate dead code or forgotten APIs.
-   * 
+   *
    * @param scope Optional path prefix to limit analysis
    */
   findUnusedExports(scope?: string): UnusedExport[] {
@@ -790,7 +829,7 @@ export class InternalFileGraph {
     return {
       files,
       edges,
-      avgDependencies: files > 0 ? Math.round((edges / files) * 10) / 10 : 0,
+      avgDependencies: files > 0 ? Math.round((edges / files) * 10) / 10 : 0
     };
   }
 
@@ -818,10 +857,13 @@ export class InternalFileGraph {
   /**
    * Restore from JSON (for loading from .codebase-intelligence.json)
    */
-  static fromJSON(data: {
-    imports?: Record<string, string[]>;
-    exports?: Record<string, FileExport[]>;
-  }, rootPath: string): InternalFileGraph {
+  static fromJSON(
+    data: {
+      imports?: Record<string, string[]>;
+      exports?: Record<string, FileExport[]>;
+    },
+    rootPath: string
+  ): InternalFileGraph {
     const graph = new InternalFileGraph(rootPath);
 
     if (data.imports) {
@@ -839,4 +881,3 @@ export class InternalFileGraph {
     return graph;
   }
 }
-

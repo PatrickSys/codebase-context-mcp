@@ -1,13 +1,13 @@
-import { EmbeddingProvider, DEFAULT_MODEL } from "./types.js";
+import { EmbeddingProvider, DEFAULT_MODEL } from './types.js';
 
 const MODEL_CONFIGS: Record<string, { dimensions: number }> = {
-  "Xenova/bge-small-en-v1.5": { dimensions: 384 },
-  "Xenova/all-MiniLM-L6-v2": { dimensions: 384 },
-  "Xenova/bge-base-en-v1.5": { dimensions: 768 },
+  'Xenova/bge-small-en-v1.5': { dimensions: 384 },
+  'Xenova/all-MiniLM-L6-v2': { dimensions: 384 },
+  'Xenova/bge-base-en-v1.5': { dimensions: 768 }
 };
 
 export class TransformersEmbeddingProvider implements EmbeddingProvider {
-  readonly name = "transformers";
+  readonly name = 'transformers';
   readonly modelName: string;
   readonly dimensions: number;
 
@@ -31,18 +31,18 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
   private async _initialize(): Promise<void> {
     try {
       console.error(`Loading embedding model: ${this.modelName}`);
-      console.error("(First run will download ~130MB model)");
+      console.error('(First run will download ~130MB model)');
 
-      const { pipeline } = await import("@xenova/transformers");
+      const { pipeline } = await import('@xenova/transformers');
 
-      this.pipeline = await pipeline("feature-extraction", this.modelName, {
-        quantized: true,
+      this.pipeline = await pipeline('feature-extraction', this.modelName, {
+        quantized: true
       });
 
       this.ready = true;
       console.error(`Model loaded successfully: ${this.modelName}`);
     } catch (error) {
-      console.error("Failed to initialize embedding model:", error);
+      console.error('Failed to initialize embedding model:', error);
       throw error;
     }
   }
@@ -54,13 +54,13 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
 
     try {
       const output = await this.pipeline(text, {
-        pooling: "mean",
-        normalize: true,
+        pooling: 'mean',
+        normalize: true
       });
 
       return Array.from(output.data);
     } catch (error) {
-      console.error("Failed to generate embedding:", error);
+      console.error('Failed to generate embedding:', error);
       throw error;
     }
   }
@@ -75,16 +75,12 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
 
     for (let i = 0; i < texts.length; i += batchSize) {
       const batch = texts.slice(i, i + batchSize);
-      const batchEmbeddings = await Promise.all(
-        batch.map((text) => this.embed(text))
-      );
+      const batchEmbeddings = await Promise.all(batch.map((text) => this.embed(text)));
 
       embeddings.push(...batchEmbeddings);
 
       if (texts.length > 100 && (i + batchSize) % 100 === 0) {
-        console.error(
-          `Embedded ${Math.min(i + batchSize, texts.length)}/${texts.length} chunks`
-        );
+        console.error(`Embedded ${Math.min(i + batchSize, texts.length)}/${texts.length} chunks`);
       }
     }
 
@@ -103,4 +99,3 @@ export async function createEmbeddingProvider(
   await provider.initialize();
   return provider;
 }
-

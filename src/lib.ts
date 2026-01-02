@@ -32,13 +32,12 @@
  */
 
 // Core classes
-export { CodebaseIndexer, type IndexerOptions } from "./core/indexer.js";
-export { CodebaseSearcher, type SearchOptions } from "./core/search.js";
-export {
-  AnalyzerRegistry,
-  analyzerRegistry,
-} from "./core/analyzer-registry.js";
-
+export { CodebaseIndexer, type IndexerOptions } from './core/indexer.js';
+import { CodebaseIndexer } from './core/indexer.js';
+export { CodebaseSearcher, type SearchOptions } from './core/search.js';
+import { CodebaseSearcher } from './core/search.js';
+export { AnalyzerRegistry, analyzerRegistry } from './core/analyzer-registry.js';
+import { analyzerRegistry } from './core/analyzer-registry.js';
 
 // Embedding providers
 export {
@@ -46,8 +45,8 @@ export {
   TransformersEmbeddingProvider,
   type EmbeddingProvider,
   type EmbeddingConfig,
-  DEFAULT_EMBEDDING_CONFIG,
-} from "./embeddings/index.js";
+  DEFAULT_EMBEDDING_CONFIG
+} from './embeddings/index.js';
 
 // Storage providers
 export {
@@ -56,12 +55,14 @@ export {
   type VectorStorageProvider,
   type StorageConfig,
   type CodeChunkWithEmbedding,
-  DEFAULT_STORAGE_CONFIG,
-} from "./storage/index.js";
+  DEFAULT_STORAGE_CONFIG
+} from './storage/index.js';
 
 // Framework analyzers
-export { AngularAnalyzer } from "./analyzers/angular/index.js";
-export { GenericAnalyzer } from "./analyzers/generic/index.js";
+export { AngularAnalyzer } from './analyzers/angular/index.js';
+import { AngularAnalyzer } from './analyzers/angular/index.js';
+export { GenericAnalyzer } from './analyzers/generic/index.js';
+import { GenericAnalyzer } from './analyzers/generic/index.js';
 
 // Utilities
 export {
@@ -70,14 +71,14 @@ export {
   detectLanguage,
   isTestFile,
   isDocumentationFile,
-  getSupportedExtensions,
-} from "./utils/language-detection.js";
+  getSupportedExtensions
+} from './utils/language-detection.js';
 export {
   createChunksFromCode,
   calculateComplexity,
   mergeSmallChunks,
-  type ChunkingOptions,
-} from "./utils/chunking.js";
+  type ChunkingOptions
+} from './utils/chunking.js';
 
 // All types
 export type {
@@ -134,8 +135,8 @@ export type {
   Decorator,
   Property,
   Method,
-  Parameter,
-} from "./types/index.js";
+  Parameter
+} from './types/index.js';
 
 /**
  * Convenience function to create a fully configured indexer with default analyzers
@@ -146,26 +147,19 @@ export type {
  */
 export function createIndexer(
   rootPath: string,
-  options?: Partial<
-    Omit<import("./core/indexer.js").IndexerOptions, "rootPath">
-  >
-): import("./core/indexer.js").CodebaseIndexer {
-  const { CodebaseIndexer } = require("./core/indexer.js");
-  const { AngularAnalyzer } = require("./analyzers/angular/index.js");
-  const { GenericAnalyzer } = require("./analyzers/generic/index.js");
-  const { analyzerRegistry } = require("./core/analyzer-registry.js");
-
+  options?: Partial<Omit<import('./core/indexer.js').IndexerOptions, 'rootPath'>>
+): import('./core/indexer.js').CodebaseIndexer {
   // Register default analyzers if not already registered
-  if (!analyzerRegistry.get("angular")) {
+  if (!analyzerRegistry.get('angular')) {
     analyzerRegistry.register(new AngularAnalyzer());
   }
-  if (!analyzerRegistry.get("generic")) {
+  if (!analyzerRegistry.get('generic')) {
     analyzerRegistry.register(new GenericAnalyzer());
   }
 
   return new CodebaseIndexer({
     rootPath,
-    ...options,
+    ...options
   });
 }
 
@@ -175,9 +169,6 @@ export function createIndexer(
  * @param rootPath - Path to the indexed project root
  * @returns A configured CodebaseSearcher instance
  */
-export function createSearcher(
-  rootPath: string
-): import("./core/search.js").CodebaseSearcher {
-  const { CodebaseSearcher } = require("./core/search.js");
+export function createSearcher(rootPath: string): import('./core/search.js').CodebaseSearcher {
   return new CodebaseSearcher(rootPath);
 }

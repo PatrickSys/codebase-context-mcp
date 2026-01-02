@@ -10,7 +10,7 @@ export interface EmbeddingProvider {
 }
 
 export interface EmbeddingConfig {
-  provider: "transformers" | "ollama" | "openai" | "custom";
+  provider: 'transformers' | 'ollama' | 'openai' | 'custom';
   model?: string;
   batchSize?: number;
   maxRetries?: number;
@@ -18,13 +18,12 @@ export interface EmbeddingConfig {
   apiEndpoint?: string;
 }
 
-export const DEFAULT_MODEL = process.env.EMBEDDING_MODEL || "Xenova/bge-small-en-v1.5";
+export const DEFAULT_MODEL = process.env.EMBEDDING_MODEL || 'Xenova/bge-small-en-v1.5';
 
 export const DEFAULT_EMBEDDING_CONFIG: EmbeddingConfig = {
-  provider: (process.env.EMBEDDING_PROVIDER as any) || "transformers",
+  provider: (process.env.EMBEDDING_PROVIDER as any) || 'transformers',
   model: DEFAULT_MODEL,
   batchSize: 32,
   maxRetries: 3,
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPENAI_API_KEY
 };
-

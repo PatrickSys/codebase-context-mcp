@@ -2,16 +2,13 @@
  * Hybrid search combining semantic vector search with keyword matching
  */
 
-import Fuse from "fuse.js";
-import path from "path";
-import { promises as fs } from "fs";
-import { CodeChunk, SearchResult, SearchFilters } from "../types/index.js";
-import {
-  EmbeddingProvider,
-  getEmbeddingProvider,
-} from "../embeddings/index.js";
-import { VectorStorageProvider, getStorageProvider } from "../storage/index.js";
-import { analyzerRegistry } from "./analyzer-registry.js";
+import Fuse from 'fuse.js';
+import path from 'path';
+import { promises as fs } from 'fs';
+import { CodeChunk, SearchResult, SearchFilters } from '../types/index.js';
+import { EmbeddingProvider, getEmbeddingProvider } from '../embeddings/index.js';
+import { VectorStorageProvider, getStorageProvider } from '../storage/index.js';
+import { analyzerRegistry } from './analyzer-registry.js';
 
 export interface SearchOptions {
   useSemanticSearch?: boolean;
@@ -24,7 +21,7 @@ const DEFAULT_SEARCH_OPTIONS: SearchOptions = {
   useSemanticSearch: true,
   useKeywordSearch: true,
   semanticWeight: 0.7,
-  keywordWeight: 0.3,
+  keywordWeight: 0.3
 };
 
 export class CodebaseSearcher {
@@ -48,7 +45,7 @@ export class CodebaseSearcher {
 
   constructor(rootPath: string) {
     this.rootPath = rootPath;
-    this.storagePath = path.join(rootPath, ".codebase-index");
+    this.storagePath = path.join(rootPath, '.codebase-index');
   }
 
   async initialize(): Promise<void> {
@@ -60,39 +57,39 @@ export class CodebaseSearcher {
 
       this.embeddingProvider = await getEmbeddingProvider();
       this.storageProvider = await getStorageProvider({
-        path: this.storagePath,
+        path: this.storagePath
       });
 
       this.initialized = true;
     } catch (error) {
-      console.warn("Partial initialization (keyword search only):", error);
+      console.warn('Partial initialization (keyword search only):', error);
       this.initialized = true;
     }
   }
 
   private async loadKeywordIndex(): Promise<void> {
     try {
-      const indexPath = path.join(this.rootPath, ".codebase-index.json");
-      const content = await fs.readFile(indexPath, "utf-8");
+      const indexPath = path.join(this.rootPath, '.codebase-index.json');
+      const content = await fs.readFile(indexPath, 'utf-8');
       this.chunks = JSON.parse(content);
 
       this.fuseIndex = new Fuse(this.chunks, {
         keys: [
-          { name: "content", weight: 0.4 },
-          { name: "metadata.componentName", weight: 0.25 },
-          { name: "filePath", weight: 0.15 },
-          { name: "relativePath", weight: 0.15 },
-          { name: "componentType", weight: 0.15 },
-          { name: "layer", weight: 0.1 },
-          { name: "tags", weight: 0.15 },
+          { name: 'content', weight: 0.4 },
+          { name: 'metadata.componentName', weight: 0.25 },
+          { name: 'filePath', weight: 0.15 },
+          { name: 'relativePath', weight: 0.15 },
+          { name: 'componentType', weight: 0.15 },
+          { name: 'layer', weight: 0.1 },
+          { name: 'tags', weight: 0.15 }
         ],
         includeScore: true,
         threshold: 0.4,
         useExtendedSearch: true,
-        ignoreLocation: true,
+        ignoreLocation: true
       });
     } catch (error) {
-      console.warn("Keyword index load failed:", error);
+      console.warn('Keyword index load failed:', error);
       this.chunks = [];
       this.fuseIndex = null;
     }
@@ -103,8 +100,8 @@ export class CodebaseSearcher {
    */
   private async loadPatternIntelligence(): Promise<void> {
     try {
-      const intelligencePath = path.join(this.rootPath, ".codebase-intelligence.json");
-      const content = await fs.readFile(intelligencePath, "utf-8");
+      const intelligencePath = path.join(this.rootPath, '.codebase-intelligence.json');
+      const content = await fs.readFile(intelligencePath, 'utf-8');
       const intelligence = JSON.parse(content);
 
       const decliningPatterns = new Set<string>();
@@ -113,7 +110,7 @@ export class CodebaseSearcher {
 
       // Extract pattern indicators from intelligence data
       if (intelligence.patterns) {
-        for (const [category, data] of Object.entries(intelligence.patterns)) {
+        for (const [_category, data] of Object.entries(intelligence.patterns)) {
           const patternData = data as any;
 
           // Track primary pattern
@@ -139,9 +136,14 @@ export class CodebaseSearcher {
       }
 
       this.patternIntelligence = { decliningPatterns, risingPatterns, patternWarnings };
-      console.error(`[search] Loaded pattern intelligence: ${decliningPatterns.size} declining, ${risingPatterns.size} rising patterns`);
+      console.error(
+        `[search] Loaded pattern intelligence: ${decliningPatterns.size} declining, ${risingPatterns.size} rising patterns`
+      );
     } catch (error) {
-      console.warn("Pattern intelligence load failed (will proceed without trend detection):", error);
+      console.warn(
+        'Pattern intelligence load failed (will proceed without trend detection):',
+        error
+      );
       this.patternIntelligence = null;
     }
   }
@@ -149,7 +151,10 @@ export class CodebaseSearcher {
   /**
    * v1.2: Detect pattern trend from chunk content
    */
-  private detectChunkTrend(chunk: CodeChunk): { trend: 'Rising' | 'Stable' | 'Declining' | undefined; warning?: string } {
+  private detectChunkTrend(chunk: CodeChunk): {
+    trend: 'Rising' | 'Stable' | 'Declining' | undefined;
+    warning?: string;
+  } {
     if (!this.patternIntelligence) {
       return { trend: undefined };
     }
@@ -187,26 +192,16 @@ export class CodebaseSearcher {
       await this.initialize();
     }
 
-    const {
-      useSemanticSearch,
-      useKeywordSearch,
-      semanticWeight,
-      keywordWeight,
-    } = {
+    const { useSemanticSearch, useKeywordSearch, semanticWeight, keywordWeight } = {
       ...DEFAULT_SEARCH_OPTIONS,
-      ...options,
+      ...options
     };
 
-    const results: Map<string, { chunk: CodeChunk; scores: number[] }> =
-      new Map();
+    const results: Map<string, { chunk: CodeChunk; scores: number[] }> = new Map();
 
     if (useSemanticSearch && this.embeddingProvider && this.storageProvider) {
       try {
-        const vectorResults = await this.semanticSearch(
-          query,
-          limit * 2,
-          filters
-        );
+        const vectorResults = await this.semanticSearch(query, limit * 2, filters);
 
         vectorResults.forEach((result) => {
           const id = result.chunk.id;
@@ -217,22 +212,18 @@ export class CodebaseSearcher {
           } else {
             results.set(id, {
               chunk: result.chunk,
-              scores: [result.score * (semanticWeight || 0.7)],
+              scores: [result.score * (semanticWeight || 0.7)]
             });
           }
         });
       } catch (error) {
-        console.warn("Semantic search failed:", error);
+        console.warn('Semantic search failed:', error);
       }
     }
 
     if (useKeywordSearch && this.fuseIndex) {
       try {
-        const keywordResults = await this.keywordSearch(
-          query,
-          limit * 2,
-          filters
-        );
+        const keywordResults = await this.keywordSearch(query, limit * 2, filters);
 
         keywordResults.forEach((result) => {
           const id = result.chunk.id;
@@ -243,17 +234,17 @@ export class CodebaseSearcher {
           } else {
             results.set(id, {
               chunk: result.chunk,
-              scores: [result.score * (keywordWeight || 0.3)],
+              scores: [result.score * (keywordWeight || 0.3)]
             });
           }
         });
       } catch (error) {
-        console.warn("Keyword search failed:", error);
+        console.warn('Keyword search failed:', error);
       }
     }
 
     const combinedResults: SearchResult[] = Array.from(results.entries())
-      .map(([id, { chunk, scores }]) => {
+      .map(([_id, { chunk, scores }]) => {
         // Calculate base combined score
         let combinedScore = scores.reduce((sum, score) => sum + score, 0);
 
@@ -262,12 +253,12 @@ export class CodebaseSearcher {
         combinedScore = Math.min(1.0, combinedScore);
 
         // Boost scores for Angular components with proper detection
-        if (chunk.componentType && chunk.framework === "angular") {
+        if (chunk.componentType && chunk.framework === 'angular') {
           combinedScore = Math.min(1.0, combinedScore * 1.3);
         }
 
         // Boost if layer is detected
-        if (chunk.layer && chunk.layer !== "unknown") {
+        if (chunk.layer && chunk.layer !== 'unknown') {
           combinedScore = Math.min(1.0, combinedScore * 1.1);
         }
 
@@ -276,7 +267,7 @@ export class CodebaseSearcher {
         if (trend === 'Rising') {
           combinedScore = Math.min(1.0, combinedScore * 1.15); // +15% for modern patterns
         } else if (trend === 'Declining') {
-          combinedScore = combinedScore * 0.90; // -10% for legacy patterns
+          combinedScore = combinedScore * 0.9; // -10% for legacy patterns
         }
 
         const summary = this.generateSummary(chunk);
@@ -297,7 +288,7 @@ export class CodebaseSearcher {
           metadata: chunk.metadata,
           // v1.2: Pattern momentum awareness
           trend,
-          patternWarning: warning,
+          patternWarning: warning
         } as SearchResult;
       })
       .sort((a, b) => b.score - a.score)
@@ -307,23 +298,17 @@ export class CodebaseSearcher {
   }
 
   private generateSummary(chunk: CodeChunk): string {
-    const analyzer = chunk.framework
-      ? analyzerRegistry.get(chunk.framework)
-      : null;
+    const analyzer = chunk.framework ? analyzerRegistry.get(chunk.framework) : null;
 
     if (analyzer && analyzer.summarize) {
       try {
         const summary = analyzer.summarize(chunk);
         // Only use analyzer summary if it's meaningful (not the generic fallback)
-        if (
-          summary &&
-          !summary.startsWith("Code in ") &&
-          !summary.includes(": lines ")
-        ) {
+        if (summary && !summary.startsWith('Code in ') && !summary.includes(': lines ')) {
           return summary;
         }
       } catch (error) {
-        console.warn("Analyzer summary failed:", error);
+        console.warn('Analyzer summary failed:', error);
       }
     }
 
@@ -339,35 +324,35 @@ export class CodebaseSearcher {
     const name = componentName || (classMatch ? classMatch[1] : null);
 
     if (name && componentType) {
-      return `${componentType.charAt(0).toUpperCase() + componentType.slice(1)
-        } '${name}' in ${fileName}.`;
+      return `${
+        componentType.charAt(0).toUpperCase() + componentType.slice(1)
+      } '${name}' in ${fileName}.`;
     } else if (name) {
       return `'${name}' defined in ${fileName}.`;
     } else if (componentType) {
-      return `${componentType.charAt(0).toUpperCase() + componentType.slice(1)
-        } in ${fileName}.`;
+      return `${componentType.charAt(0).toUpperCase() + componentType.slice(1)} in ${fileName}.`;
     }
 
     // Last resort: describe the file type
     const ext = path.extname(fileName).slice(1);
     const langMap: Record<string, string> = {
-      ts: "TypeScript",
-      js: "JavaScript",
-      html: "HTML template",
-      scss: "SCSS styles",
-      css: "CSS styles",
-      json: "JSON config",
+      ts: 'TypeScript',
+      js: 'JavaScript',
+      html: 'HTML template',
+      scss: 'SCSS styles',
+      css: 'CSS styles',
+      json: 'JSON config'
     };
     return `${langMap[ext] || ext.toUpperCase()} in ${fileName}.`;
   }
 
   private generateSnippet(content: string, maxLines: number = 100): string {
-    const lines = content.split("\n");
+    const lines = content.split('\n');
     if (lines.length <= maxLines) {
       return content;
     }
 
-    const snippet = lines.slice(0, maxLines).join("\n");
+    const snippet = lines.slice(0, maxLines).join('\n');
     const remaining = lines.length - maxLines;
     return `${snippet}\n\n... [${remaining} more lines]`;
   }
@@ -383,15 +368,11 @@ export class CodebaseSearcher {
 
     const queryVector = await this.embeddingProvider.embed(query);
 
-    const results = await this.storageProvider.search(
-      queryVector,
-      limit,
-      filters
-    );
+    const results = await this.storageProvider.search(queryVector, limit, filters);
 
     return results.map((r) => ({
       chunk: r.chunk,
-      score: r.score,
+      score: r.score
     }));
   }
 
@@ -410,10 +391,7 @@ export class CodebaseSearcher {
       fuseResults = fuseResults.filter((r) => {
         const chunk = r.item;
 
-        if (
-          filters.componentType &&
-          chunk.componentType !== filters.componentType
-        ) {
+        if (filters.componentType && chunk.componentType !== filters.componentType) {
           return false;
         }
         if (filters.layer && chunk.layer !== filters.layer) {
@@ -444,7 +422,7 @@ export class CodebaseSearcher {
       const queryLower = query.toLowerCase();
       const fileName = path.basename(chunk.filePath).toLowerCase();
       const relativePathLower = chunk.relativePath.toLowerCase();
-      const componentName = chunk.metadata?.componentName?.toLowerCase() || "";
+      const componentName = chunk.metadata?.componentName?.toLowerCase() || '';
 
       // Exact class name match
       if (componentName && queryLower === componentName) {
@@ -454,7 +432,7 @@ export class CodebaseSearcher {
       // Exact file name match
       if (
         fileName === queryLower ||
-        fileName.replace(/\.ts$/, "") === queryLower.replace(/\.ts$/, "")
+        fileName.replace(/\.ts$/, '') === queryLower.replace(/\.ts$/, '')
       ) {
         score = Math.min(1.0, score + 0.2);
       }
@@ -469,7 +447,7 @@ export class CodebaseSearcher {
 
       return {
         chunk,
-        score,
+        score
       };
     });
   }
@@ -486,14 +464,12 @@ export class CodebaseSearcher {
     }
 
     const queryLower = query.toLowerCase();
-    const matchingTags = (chunk.tags || []).filter((tag) =>
-      queryLower.includes(tag.toLowerCase())
-    );
+    const matchingTags = (chunk.tags || []).filter((tag) => queryLower.includes(tag.toLowerCase()));
     if (matchingTags.length > 0) {
-      reasons.push(`tags: ${matchingTags.join(", ")}`);
+      reasons.push(`tags: ${matchingTags.join(', ')}`);
     }
 
-    return reasons.length > 0 ? reasons.join("; ") : "content match";
+    return reasons.length > 0 ? reasons.join('; ') : 'content match';
   }
 
   async getChunkCount(): Promise<number> {
