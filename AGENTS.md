@@ -1,60 +1,21 @@
 # Agent Instructions
 
 ## Internal Documentation
+This repository uses a private git submodule for internal notes.
 
-This repository uses a **git submodule** for internal documentation:
+- **Path**: `internal-docs/`
+- **Repo**: `https://github.com/PatrickSys/codebase-context-internal.git`
 
-- **Submodule path**: `internal-docs/`
-- **Private repository**: `PatrickSys/codebase-context-mcp-internal`
-- **Purpose**: Store internal research, strategies, and private development notes
-
-### Initial Setup (New Machine)
-
-When cloning this repository for the first time:
-
+### Quick Setup
 ```bash
-git clone https://github.com/PatrickSys/codebase-context-mcp.git
-cd codebase-context-mcp
-git submodule init
-git submodule update
+git clone --recurse-submodules https://github.com/PatrickSys/codebase-context.git
 ```
 
-Or use the shorthand:
-
+### Syncing
 ```bash
-git clone --recurse-submodules https://github.com/PatrickSys/codebase-context-mcp.git
+git pull --recurse-submodules
+git submodule update --remote --merge
 ```
 
-### Authentication
-
-The submodule repository is **private**. Ensure you have:
-- A valid GitHub Personal Access Token (PAT) with `repo` scope, OR
-- SSH keys configured for GitHub access
-
-### Syncing Changes
-
-To pull latest changes from both main and submodule repositories:
-
-```bash
-git pull
-git submodule update --remote
-```
-
-To commit changes in the submodule:
-
-```bash
-cd internal-docs
-git add .
-git commit -m "your message"
-git push origin main
-cd ..
-git add internal-docs
-git commit -m "Update submodule reference"
-```
-
-### Why a Submodule?
-
-- **Privacy**: Keeps internal docs in a separate private repository
-- **Sync**: Enables synchronization across multiple machines
-- **Version Control**: Tracks internal docs alongside public code
-- **Security**: CrowdStrike restrictions prevent USB transfers; GitHub provides secure cloud sync
+### Privacy & Security
+The `internal-docs` repository is **Private**. It returns a 404 to unauthenticated users/APIs. Access requires a GitHub PAT or SSH keys with repository permissions.
