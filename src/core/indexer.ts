@@ -376,7 +376,8 @@ export class CodebaseIndexer {
 
           if ((i + batchSize) % 100 === 0 || i + batchSize >= chunksToEmbed.length) {
             console.error(
-              `Embedded ${Math.min(i + batchSize, chunksToEmbed.length)}/${chunksToEmbed.length
+              `Embedded ${Math.min(i + batchSize, chunksToEmbed.length)}/${
+                chunksToEmbed.length
               } chunks`
             );
           }

@@ -63,7 +63,6 @@ const indexState: IndexState = {
   status: 'idle'
 };
 
-
 const server: Server = new Server(
   {
     name: 'codebase-context',
@@ -594,19 +593,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   lastIndexed: indexState.lastIndexed?.toISOString(),
                   stats: indexState.stats
                     ? {
-                      totalFiles: indexState.stats.totalFiles,
-                      indexedFiles: indexState.stats.indexedFiles,
-                      totalChunks: indexState.stats.totalChunks,
-                      duration: `${(indexState.stats.duration / 1000).toFixed(2)}s`
-                    }
+                        totalFiles: indexState.stats.totalFiles,
+                        indexedFiles: indexState.stats.indexedFiles,
+                        totalChunks: indexState.stats.totalChunks,
+                        duration: `${(indexState.stats.duration / 1000).toFixed(2)}s`
+                      }
                     : undefined,
                   progress: progress
                     ? {
-                      phase: progress.phase,
-                      percentage: progress.percentage,
-                      filesProcessed: progress.filesProcessed,
-                      totalFiles: progress.totalFiles
-                    }
+                        phase: progress.phase,
+                        percentage: progress.percentage,
+                        filesProcessed: progress.filesProcessed,
+                        totalFiles: progress.totalFiles
+                      }
                     : undefined,
                   error: indexState.error,
                   hint: 'Use refresh_index to manually trigger re-indexing when needed.'

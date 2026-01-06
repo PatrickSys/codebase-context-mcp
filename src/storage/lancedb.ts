@@ -189,7 +189,10 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
       console.error('Failed to search:', error);
       // For other errors, we throw IndexCorruptedError to be safe and trigger auto-heal
       // if it looks like a database issue
-      if (error instanceof Error && (error.message.includes('LanceDB') || error.message.includes('Arrow'))) {
+      if (
+        error instanceof Error &&
+        (error.message.includes('LanceDB') || error.message.includes('Arrow'))
+      ) {
         throw new IndexCorruptedError(`LanceDB runtime error: ${error.message}`);
       }
       return [];

@@ -8,4 +8,3 @@ export class IndexCorruptedError extends Error {
     this.name = 'IndexCorruptedError';
   }
 }
-

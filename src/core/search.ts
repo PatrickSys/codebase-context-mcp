@@ -331,8 +331,9 @@ export class CodebaseSearcher {
     const name = componentName || (classMatch ? classMatch[1] : null);
 
     if (name && componentType) {
-      return `${componentType.charAt(0).toUpperCase() + componentType.slice(1)
-        } '${name}' in ${fileName}.`;
+      return `${
+        componentType.charAt(0).toUpperCase() + componentType.slice(1)
+      } '${name}' in ${fileName}.`;
     } else if (name) {
       return `'${name}' defined in ${fileName}.`;
     } else if (componentType) {
