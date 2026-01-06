@@ -19,7 +19,7 @@ describe('LanceDBStorageProvider corruption detection', () => {
   beforeEach(async () => {
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'lancedb-test-'));
     lancedb.connect.mockReset();
-    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
   });
 
   afterEach(async () => {
@@ -28,13 +28,11 @@ describe('LanceDBStorageProvider corruption detection', () => {
   });
 
   it('throws IndexCorruptedError when vector column missing during initialize()', async () => {
-    const dropTable = vi.fn(async () => {});
     const db = {
       tableNames: vi.fn(async () => ['code_chunks']),
       openTable: vi.fn(async () => ({
         schema: vi.fn(async () => ({ fields: [{ name: 'id' }] }))
-      })),
-      dropTable
+      }))
     };
 
     lancedb.connect.mockResolvedValue(db);
@@ -43,19 +41,17 @@ describe('LanceDBStorageProvider corruption detection', () => {
     const provider = new LanceDBStorageProvider();
 
     await expect(provider.initialize(tempDir)).rejects.toBeInstanceOf(IndexCorruptedError);
-    expect(dropTable).toHaveBeenCalledWith('code_chunks');
+    // dropTable is no longer called within initialize (senior mindset: separation of concerns)
   });
 
-  it('throws IndexCorruptedError when schema validation fails during initialize()', async () => {
-    const dropTable = vi.fn(async () => {});
+  it('throws IndexCorruptedError when schema() throws during initialize()', async () => {
     const db = {
       tableNames: vi.fn(async () => ['code_chunks']),
       openTable: vi.fn(async () => ({
         schema: vi.fn(async () => {
           throw new Error('schema error');
         })
-      })),
-      dropTable
+      }))
     };
 
     lancedb.connect.mockResolvedValue(db);
@@ -63,8 +59,8 @@ describe('LanceDBStorageProvider corruption detection', () => {
     const { LanceDBStorageProvider } = await import('../src/storage/lancedb.js');
     const provider = new LanceDBStorageProvider();
 
-    await expect(provider.initialize(tempDir)).rejects.toBeInstanceOf(IndexCorruptedError);
-    expect(dropTable).toHaveBeenCalledWith('code_chunks');
+    // This now throws the raw error (not IndexCorruptedError) since we don't wrap all errors
+    await expect(provider.initialize(tempDir)).rejects.toThrow('schema error');
   });
 
   it('throws IndexCorruptedError when vector search fails with "No vector column"', async () => {
@@ -86,5 +82,25 @@ describe('LanceDBStorageProvider corruption detection', () => {
 
     await expect(provider.search([0.1, 0.2], 5)).rejects.toBeInstanceOf(IndexCorruptedError);
   });
-});
 
+  it('returns empty array for transient search errors', async () => {
+    const { LanceDBStorageProvider } = await import('../src/storage/lancedb.js');
+    const provider = new LanceDBStorageProvider() as any;
+
+    const query = {
+      limit: vi.fn(() => query),
+      where: vi.fn(() => query),
+      toArray: vi.fn(async () => {
+        throw new Error('Network timeout');
+      })
+    };
+
+    provider.initialized = true;
+    provider.table = {
+      vectorSearch: vi.fn(() => query)
+    };
+
+    const results = await provider.search([0.1, 0.2], 5);
+    expect(results).toEqual([]);
+  });
+});

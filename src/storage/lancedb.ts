@@ -21,46 +21,24 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
 
     try {
       this.storagePath = storagePath;
-
-      // Ensure directory exists
       await fs.mkdir(storagePath, { recursive: true });
 
-      // Dynamic import to avoid issues at require time
       const lancedb = await import('@lancedb/lancedb');
-
-      // Connect to database
       this.db = await lancedb.connect(storagePath);
 
-      // Check if table exists and has valid schema
+      // Check if table exists and validate schema
       const tableNames = await this.db.tableNames();
       if (tableNames.includes('code_chunks')) {
         this.table = await this.db.openTable('code_chunks');
 
-        // Validate schema has vector column (required for semantic search)
-        try {
-          const schema = await this.table.schema();
-          const hasVectorColumn = schema.fields.some((f: any) => f.name === 'vector');
+        const schema = await this.table.schema();
+        const hasVectorColumn = schema.fields.some((f: any) => f.name === 'vector');
 
-          if (!hasVectorColumn) {
-            console.error('Stale index detected (missing vector column). Rebuilding...');
-            await this.db.dropTable('code_chunks');
-            this.table = null;
-            throw new IndexCorruptedError('LanceDB index corrupted: missing vector column');
-          } else {
-            console.error('Opened existing LanceDB table');
-          }
-        } catch (schemaError) {
-          if (schemaError instanceof IndexCorruptedError) {
-            throw schemaError;
-          }
-          // If schema check fails, table is likely corrupted - drop and rebuild
-          console.error('Failed to validate table schema, rebuilding index...');
-          await this.db.dropTable('code_chunks');
-          this.table = null;
-          throw new IndexCorruptedError('LanceDB index corrupted: schema validation failed');
+        if (!hasVectorColumn) {
+          throw new IndexCorruptedError('LanceDB index corrupted: missing vector column');
         }
+        console.error('Opened existing LanceDB table');
       } else {
-        // Table missing entirely - not necessarily an error during initialization
         this.table = null;
       }
 
@@ -127,7 +105,6 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
     filters?: SearchFilters
   ): Promise<VectorSearchResult[]> {
     if (!this.initialized || !this.table) {
-      // If table is missing, throw so auto-heal can fix it
       throw new IndexCorruptedError('LanceDB index corrupted: no table available for search');
     }
 
@@ -183,18 +160,13 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
         distance: result._distance || 0
       }));
     } catch (error) {
-      if (error instanceof Error && error.message.includes('No vector column')) {
-        throw new IndexCorruptedError('LanceDB index corrupted: missing vector column');
+      // Only trigger auto-heal for verified corruption patterns
+      if (error instanceof Error && error.message.toLowerCase().includes('no vector column')) {
+        throw new IndexCorruptedError(`LanceDB index corrupted: ${error.message}`);
       }
-      console.error('Failed to search:', error);
-      // For other errors, we throw IndexCorruptedError to be safe and trigger auto-heal
-      // if it looks like a database issue
-      if (
-        error instanceof Error &&
-        (error.message.includes('LanceDB') || error.message.includes('Arrow'))
-      ) {
-        throw new IndexCorruptedError(`LanceDB runtime error: ${error.message}`);
-      }
+
+      // Transient errors - log and gracefully degrade
+      console.error('[LanceDB] Search error:', error instanceof Error ? error.message : error);
       return [];
     }
   }
@@ -223,8 +195,7 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
     }
 
     try {
-      const result = await this.table.countRows();
-      return result;
+      return await this.table.countRows();
     } catch (error) {
       console.error('Failed to count rows:', error);
       return 0;
