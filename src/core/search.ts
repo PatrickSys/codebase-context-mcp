@@ -374,16 +374,12 @@ export class CodebaseSearcher {
 
     const queryVector = await this.embeddingProvider.embed(query);
 
-    try {
-      const results = await this.storageProvider.search(queryVector, limit, filters);
+    const results = await this.storageProvider.search(queryVector, limit, filters);
 
-      return results.map((r) => ({
-        chunk: r.chunk,
-        score: r.score
-      }));
-    } catch (error) {
-      throw error;
-    }
+    return results.map((r) => ({
+      chunk: r.chunk,
+      score: r.score
+    }));
   }
 
   private async keywordSearch(
