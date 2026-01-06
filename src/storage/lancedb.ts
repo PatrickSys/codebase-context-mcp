@@ -6,6 +6,7 @@
 import { promises as fs } from 'fs';
 import { VectorStorageProvider, CodeChunkWithEmbedding, VectorSearchResult } from './types.js';
 import { CodeChunk, SearchFilters } from '../types/index.js';
+import { IndexCorruptedError } from '../errors/index.js';
 
 export class LanceDBStorageProvider implements VectorStorageProvider {
   readonly name = 'lancedb';
@@ -20,44 +21,33 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
 
     try {
       this.storagePath = storagePath;
-
-      // Ensure directory exists
       await fs.mkdir(storagePath, { recursive: true });
 
-      // Dynamic import to avoid issues at require time
       const lancedb = await import('@lancedb/lancedb');
-
-      // Connect to database
       this.db = await lancedb.connect(storagePath);
 
-      // Check if table exists and has valid schema
+      // Check if table exists and validate schema
       const tableNames = await this.db.tableNames();
       if (tableNames.includes('code_chunks')) {
         this.table = await this.db.openTable('code_chunks');
 
-        // Validate schema has vector column (required for semantic search)
-        try {
-          const schema = await this.table.schema();
-          const hasVectorColumn = schema.fields.some((f: any) => f.name === 'vector');
+        const schema = await this.table.schema();
+        const hasVectorColumn = schema.fields.some((f: any) => f.name === 'vector');
 
-          if (!hasVectorColumn) {
-            console.error('Stale index detected (missing vector column). Rebuilding...');
-            await this.db.dropTable('code_chunks');
-            this.table = null;
-          } else {
-            console.error('Opened existing LanceDB table');
-          }
-        } catch (_schemaError) {
-          // If schema check fails, table is likely corrupted - drop and rebuild
-          console.error('Failed to validate table schema, rebuilding index...');
-          await this.db.dropTable('code_chunks');
-          this.table = null;
+        if (!hasVectorColumn) {
+          throw new IndexCorruptedError('LanceDB index corrupted: missing vector column');
         }
+        console.error('Opened existing LanceDB table');
+      } else {
+        this.table = null;
       }
 
       this.initialized = true;
       console.error(`LanceDB initialized at: ${storagePath}`);
     } catch (error) {
+      if (error instanceof IndexCorruptedError) {
+        throw error;
+      }
       console.error('Failed to initialize LanceDB:', error);
       throw error;
     }
@@ -115,7 +105,7 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
     filters?: SearchFilters
   ): Promise<VectorSearchResult[]> {
     if (!this.initialized || !this.table) {
-      return [];
+      throw new IndexCorruptedError('LanceDB index corrupted: no table available for search');
     }
 
     try {
@@ -170,7 +160,13 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
         distance: result._distance || 0
       }));
     } catch (error) {
-      console.error('Failed to search:', error);
+      // Only trigger auto-heal for verified corruption patterns
+      if (error instanceof Error && error.message.toLowerCase().includes('no vector column')) {
+        throw new IndexCorruptedError(`LanceDB index corrupted: ${error.message}`);
+      }
+
+      // Transient errors - log and gracefully degrade
+      console.error('[LanceDB] Search error:', error instanceof Error ? error.message : error);
       return [];
     }
   }
@@ -199,8 +195,7 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
     }
 
     try {
-      const result = await this.table.countRows();
-      return result;
+      return await this.table.countRows();
     } catch (error) {
       console.error('Failed to count rows:', error);
       return 0;

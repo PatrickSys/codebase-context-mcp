@@ -9,6 +9,7 @@ import { CodeChunk, SearchResult, SearchFilters } from '../types/index.js';
 import { EmbeddingProvider, getEmbeddingProvider } from '../embeddings/index.js';
 import { VectorStorageProvider, getStorageProvider } from '../storage/index.js';
 import { analyzerRegistry } from './analyzer-registry.js';
+import { IndexCorruptedError } from '../errors/index.js';
 
 export interface SearchOptions {
   useSemanticSearch?: boolean;
@@ -62,6 +63,9 @@ export class CodebaseSearcher {
 
       this.initialized = true;
     } catch (error) {
+      if (error instanceof IndexCorruptedError) {
+        throw error; // Propagate to handler for auto-heal
+      }
       console.warn('Partial initialization (keyword search only):', error);
       this.initialized = true;
     }
@@ -217,6 +221,9 @@ export class CodebaseSearcher {
           }
         });
       } catch (error) {
+        if (error instanceof IndexCorruptedError) {
+          throw error; // Propagate to handler for auto-heal
+        }
         console.warn('Semantic search failed:', error);
       }
     }

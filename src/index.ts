@@ -20,12 +20,13 @@ import {
   Resource
 } from '@modelcontextprotocol/sdk/types.js';
 import { CodebaseIndexer } from './core/indexer.js';
-import { IndexingStats } from './types/index.js';
+import { IndexingStats, SearchResult } from './types/index.js';
 import { CodebaseSearcher } from './core/search.js';
 import { analyzerRegistry } from './core/analyzer-registry.js';
 import { AngularAnalyzer } from './analyzers/angular/index.js';
 import { GenericAnalyzer } from './analyzers/generic/index.js';
 import { InternalFileGraph } from './utils/usage-tracker.js';
+import { IndexCorruptedError } from './errors/index.js';
 
 analyzerRegistry.register(new AngularAnalyzer());
 analyzerRegistry.register(new GenericAnalyzer());
@@ -62,11 +63,10 @@ const indexState: IndexState = {
   status: 'idle'
 };
 
-
 const server: Server = new Server(
   {
     name: 'codebase-context',
-    version: '1.3.0'
+    version: '1.3.1'
   },
   {
     capabilities: {
@@ -492,7 +492,62 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         const searcher = new CodebaseSearcher(ROOT_PATH);
-        const results = await searcher.search(query, limit || 5, filters);
+        let results: SearchResult[];
+
+        try {
+          results = await searcher.search(query, limit || 5, filters);
+        } catch (error) {
+          if (error instanceof IndexCorruptedError) {
+            console.error('[Auto-Heal] Index corrupted. Triggering full re-index...');
+
+            await performIndexing();
+
+            if (indexState.status === 'ready') {
+              console.error('[Auto-Heal] Success. Retrying search...');
+              const freshSearcher = new CodebaseSearcher(ROOT_PATH);
+              try {
+                results = await freshSearcher.search(query, limit || 5, filters);
+              } catch (retryError) {
+                return {
+                  content: [
+                    {
+                      type: 'text',
+                      text: JSON.stringify(
+                        {
+                          status: 'error',
+                          message: `Auto-heal retry failed: ${
+                            retryError instanceof Error ? retryError.message : String(retryError)
+                          }`
+                        },
+                        null,
+                        2
+                      )
+                    }
+                  ]
+                };
+              }
+            } else {
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: JSON.stringify(
+                      {
+                        status: 'error',
+                        message: `Auto-heal failed: Indexing ended with status '${indexState.status}'`,
+                        error: indexState.error
+                      },
+                      null,
+                      2
+                    )
+                  }
+                ]
+              };
+            }
+          } else {
+            throw error; // Propagate unexpected errors
+          }
+        }
 
         return {
           content: [
@@ -538,19 +593,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   lastIndexed: indexState.lastIndexed?.toISOString(),
                   stats: indexState.stats
                     ? {
-                      totalFiles: indexState.stats.totalFiles,
-                      indexedFiles: indexState.stats.indexedFiles,
-                      totalChunks: indexState.stats.totalChunks,
-                      duration: `${(indexState.stats.duration / 1000).toFixed(2)}s`
-                    }
+                        totalFiles: indexState.stats.totalFiles,
+                        indexedFiles: indexState.stats.indexedFiles,
+                        totalChunks: indexState.stats.totalChunks,
+                        duration: `${(indexState.stats.duration / 1000).toFixed(2)}s`
+                      }
                     : undefined,
                   progress: progress
                     ? {
-                      phase: progress.phase,
-                      percentage: progress.percentage,
-                      filesProcessed: progress.filesProcessed,
-                      totalFiles: progress.totalFiles
-                    }
+                        phase: progress.phase,
+                        percentage: progress.percentage,
+                        filesProcessed: progress.filesProcessed,
+                        totalFiles: progress.totalFiles
+                      }
                     : undefined,
                   error: indexState.error,
                   hint: 'Use refresh_index to manually trigger re-indexing when needed.'
