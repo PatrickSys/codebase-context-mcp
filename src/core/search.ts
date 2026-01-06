@@ -9,6 +9,7 @@ import { CodeChunk, SearchResult, SearchFilters } from '../types/index.js';
 import { EmbeddingProvider, getEmbeddingProvider } from '../embeddings/index.js';
 import { VectorStorageProvider, getStorageProvider } from '../storage/index.js';
 import { analyzerRegistry } from './analyzer-registry.js';
+import { IndexCorruptedError } from '../errors/index.js';
 
 export interface SearchOptions {
   useSemanticSearch?: boolean;
@@ -62,6 +63,9 @@ export class CodebaseSearcher {
 
       this.initialized = true;
     } catch (error) {
+      if (error instanceof IndexCorruptedError) {
+        throw error; // Propagate to handler for auto-heal
+      }
       console.warn('Partial initialization (keyword search only):', error);
       this.initialized = true;
     }
@@ -217,6 +221,9 @@ export class CodebaseSearcher {
           }
         });
       } catch (error) {
+        if (error instanceof IndexCorruptedError) {
+          throw error; // Propagate to handler for auto-heal
+        }
         console.warn('Semantic search failed:', error);
       }
     }
@@ -324,9 +331,8 @@ export class CodebaseSearcher {
     const name = componentName || (classMatch ? classMatch[1] : null);
 
     if (name && componentType) {
-      return `${
-        componentType.charAt(0).toUpperCase() + componentType.slice(1)
-      } '${name}' in ${fileName}.`;
+      return `${componentType.charAt(0).toUpperCase() + componentType.slice(1)
+        } '${name}' in ${fileName}.`;
     } else if (name) {
       return `'${name}' defined in ${fileName}.`;
     } else if (componentType) {
@@ -368,12 +374,16 @@ export class CodebaseSearcher {
 
     const queryVector = await this.embeddingProvider.embed(query);
 
-    const results = await this.storageProvider.search(queryVector, limit, filters);
+    try {
+      const results = await this.storageProvider.search(queryVector, limit, filters);
 
-    return results.map((r) => ({
-      chunk: r.chunk,
-      score: r.score
-    }));
+      return results.map((r) => ({
+        chunk: r.chunk,
+        score: r.score
+      }));
+    } catch (error) {
+      throw error;
+    }
   }
 
   private async keywordSearch(

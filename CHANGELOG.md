@@ -1,6 +1,11 @@
 # Changelog
 
 
+## [1.3.1] - 2026-01-05
+
+### Fixed
+- **Auto-Heal Semantic Search**: Detects LanceDB schema corruption (missing `vector` column), triggers re-indexing, and retries search instead of silently falling back to keyword-only results.
+
 ## [1.3.0] - 2026-01-01
 
 ### Added

@@ -6,6 +6,7 @@
 import { promises as fs } from 'fs';
 import { VectorStorageProvider, CodeChunkWithEmbedding, VectorSearchResult } from './types.js';
 import { CodeChunk, SearchFilters } from '../types/index.js';
+import { IndexCorruptedError } from '../errors/index.js';
 
 export class LanceDBStorageProvider implements VectorStorageProvider {
   readonly name = 'lancedb';
@@ -44,20 +45,31 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
             console.error('Stale index detected (missing vector column). Rebuilding...');
             await this.db.dropTable('code_chunks');
             this.table = null;
+            throw new IndexCorruptedError('LanceDB index corrupted: missing vector column');
           } else {
             console.error('Opened existing LanceDB table');
           }
-        } catch (_schemaError) {
+        } catch (schemaError) {
+          if (schemaError instanceof IndexCorruptedError) {
+            throw schemaError;
+          }
           // If schema check fails, table is likely corrupted - drop and rebuild
           console.error('Failed to validate table schema, rebuilding index...');
           await this.db.dropTable('code_chunks');
           this.table = null;
+          throw new IndexCorruptedError('LanceDB index corrupted: schema validation failed');
         }
+      } else {
+        // Table missing entirely - not necessarily an error during initialization
+        this.table = null;
       }
 
       this.initialized = true;
       console.error(`LanceDB initialized at: ${storagePath}`);
     } catch (error) {
+      if (error instanceof IndexCorruptedError) {
+        throw error;
+      }
       console.error('Failed to initialize LanceDB:', error);
       throw error;
     }
@@ -115,7 +127,8 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
     filters?: SearchFilters
   ): Promise<VectorSearchResult[]> {
     if (!this.initialized || !this.table) {
-      return [];
+      // If table is missing, throw so auto-heal can fix it
+      throw new IndexCorruptedError('LanceDB index corrupted: no table available for search');
     }
 
     try {
@@ -170,7 +183,15 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
         distance: result._distance || 0
       }));
     } catch (error) {
+      if (error instanceof Error && error.message.includes('No vector column')) {
+        throw new IndexCorruptedError('LanceDB index corrupted: missing vector column');
+      }
       console.error('Failed to search:', error);
+      // For other errors, we throw IndexCorruptedError to be safe and trigger auto-heal
+      // if it looks like a database issue
+      if (error instanceof Error && (error.message.includes('LanceDB') || error.message.includes('Arrow'))) {
+        throw new IndexCorruptedError(`LanceDB runtime error: ${error.message}`);
+      }
       return [];
     }
   }

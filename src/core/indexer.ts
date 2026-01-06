@@ -86,7 +86,7 @@ export class CodebaseIndexer {
       },
       embedding: {
         provider: 'transformers',
-        model: 'Xenova/bge-base-en-v1.5',
+        model: 'Xenova/bge-small-en-v1.5',
         batchSize: 100
       },
       skipEmbedding: false,
@@ -376,8 +376,7 @@ export class CodebaseIndexer {
 
           if ((i + batchSize) % 100 === 0 || i + batchSize >= chunksToEmbed.length) {
             console.error(
-              `Embedded ${Math.min(i + batchSize, chunksToEmbed.length)}/${
-                chunksToEmbed.length
+              `Embedded ${Math.min(i + batchSize, chunksToEmbed.length)}/${chunksToEmbed.length
               } chunks`
             );
           }
