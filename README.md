@@ -35,7 +35,7 @@ When generating code, the agent checks your patterns first:
 | Without MCP | With MCP |
 |-------------|----------|
 | Uses `constructor(private svc: Service)` | Uses `inject()` (97% team adoption) |
-| Suggests `primeng/button` directly | Uses `@codeblue/prime` wrapper |
+| Suggests `primeng/button` directly | Uses `@mycompany/ui-toolkit` wrapper |
 | Generic Jest setup | Your team's actual test utilities |
 
 ### Tip: Auto-invoke in your rules
