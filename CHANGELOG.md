@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [1.3.2] - 2026-01-16
+
+### Changed
+- **Embeddings**: Batch embedding now uses a single Transformers.js pipeline call per batch for higher throughput.
+- **Dependencies**: Bump `@modelcontextprotocol/sdk` to 1.25.2.
+
 ## [1.3.1] - 2026-01-05
 
 ### Fixed

@@ -75,9 +75,12 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
 
     for (let i = 0; i < texts.length; i += batchSize) {
       const batch = texts.slice(i, i + batchSize);
-      const batchEmbeddings = await Promise.all(batch.map((text) => this.embed(text)));
 
-      embeddings.push(...batchEmbeddings);
+      const output = await this.pipeline(batch, {
+        pooling: 'mean',
+        normalize: true
+      });
+      embeddings.push(...(output.tolist() as number[][]));
 
       if (texts.length > 100 && (i + batchSize) % 100 === 0) {
         console.error(`Embedded ${Math.min(i + batchSize, texts.length)}/${texts.length} chunks`);
