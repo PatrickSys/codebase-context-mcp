@@ -66,7 +66,7 @@ const indexState: IndexState = {
 const server: Server = new Server(
   {
     name: 'codebase-context',
-    version: '1.3.1'
+    version: '1.3.3'
   },
   {
     capabilities: {

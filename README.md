@@ -17,6 +17,8 @@ Add this to your MCP client config (Claude Desktop, VS Code, Cursor, etc.).
 }
 ```
 
+If your environment prompts on first run, use `npx --yes ...` (or `npx -y ...`) to auto-confirm.
+
 ## What You Get
 
 - **Internal library discovery** → `@mycompany/ui-toolkit`: 847 uses vs `primeng`: 3 uses
@@ -56,6 +58,7 @@ Now the agent checks patterns automatically instead of waiting for you to ask.
 | `get_component_usage` | Find where a library/component is used |
 | `get_team_patterns` | Pattern frequencies + canonical examples |
 | `get_codebase_metadata` | Project structure overview |
+| `get_indexing_status` | Indexing progress + last stats |
 | `get_style_guide` | Query style guide rules |
 | `detect_circular_dependencies` | Find import cycles between files |
 | `refresh_index` | Re-index the codebase |
@@ -67,6 +70,7 @@ Now the agent checks patterns automatically instead of waiting for you to ask.
 |----------|---------|-------------|
 | `EMBEDDING_PROVIDER` | `transformers` | `openai` (fast, cloud) or `transformers` (local, private) |
 | `OPENAI_API_KEY` | - | Required if provider is `openai` |
+| `CODEBASE_ROOT` | - | Project root to index (CLI arg takes precedence) |
 | `CODEBASE_CONTEXT_DEBUG` | - | Set to `1` to enable verbose logging (startup messages, analyzer registration) |
 
 ## Performance Note

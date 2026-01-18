@@ -1,6 +1,18 @@
 # Changelog
 
 
+## [1.3.3] - 2026-01-18
+
+### Fixed
+- **Security**: Resolve `pnpm audit` advisories by updating `hono` to 4.11.4 and removing the vulnerable `diff` transitive dependency (replaced `ts-node` with `tsx` for `pnpm dev`).
+
+### Changed
+- **Docs**: Clarify private `internal-docs/` submodule setup, add `npx --yes` tip, document `CODEBASE_ROOT`, and list `get_indexing_status` tool.
+- **Submodule**: Disable automatic updates for `internal-docs` (`update = none`).
+
+### Removed
+- **Dev**: Remove local-only `test-context.cjs` helper script.
+
 ## [1.3.2] - 2026-01-16
 
 ### Changed

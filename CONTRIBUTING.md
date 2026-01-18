@@ -10,9 +10,11 @@ pnpm build
 
 ```
 
+Note: this repo references a private submodule at `internal-docs/`. If you don't have access, clone without `--recurse-submodules` or ignore submodule update errors.
+
 ## Using the Package
 
-This is an MCP server, not a CLI tool. See [README.md](./README.md) for configuration with Claude Desktop, VS Code, Cursor, etc.
+See [README.md](./README.md) for configuration with Claude Desktop, VS Code, Cursor, etc.
 
 ## Project Structure
 
