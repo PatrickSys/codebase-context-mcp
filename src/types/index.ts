@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Core types for the modular codebase context system
  * These types define the contract that all framework analyzers must implement

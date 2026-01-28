@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { EmbeddingProvider, DEFAULT_MODEL } from './types.js';
 
 const MODEL_CONFIGS: Record<string, { dimensions: number }> = {

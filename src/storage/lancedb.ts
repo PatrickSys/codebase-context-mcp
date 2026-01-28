@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * LanceDB Storage Provider
  * Embedded vector database for storing and searching code embeddings
