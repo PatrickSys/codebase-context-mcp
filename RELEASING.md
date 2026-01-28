@@ -7,7 +7,7 @@ We use a clean OSS-style flow:
 - PRs merge into `master` (nothing publishes on merge)
 - A release is created by a dedicated **Release PR** opened/updated automatically
 - When the Release PR is merged, CI creates a git tag like `v1.2.3`
-- Tag pushes trigger CI to publish to npm
+- When a release tag is created, CI publishes to npm automatically
 
 ## One-time setup (maintainers)
 
@@ -37,9 +37,8 @@ We use a clean OSS-style flow:
 
 3. When you're ready to ship, merge the Release PR.
    - This creates a git tag `vX.Y.Z` and a GitHub Release
-   - The `Publish` workflow runs on the tag and publishes to npm
+   - The `Release Please` workflow publishes to npm as part of the same run
 
 ## Notes
 
-- Publishing is triggered only by `v*` tags.
-- The publish workflow verifies `tag == v${package.json.version}` and fails fast if they don't match.
+- If a version is already published on npm, CI skips the publish step (useful when seeding historical tags).
