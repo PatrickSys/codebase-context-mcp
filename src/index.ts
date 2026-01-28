@@ -1039,7 +1039,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             if (matchingMemories.length > 0) {
               result.memories = matchingMemories;
             }
-          } catch (error) {
+          } catch (_error) {
             // No memory file yet, that's fine - don't fail the whole request
           }
 
