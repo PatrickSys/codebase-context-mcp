@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.1](https://github.com/PatrickSys/codebase-context/compare/v1.4.0...v1.4.1) (2026-01-28)
+
+
+### Bug Fixes
+
+* **release:** make release-please runnable and less personal ([#11](https://github.com/PatrickSys/codebase-context/issues/11)) ([e7737e9](https://github.com/PatrickSys/codebase-context/commit/e7737e990ab88b56910d0aa4c664a69a7b290174))
+
 ## [Unreleased]
 
 ## [1.4.0] - 2026-01-28
