@@ -35,7 +35,18 @@ jobs:
         env:
           GITHUB_REF_NAME: ${{ github.ref_name }}
 
+      - name: Check if version already published
+        run: |
+          VERSION="$(node -e "console.log(JSON.parse(require('fs').readFileSync('package.json','utf8')).version)")"
+          if npm view "codebase-context@${VERSION}" version >/dev/null 2>&1; then
+            echo "Version ${VERSION} already exists on npm; skipping publish."
+            echo "SKIP_PUBLISH=true" >> "$GITHUB_ENV"
+          else
+            echo "Version ${VERSION} not found on npm; will publish."
+          fi
+
       - name: Quality gates
+        if: env.SKIP_PUBLISH != 'true'
         run: |
           pnpm lint
           pnpm format:check
@@ -44,6 +55,7 @@ jobs:
           pnpm build
 
       - name: Publish
+        if: env.SKIP_PUBLISH != 'true'
         run: pnpm publish --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
