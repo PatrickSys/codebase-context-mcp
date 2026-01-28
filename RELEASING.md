@@ -20,6 +20,8 @@ We use a clean OSS-style flow:
    - Require PRs (no direct pushes)
    - Require the `Tests` workflow to pass
 
+This repo also uses `CODEOWNERS` so PRs from non-owners require an approval from `@PatrickSys`.
+
 ## Normal release flow
 
 1. Merge changes into `master` via PRs.
