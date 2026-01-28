@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 /**
  * MCP Server for Codebase Context
  * Provides codebase indexing and semantic search capabilities

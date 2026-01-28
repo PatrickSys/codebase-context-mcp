@@ -1,0 +1,79 @@
+* b944cb9 (HEAD -> backup-before-cleanup, tag: v1.4.1, origin/master, origin/backup-before-cleanup, origin/HEAD, master, fix/trusted-publishing) chore(master): release 1.4.1 (#12)
+* 0a9a325 chore(release): publish to npm from release-please workflow (#13)
+| * 1618bbf (origin/chore/release-publish-unify) chore(release): publish to npm from release-please workflow
+|/  
+| * 2034168 (origin/release-please--branches--master--components--codebase-context) chore(master): release 1.4.1
+|/  
+* e7737e9 fix(release): make release-please runnable and less personal (#11)
+| * a24a444 (origin/chore/release-flow-fixes) fix(release): make release-please runnable and less personal
+|/  
+* e7f72cd chore(release): automate release PR + npm publish (#10)
+| * 12d9bd5 (origin/chore/release-flow) chore: add CODEOWNERS for maintainer approval
+| * 4bbcb9e chore(release): automate release PR + npm publish
+|/  
+* 3da3439 (tag: v1.4.0) feat(memory): v1.4.0 Memory System  (#9)
+* e7ee82c chore(release): 1.3.3
+* eca814d Update internal docs
+* 9aed4da Improve batch embedding throughput for faster indexing
+* f10b6ed feat(docs) clean up docs
+* b5de56b feat(docs) simplify docs
+*   9fde6c0 Merge pull request #8 from PatrickSys/feat/auto-heal-semantic-search
+|\  
+| | * fa672fc (feat/auto-heal-semantic-search) chore: remove outdated documentation files
+| |/  
+| * 9edbfc0 (origin/feat/auto-heal-semantic-search) refactor(lancedb): simplify error handling for auto-heal
+| * 049269f fix(format): apply prettier formatting to all source files
+| * 39f777e fix(lint): remove useless try/catch in search.ts
+| * 6718caa release: v1.3.1 - Auto-Heal for Silent Semantic Search Failure
+|/  
+* bb5dcb1 Update submodule to codebase-context-internal and simplify docs
+* 1d0ee28 Add internal-docs as private submodule
+* 5197711 fix: update prepublishOnly to use pnpm (Greptile audit)
+*   b0c432b Merge pull request #6 from PatrickSys/chore/infrastructure-upgrade
+|\  
+| *   396688c chore: resolve merge conflicts with master and modernize CI
+| |\  
+| |/  
+|/|   
+* | 08de9b6 Infrastructure Upgrade: PNPM Migration  (#5)
+| * 5088de9 (origin/chore/infrastructure-upgrade) chore(ci): modernize workflow and finalize quality checks
+| * ff83bc2 style: apply global prettier formatting
+| * 3680360 security: implement supply chain protections
+| * 9c536b7 refactor: clean up Server type annotation in index.ts
+| * 0c6873f chore: migrate from npm to pnpm (Phase 1)
+|/  
+* fc8eb35 feat: v1.3.0 foundation (workspace utils, metadata fix, testing) (#4)
+| * 905038d (origin/feat/v1.3.0-foundation) fix: resolve dependency category type mismatch in build
+| * 4bdf449 feat: v1.3.0 foundation (testing, workspace utils, metadata fix)
+|/  
+* 2fa3eb7 refactor: rename codebase-context-mcp to codebase-context
+* 33f3e2a chore: release v1.2.2
+* a72f35b fix: guard startup logs for wide MCP STDIO compatibility
+* b371b9b v1.2.0: Search Quality + Pattern Guidance (guidance field, trend awareness, search boosting)
+* ced0e18 feat: Pattern Momentum - detect migration direction via git history (v1.1.0)
+* 83c153f docs: add performance notes to README regarding initial indexing, caching, and future updates.
+* d86c350 Rename to codebas-context
+* 654aa8c Prepare to publish.
+* 106ee1a fix: singleton embedding provider and LanceDB schema validation
+* 94f3f13 feat(mcp, docs) Remove file watcher triggering full reindex on every change. Improve docs
+* 226ce47 Clarify pluggable analyzer architecture and JS/TS focus
+* ad27ac5 Expand limitations section with honest caveats and fix syntax
+* a14b04c Add OpenAI embedding provider and skip-embedding option
+* 183e9fc chore(docs): Refactor documentation to make it understandable and lightweight
+* 10045bd feat(docs, mcp): Improve the progress logging and documentation.
+* 8f3bf68 feat(v1.2.0): testing patterns detection, golden files extraction, wrapper libraries detection, file watcher for incrementalish indexing
+* c7d4dd8 Add resource handling and context generation for codebase intelligence
+* e74ac49 Make it distributable through - Added usage instructions for installing and using the package in CONTRIBUTING.md and README.md. - Improved project structure in README.md to clarify the functionality of the MCP server. - Updated package.json to include additional exports and metadata. - Introduced a new lib.ts file to serve as a public API entry point for programmatic use. - Modified index.ts to allow for conditional auto-starting of the server when run directly. - Updated tsconfig.json to enable declaration maps for better debugging.
+* 9c71b60 remove linkedin post from repo
+* 76e165c clean up unnecessary docs and test files
+* 7c92c1a v1.0.0 - semantic search MCP for AI assistants
+* aaaecd4 Improve search relevance with intelligent scoring
+* 4cf0eb0 Add MIT License
+* d53671a Initial commit: Local-first semantic codebase indexing MCP server
+*   8606d03 (refs/stash) WIP on master: 09da3ab Improve search relevance with intelligent scoring
+|\  
+| * 5bca082 index on master: 09da3ab Improve search relevance with intelligent scoring
+|/  
+* 09da3ab Improve search relevance with intelligent scoring
+* 86465c6 Add MIT License
+* 0c53c25 Initial commit: Local-first semantic codebase indexing MCP server

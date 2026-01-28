@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export interface EmbeddingProvider {
   readonly name: string;
   readonly modelName: string;

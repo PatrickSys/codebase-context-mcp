@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Code Chunking Utilities
  * Smart chunking that preserves semantic boundaries

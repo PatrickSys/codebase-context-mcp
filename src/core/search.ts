@@ -2,6 +2,7 @@
  * Hybrid search combining semantic vector search with keyword matching
  */
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import Fuse from 'fuse.js';
 import path from 'path';
 import { promises as fs } from 'fs';
