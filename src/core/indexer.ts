@@ -27,6 +27,12 @@ import {
   FileExport
 } from '../utils/usage-tracker.js';
 import { getFileCommitDates } from '../utils/git-dates.js';
+import {
+  CODEBASE_CONTEXT_DIRNAME,
+  INTELLIGENCE_FILENAME,
+  KEYWORD_INDEX_FILENAME,
+  VECTOR_DB_DIRNAME
+} from '../constants/codebase-context.js';
 
 export interface IndexerOptions {
   rootPath: string;
@@ -389,23 +395,26 @@ export class CodebaseIndexer {
       // Phase 4: Storing
       this.updateProgress('storing', 75);
 
+      const contextDir = path.join(this.rootPath, CODEBASE_CONTEXT_DIRNAME);
+      await fs.mkdir(contextDir, { recursive: true });
+
       if (!this.config.skipEmbedding) {
         console.error(`Storing ${chunksToEmbed.length} chunks...`);
 
         // Store in LanceDB for vector search
-        const storagePath = path.join(this.rootPath, '.codebase-index');
+        const storagePath = path.join(contextDir, VECTOR_DB_DIRNAME);
         const storageProvider = await getStorageProvider({ path: storagePath });
         await storageProvider.clear(); // Clear existing index
         await storageProvider.store(chunksWithEmbeddings);
       }
 
       // Also save JSON for keyword search (Fuse.js) - use chunksToEmbed for consistency
-      const indexPath = path.join(this.rootPath, '.codebase-index.json');
+      const indexPath = path.join(contextDir, KEYWORD_INDEX_FILENAME);
       // Write without pretty-printing to save memory
       await fs.writeFile(indexPath, JSON.stringify(chunksToEmbed));
 
       // Save library usage and pattern stats
-      const intelligencePath = path.join(this.rootPath, '.codebase-intelligence.json');
+      const intelligencePath = path.join(contextDir, INTELLIGENCE_FILENAME);
       const libraryStats = libraryTracker.getStats();
 
       // Extract tsconfig paths for AI to understand import aliases
@@ -594,7 +603,11 @@ export class CodebaseIndexer {
 
     // Load intelligence data if available
     try {
-      const intelligencePath = path.join(this.rootPath, '.codebase-intelligence.json');
+      const intelligencePath = path.join(
+        this.rootPath,
+        CODEBASE_CONTEXT_DIRNAME,
+        INTELLIGENCE_FILENAME
+      );
       const intelligenceContent = await fs.readFile(intelligencePath, 'utf-8');
       const intelligence = JSON.parse(intelligenceContent);
 

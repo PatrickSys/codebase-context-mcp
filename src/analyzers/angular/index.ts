@@ -18,6 +18,10 @@ import {
 } from '../../types/index.js';
 import { parse } from '@typescript-eslint/typescript-estree';
 import { createChunksFromCode } from '../../utils/chunking.js';
+import {
+  CODEBASE_CONTEXT_DIRNAME,
+  KEYWORD_INDEX_FILENAME
+} from '../../constants/codebase-context.js';
 
 export class AngularAnalyzer implements FrameworkAnalyzer {
   readonly name = 'angular';
@@ -867,7 +871,7 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
 
     // Calculate statistics from existing index if available
     try {
-      const indexPath = path.join(rootPath, '.codebase-index.json');
+      const indexPath = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
       const indexContent = await fs.readFile(indexPath, 'utf-8');
       const chunks = JSON.parse(indexContent);
 

@@ -10,6 +10,12 @@ import { EmbeddingProvider, getEmbeddingProvider } from '../embeddings/index.js'
 import { VectorStorageProvider, getStorageProvider } from '../storage/index.js';
 import { analyzerRegistry } from './analyzer-registry.js';
 import { IndexCorruptedError } from '../errors/index.js';
+import {
+  CODEBASE_CONTEXT_DIRNAME,
+  INTELLIGENCE_FILENAME,
+  KEYWORD_INDEX_FILENAME,
+  VECTOR_DB_DIRNAME
+} from '../constants/codebase-context.js';
 
 export interface SearchOptions {
   useSemanticSearch?: boolean;
@@ -46,7 +52,7 @@ export class CodebaseSearcher {
 
   constructor(rootPath: string) {
     this.rootPath = rootPath;
-    this.storagePath = path.join(rootPath, '.codebase-index');
+    this.storagePath = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, VECTOR_DB_DIRNAME);
   }
 
   async initialize(): Promise<void> {
@@ -73,7 +79,7 @@ export class CodebaseSearcher {
 
   private async loadKeywordIndex(): Promise<void> {
     try {
-      const indexPath = path.join(this.rootPath, '.codebase-index.json');
+      const indexPath = path.join(this.rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
       const content = await fs.readFile(indexPath, 'utf-8');
       this.chunks = JSON.parse(content);
 
@@ -104,7 +110,11 @@ export class CodebaseSearcher {
    */
   private async loadPatternIntelligence(): Promise<void> {
     try {
-      const intelligencePath = path.join(this.rootPath, '.codebase-intelligence.json');
+      const intelligencePath = path.join(
+        this.rootPath,
+        CODEBASE_CONTEXT_DIRNAME,
+        INTELLIGENCE_FILENAME
+      );
       const content = await fs.readFile(intelligencePath, 'utf-8');
       const intelligence = JSON.parse(content);
 

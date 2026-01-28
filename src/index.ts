@@ -20,13 +20,32 @@ import {
   Resource
 } from '@modelcontextprotocol/sdk/types.js';
 import { CodebaseIndexer } from './core/indexer.js';
-import { IndexingStats, SearchResult } from './types/index.js';
+import type {
+  IndexingStats,
+  SearchResult,
+  Memory,
+  MemoryCategory,
+  MemoryType
+} from './types/index.js';
 import { CodebaseSearcher } from './core/search.js';
 import { analyzerRegistry } from './core/analyzer-registry.js';
 import { AngularAnalyzer } from './analyzers/angular/index.js';
 import { GenericAnalyzer } from './analyzers/generic/index.js';
 import { InternalFileGraph } from './utils/usage-tracker.js';
 import { IndexCorruptedError } from './errors/index.js';
+import {
+  CODEBASE_CONTEXT_DIRNAME,
+  MEMORY_FILENAME,
+  INTELLIGENCE_FILENAME,
+  KEYWORD_INDEX_FILENAME,
+  VECTOR_DB_DIRNAME
+} from './constants/codebase-context.js';
+import {
+  appendMemoryFile,
+  readMemoriesFile,
+  filterMemories,
+  applyUnfilteredLimit
+} from './memory/store.js';
 
 analyzerRegistry.register(new AngularAnalyzer());
 analyzerRegistry.register(new GenericAnalyzer());
@@ -51,6 +70,87 @@ function resolveRootPath(): string {
 
 const ROOT_PATH = resolveRootPath();
 
+// File paths (new structure)
+const PATHS = {
+  baseDir: path.join(ROOT_PATH, CODEBASE_CONTEXT_DIRNAME),
+  memory: path.join(ROOT_PATH, CODEBASE_CONTEXT_DIRNAME, MEMORY_FILENAME),
+  intelligence: path.join(ROOT_PATH, CODEBASE_CONTEXT_DIRNAME, INTELLIGENCE_FILENAME),
+  keywordIndex: path.join(ROOT_PATH, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME),
+  vectorDb: path.join(ROOT_PATH, CODEBASE_CONTEXT_DIRNAME, VECTOR_DB_DIRNAME)
+};
+
+// Legacy paths for migration
+const LEGACY_PATHS = {
+  // Pre-v1.5
+  intelligence: path.join(ROOT_PATH, '.codebase-intelligence.json'),
+  keywordIndex: path.join(ROOT_PATH, '.codebase-index.json'),
+  vectorDb: path.join(ROOT_PATH, '.codebase-index')
+};
+
+/**
+ * Check if file/directory exists
+ */
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Migrate legacy file structure to .codebase-context/ folder.
+ * Idempotent, fail-safe. Rollback compatibility is not required.
+ */
+async function migrateToNewStructure(): Promise<boolean> {
+  let migrated = false;
+
+  try {
+    await fs.mkdir(PATHS.baseDir, { recursive: true });
+
+    // intelligence.json
+    if (!(await fileExists(PATHS.intelligence))) {
+      if (await fileExists(LEGACY_PATHS.intelligence)) {
+        await fs.copyFile(LEGACY_PATHS.intelligence, PATHS.intelligence);
+        migrated = true;
+        if (process.env.CODEBASE_CONTEXT_DEBUG) {
+          console.error('[DEBUG] Migrated intelligence.json');
+        }
+      }
+    }
+
+    // index.json (keyword index)
+    if (!(await fileExists(PATHS.keywordIndex))) {
+      if (await fileExists(LEGACY_PATHS.keywordIndex)) {
+        await fs.copyFile(LEGACY_PATHS.keywordIndex, PATHS.keywordIndex);
+        migrated = true;
+        if (process.env.CODEBASE_CONTEXT_DEBUG) {
+          console.error('[DEBUG] Migrated index.json');
+        }
+      }
+    }
+
+    // Vector DB directory
+    if (!(await fileExists(PATHS.vectorDb))) {
+      if (await fileExists(LEGACY_PATHS.vectorDb)) {
+        await fs.rename(LEGACY_PATHS.vectorDb, PATHS.vectorDb);
+        migrated = true;
+        if (process.env.CODEBASE_CONTEXT_DEBUG) {
+          console.error('[DEBUG] Migrated vector database');
+        }
+      }
+    }
+
+    return migrated;
+  } catch (error) {
+    if (process.env.CODEBASE_CONTEXT_DEBUG) {
+      console.error('[DEBUG] Migration error:', error);
+    }
+    return false;
+  }
+}
+
 export interface IndexState {
   status: 'idle' | 'indexing' | 'ready' | 'error';
   lastIndexed?: Date;
@@ -66,7 +166,7 @@ const indexState: IndexState = {
 const server: Server = new Server(
   {
     name: 'codebase-context',
-    version: '1.3.3'
+    version: '1.4.0'
   },
   {
     capabilities: {
@@ -237,6 +337,71 @@ const TOOLS: Tool[] = [
         }
       }
     }
+  },
+  {
+    name: 'remember',
+    description:
+      '📝 CALL IMMEDIATELY when user explicitly asks to remember/record something.\n\n' +
+      'USER TRIGGERS:\n' +
+      '• "Remember this: [X]"\n' +
+      '• "Record this: [Y]"\n' +
+      '• "Save this for next time: [Z]"\n\n' +
+      '⚠️ DO NOT call unless user explicitly requests it.\n\n' +
+      'HOW TO WRITE:\n' +
+      '• ONE convention per memory (if user lists 5 things, call this 5 times)\n' +
+      '• memory: 5-10 words (the specific rule)\n' +
+      '• reason: 1 sentence (why it matters)\n' +
+      '• Skip: one-time features, code examples, essays',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        type: {
+          type: 'string',
+          enum: ['convention', 'decision', 'gotcha'],
+          description: 'Type of memory being recorded'
+        },
+        category: {
+          type: 'string',
+          description: 'Broader category for filtering',
+          enum: ['tooling', 'architecture', 'testing', 'dependencies', 'conventions']
+        },
+        memory: {
+          type: 'string',
+          description: 'What to remember (concise)'
+        },
+        reason: {
+          type: 'string',
+          description: 'Why this matters or what breaks otherwise'
+        }
+      },
+      required: ['type', 'category', 'memory', 'reason']
+    }
+  },
+  {
+    name: 'get_memory',
+    description:
+      'Retrieves team conventions, architectural decisions, and known gotchas.\n' +
+      'CALL BEFORE suggesting patterns, libraries, or architecture.\n\n' +
+      'Filters: category (tooling/architecture/testing/dependencies/conventions), type (convention/decision/gotcha), query (keyword search).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        category: {
+          type: 'string',
+          description: 'Filter by category',
+          enum: ['tooling', 'architecture', 'testing', 'dependencies', 'conventions']
+        },
+        type: {
+          type: 'string',
+          description: 'Filter by memory type',
+          enum: ['convention', 'decision', 'gotcha']
+        },
+        query: {
+          type: 'string',
+          description: 'Keyword search across memory and reason'
+        }
+      }
+    }
   }
 ];
 
@@ -261,7 +426,7 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => {
 });
 
 async function generateCodebaseContext(): Promise<string> {
-  const intelligencePath = path.join(ROOT_PATH, '.codebase-intelligence.json');
+  const intelligencePath = PATHS.intelligence;
 
   try {
     const content = await fs.readFile(intelligencePath, 'utf-8');
@@ -437,7 +602,7 @@ async function performIndexing(): Promise<void> {
 }
 
 async function shouldReindex(): Promise<boolean> {
-  const indexPath = path.join(ROOT_PATH, '.codebase-index.json');
+  const indexPath = PATHS.keywordIndex;
   try {
     await fs.access(indexPath);
     return false;
@@ -549,6 +714,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
         }
 
+        // Load memories for keyword matching
+        const allMemories = await readMemoriesFile(PATHS.memory);
+
+        const findRelatedMemories = (queryTerms: string[]): Memory[] => {
+          return allMemories.filter((m) => {
+            const searchText = `${m.memory} ${m.reason}`.toLowerCase();
+            return queryTerms.some((term) => searchText.includes(term));
+          });
+        };
+
+        const queryTerms = query.toLowerCase().split(/\s+/);
+        const relatedMemories = findRelatedMemories(queryTerms);
+
         return {
           content: [
             {
@@ -565,11 +743,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     componentType: r.componentType,
                     layer: r.layer,
                     framework: r.framework,
-                    // v1.2: Pattern momentum awareness
                     trend: r.trend,
                     patternWarning: r.patternWarning
                   })),
-                  totalResults: results.length
+                  totalResults: results.length,
+                  ...(relatedMemories.length > 0 && { relatedMemories })
                 },
                 null,
                 2
@@ -660,7 +838,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         // Load team patterns from intelligence file
         let teamPatterns = {};
         try {
-          const intelligencePath = path.join(ROOT_PATH, '.codebase-intelligence.json');
+          const intelligencePath = PATHS.intelligence;
           const intelligenceContent = await fs.readFile(intelligencePath, 'utf-8');
           const intelligence = JSON.parse(intelligenceContent);
 
@@ -814,7 +992,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const { category } = args as { category?: string };
 
         try {
-          const intelligencePath = path.join(ROOT_PATH, '.codebase-intelligence.json');
+          const intelligencePath = PATHS.intelligence;
           const content = await fs.readFile(intelligencePath, 'utf-8');
           const intelligence = JSON.parse(content);
 
@@ -838,6 +1016,31 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             if (intelligence.tsconfigPaths) {
               result.tsconfigPaths = intelligence.tsconfigPaths;
             }
+          }
+
+          // Load and append matching memories
+          try {
+            const allMemories = await readMemoriesFile(PATHS.memory);
+
+            // Map pattern categories to decision categories
+            const categoryMap: Record<string, string[]> = {
+              all: ['tooling', 'architecture', 'testing', 'dependencies', 'conventions'],
+              di: ['architecture', 'conventions'],
+              state: ['architecture', 'conventions'],
+              testing: ['testing'],
+              libraries: ['dependencies']
+            };
+
+            const relevantCategories = categoryMap[category || 'all'] || [];
+            const matchingMemories = allMemories.filter((m) =>
+              relevantCategories.includes(m.category)
+            );
+
+            if (matchingMemories.length > 0) {
+              result.memories = matchingMemories;
+            }
+          } catch (error) {
+            // No memory file yet, that's fine - don't fail the whole request
           }
 
           return {
@@ -867,7 +1070,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const { name: componentName } = args as { name: string };
 
         try {
-          const intelligencePath = path.join(ROOT_PATH, '.codebase-intelligence.json');
+          const intelligencePath = PATHS.intelligence;
           const content = await fs.readFile(intelligencePath, 'utf-8');
           const intelligence = JSON.parse(content);
 
@@ -950,7 +1153,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const { scope } = args as { scope?: string };
 
         try {
-          const intelligencePath = path.join(ROOT_PATH, '.codebase-intelligence.json');
+          const intelligencePath = PATHS.intelligence;
           const content = await fs.readFile(intelligencePath, 'utf-8');
           const intelligence = JSON.parse(content);
 
@@ -1045,6 +1248,166 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
       }
 
+      case 'remember': {
+        const args_typed = args as {
+          type?: MemoryType;
+          category: MemoryCategory;
+          memory: string;
+          reason: string;
+        };
+
+        const { type = 'decision', category, memory, reason } = args_typed;
+
+        try {
+          const crypto = await import('crypto');
+          const memoryPath = PATHS.memory;
+
+          const hashContent = `${type}:${category}:${memory}:${reason}`;
+          const hash = crypto.createHash('sha256').update(hashContent).digest('hex');
+          const id = hash.substring(0, 12);
+
+          const newMemory: Memory = {
+            id,
+            type,
+            category,
+            memory,
+            reason,
+            date: new Date().toISOString()
+          };
+
+          const result = await appendMemoryFile(memoryPath, newMemory);
+
+          if (result.status === 'duplicate') {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(
+                    {
+                      status: 'info',
+                      message: 'This memory was already recorded.',
+                      memory: result.memory
+                    },
+                    null,
+                    2
+                  )
+                }
+              ]
+            };
+          }
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    status: 'success',
+                    message: 'Memory recorded successfully.',
+                    memory: result.memory
+                  },
+                  null,
+                  2
+                )
+              }
+            ]
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    status: 'error',
+                    message: 'Failed to record memory.',
+                    error: error instanceof Error ? error.message : String(error)
+                  },
+                  null,
+                  2
+                )
+              }
+            ]
+          };
+        }
+      }
+
+      case 'get_memory': {
+        const { category, type, query } = args as {
+          category?: MemoryCategory;
+          type?: MemoryType;
+          query?: string;
+        };
+
+        try {
+          const memoryPath = PATHS.memory;
+          const allMemories = await readMemoriesFile(memoryPath);
+
+          if (allMemories.length === 0) {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(
+                    {
+                      status: 'success',
+                      message:
+                        "No team conventions recorded yet. Use 'remember' to build tribal knowledge or memory when the user corrects you over a repeatable pattern.",
+                      memories: [],
+                      count: 0
+                    },
+                    null,
+                    2
+                  )
+                }
+              ]
+            };
+          }
+
+          const filtered = filterMemories(allMemories, { category, type, query });
+          const limited = applyUnfilteredLimit(filtered, { category, type, query }, 20);
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    status: 'success',
+                    count: limited.memories.length,
+                    totalCount: limited.totalCount,
+                    truncated: limited.truncated,
+                    message: limited.truncated
+                      ? 'Showing 20 most recent. Use filters (category/type/query) for targeted results.'
+                      : undefined,
+                    memories: limited.memories
+                  },
+                  null,
+                  2
+                )
+              }
+            ]
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    status: 'error',
+                    message: 'Failed to retrieve memories.',
+                    error: error instanceof Error ? error.message : String(error)
+                  },
+                  null,
+                  2
+                )
+              }
+            ]
+          };
+        }
+      }
+
       default:
         return {
           content: [
@@ -1083,18 +1446,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 async function main() {
-  // Server startup banner (guarded to avoid stderr during MCP STDIO handshake)
-  if (process.env.CODEBASE_CONTEXT_DEBUG) {
-    console.error('[DEBUG] Codebase Context MCP Server');
-    console.error(`[DEBUG] Root: ${ROOT_PATH}`);
-    console.error(
-      `[DEBUG] Analyzers: ${analyzerRegistry
-        .getAll()
-        .map((a) => a.name)
-        .join(', ')}`
-    );
-  }
-
   // Validate root path exists and is a directory
   try {
     const stats = await fs.stat(ROOT_PATH);
@@ -1107,6 +1458,31 @@ async function main() {
     console.error(`ERROR: Root path does not exist: ${ROOT_PATH}`);
     console.error(`Please specify a valid project directory.`);
     process.exit(1);
+  }
+
+  // Migrate legacy structure before server starts
+  try {
+    const migrated = await migrateToNewStructure();
+    if (migrated && process.env.CODEBASE_CONTEXT_DEBUG) {
+      console.error('[DEBUG] Migrated to .codebase-context/ structure');
+    }
+  } catch (error) {
+    // Non-fatal: continue with current paths
+    if (process.env.CODEBASE_CONTEXT_DEBUG) {
+      console.error('[DEBUG] Migration failed:', error);
+    }
+  }
+
+  // Server startup banner (guarded to avoid stderr during MCP STDIO handshake)
+  if (process.env.CODEBASE_CONTEXT_DEBUG) {
+    console.error('[DEBUG] Codebase Context MCP Server');
+    console.error(`[DEBUG] Root: ${ROOT_PATH}`);
+    console.error(
+      `[DEBUG] Analyzers: ${analyzerRegistry
+        .getAll()
+        .map((a) => a.name)
+        .join(', ')}`
+    );
   }
 
   // Check for package.json to confirm it's a project root (guarded to avoid stderr during handshake)

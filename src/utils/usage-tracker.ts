@@ -834,7 +834,7 @@ export class InternalFileGraph {
   }
 
   /**
-   * Serialize for persistence to .codebase-intelligence.json
+   * Serialize for persistence to .codebase-context/intelligence.json
    */
   toJSON(): {
     imports: Record<string, string[]>;
@@ -855,7 +855,7 @@ export class InternalFileGraph {
   }
 
   /**
-   * Restore from JSON (for loading from .codebase-intelligence.json)
+   * Restore from JSON (for loading from .codebase-context/intelligence.json)
    */
   static fromJSON(
     data: {
