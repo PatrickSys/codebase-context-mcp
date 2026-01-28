@@ -42,7 +42,6 @@ src/
 
 **Tests** - Run `pnpm test`. We use Vitest for unit and smoke testing.
 
-
 ## Adding a Framework Analyzer
 
 1. Create `src/analyzers/react/index.ts`
@@ -77,3 +76,23 @@ The server logs to stderr, so you can see what it's doing.
 - Open PR with what you changed and why
 
 No strict commit format, just be clear about what you're doing.
+
+## Release Notes (PR titles)
+
+This repo publishes to npm via an automated Release PR flow.
+
+To keep releases predictable and human-readable, please use a Conventional-Commits style **PR title** (we usually squash-merge, and the PR title becomes the commit message):
+
+- `feat: ...` (new feature)
+- `fix: ...` (bug fix)
+- `docs: ...` (docs-only)
+- `chore: ...` (maintenance)
+- `refactor: ...` (refactor)
+
+Examples:
+
+- `feat: add memory store for team conventions`
+- `fix: avoid creating directories on invalid ROOT_PATH`
+- `docs: clarify MCP client config and npx --yes`
+
+Maintainers: release steps are documented in `RELEASING.md`.
