@@ -521,3 +521,43 @@ export interface Parameter {
   defaultValue?: string;
   decorators?: Decorator[];
 }
+
+// Memory System
+
+/**
+ * Category of architectural/design decision
+ * Used for organizing and querying decisions
+ */
+export type MemoryCategory =
+  | 'tooling' // Build tools, package managers, linting, IDE config
+  | 'architecture' // Layers, folder structure, module boundaries
+  | 'testing' // Test frameworks, mocking strategies, coverage
+  | 'dependencies' // Library choices, wrappers, versioning, package management
+  | 'conventions'; // Naming, style, organization not captured in patterns
+
+/**
+ * Type of knowledge being recorded
+ */
+export type MemoryType =
+  | 'convention' // Style, naming, component preferences
+  | 'decision' // Architecture/tooling choices with rationale
+  | 'gotcha'; // Things that break and why
+
+/**
+ * A recorded architectural or design decision
+ * Captures the "why" behind choices to prevent AI agents from repeating mistakes
+ */
+export interface Memory {
+  /** Content-based hash ID (first 12 chars of SHA-256) */
+  id: string;
+  /** Type of knowledge: convention, decision, or gotcha */
+  type: MemoryType;
+  /** Category for organization and filtering */
+  category: MemoryCategory;
+  /** Brief description of what to remember */
+  memory: string;
+  /** Why this decision was made - the rationale/context */
+  reason: string;
+  /** ISO 8601 date when decision was recorded */
+  date: string;
+}

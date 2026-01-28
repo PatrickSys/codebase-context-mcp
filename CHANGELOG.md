@@ -1,32 +1,71 @@
 # Changelog
 
+## [Unreleased]
+
+## [1.4.0] - 2026-01-28
+
+### Added
+
+- **Memory System**: New `remember` and `get_memory` tools capture team conventions, decisions, and gotchas
+  - **Types**: `convention` | `decision` | `gotcha`
+  - **Categories**: `tooling`, `architecture`, `testing`, `dependencies`, `conventions`
+  - **Storage**: `.codebase-context/memory.json` with content-based hash IDs (commit this)
+  - **Safety**: `get_memory` truncates unfiltered results to 20 most recent
+- **Integration with `get_team_patterns`**: Appends relevant memories when category overlaps
+- **Integration with `search_codebase`**: Surfaces `relatedMemories` via keyword match in search results
+
+### Changed
+
+- **File Structure**: All MCP files now organized in `.codebase-context/` folder for cleaner project root
+  - Vector DB: `.codebase-index/` → `.codebase-context/index/`
+  - Intelligence: `.codebase-intelligence.json` → `.codebase-context/intelligence.json`
+  - Keyword index: `.codebase-index.json` → `.codebase-context/index.json`
+  - **Migration**: Automatic on server startup (legacy JSON preserved; vector DB directory moved)
+
+### Fixed
+
+- **Startup safety**: Validates `ROOT_PATH` before running migration to avoid creating directories on typo paths
+
+### Why This Feature
+
+Patterns show "what" (97% use inject) but not "why" (standalone compatibility). AGENTS.md can't capture every hard-won lesson. Decision memory gives AI agents access to the team's battle-tested rationale.
+
+**Design principle**: Tool must be self-evident without AGENTS.md rules. "Is this about HOW (record) vs WHAT (don't record)"
+
+**Inspired by**: v1.1 Pattern Momentum (temporal dimension) + memory systems research (Copilot Memory, Gemini Memory)
 
 ## [1.3.3] - 2026-01-18
 
 ### Fixed
+
 - **Security**: Resolve `pnpm audit` advisories by updating `hono` to 4.11.4 and removing the vulnerable `diff` transitive dependency (replaced `ts-node` with `tsx` for `pnpm dev`).
 
 ### Changed
+
 - **Docs**: Clarify private `internal-docs/` submodule setup, add `npx --yes` tip, document `CODEBASE_ROOT`, and list `get_indexing_status` tool.
 - **Submodule**: Disable automatic updates for `internal-docs` (`update = none`).
 
 ### Removed
+
 - **Dev**: Remove local-only `test-context.cjs` helper script.
 
 ## [1.3.2] - 2026-01-16
 
 ### Changed
+
 - **Embeddings**: Batch embedding now uses a single Transformers.js pipeline call per batch for higher throughput.
 - **Dependencies**: Bump `@modelcontextprotocol/sdk` to 1.25.2.
 
 ## [1.3.1] - 2026-01-05
 
 ### Fixed
+
 - **Auto-Heal Semantic Search**: Detects LanceDB schema corruption (missing `vector` column), triggers re-indexing, and retries search instead of silently falling back to keyword-only results.
 
 ## [1.3.0] - 2026-01-01
 
 ### Added
+
 - **Workspace Detection**: Monorepo support for Nx, Turborepo, Lerna, and pnpm workspaces
   - New utility: `src/utils/workspace-detection.ts`
   - Functions: `scanWorkspacePackageJsons()`, `detectWorkspaceType()`, `aggregateWorkspaceDependencies()`
@@ -36,13 +75,16 @@
 - **Dependency Detection**: Added `@nx/` and `@nrwl/` prefix matching for build tools
 
 ### Fixed
+
 - **detectMetadata() bug**: All registered analyzers now contribute to codebase metadata (previously only the first analyzer was called)
   - Added `mergeMetadata()` helper with proper array deduplication and layer merging
 
 ### Changed
+
 - Updated roadmap: v1.3 is now "Extensible Architecture Foundation"
 
 ### Acknowledgements
+
 Thanks to [@aolin480](https://github.com/aolin480) for accelerating the workspace detection roadmap and identifying the detectMetadata() limitation in their fork.
 
 ## 1.2.2 (2025-12-31)
@@ -54,7 +96,6 @@ Thanks to [@aolin480](https://github.com/aolin480) for accelerating the workspac
 - **Silent Failure**: Added global exception handlers to stderr to prevent silent failures in the future
 
 ## 1.2.1 (2025-12-31)
-
 
 ### Fixed
 

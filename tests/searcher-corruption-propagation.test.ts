@@ -3,6 +3,11 @@ import { promises as fs } from 'fs';
 import os from 'os';
 import path from 'path';
 import { IndexCorruptedError } from '../src/errors/index.js';
+import {
+  CODEBASE_CONTEXT_DIRNAME,
+  INTELLIGENCE_FILENAME,
+  KEYWORD_INDEX_FILENAME
+} from '../src/constants/codebase-context.js';
 
 const deps = vi.hoisted(() => ({
   getEmbeddingProvider: vi.fn(),
@@ -29,8 +34,15 @@ describe('CodebaseSearcher IndexCorruptedError propagation', () => {
     consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    await fs.writeFile(path.join(tempDir, '.codebase-index.json'), JSON.stringify([]));
-    await fs.writeFile(path.join(tempDir, '.codebase-intelligence.json'), JSON.stringify({}));
+    await fs.mkdir(path.join(tempDir, CODEBASE_CONTEXT_DIRNAME), { recursive: true });
+    await fs.writeFile(
+      path.join(tempDir, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME),
+      JSON.stringify([])
+    );
+    await fs.writeFile(
+      path.join(tempDir, CODEBASE_CONTEXT_DIRNAME, INTELLIGENCE_FILENAME),
+      JSON.stringify({})
+    );
   });
 
   afterEach(async () => {
@@ -77,4 +89,3 @@ describe('CodebaseSearcher IndexCorruptedError propagation', () => {
     await expect(searcher.search('test', 5)).rejects.toBeInstanceOf(IndexCorruptedError);
   });
 });
-

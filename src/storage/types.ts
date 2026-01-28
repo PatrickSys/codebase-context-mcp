@@ -3,6 +3,7 @@
  */
 
 import { CodeChunk, SearchFilters } from '../types/index.js';
+import { CODEBASE_CONTEXT_DIRNAME, VECTOR_DB_DIRNAME } from '../constants/codebase-context.js';
 
 export interface VectorStorageProvider {
   readonly name: string;
@@ -59,5 +60,5 @@ export interface StorageConfig {
 
 export const DEFAULT_STORAGE_CONFIG: StorageConfig = {
   provider: 'lancedb',
-  path: '.codebase-index'
+  path: `${CODEBASE_CONTEXT_DIRNAME}/${VECTOR_DB_DIRNAME}`
 };
