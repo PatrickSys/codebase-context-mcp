@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.2](https://github.com/PatrickSys/codebase-context/compare/v1.4.1...v1.4.2) (2026-01-28)
+
+
+### Bug Fixes
+
+* **lint:** disable no-explicit-any rule for AST manipulation code ([6cfa6b6](https://github.com/PatrickSys/codebase-context/commit/6cfa6b6ddbc47fcb875bfba95e66eda93d8731b6))
+
 ## [1.4.1](https://github.com/PatrickSys/codebase-context/compare/v1.4.0...v1.4.1) (2026-01-28)
 
 
