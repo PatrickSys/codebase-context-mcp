@@ -20,7 +20,10 @@ We use a clean OSS-style flow:
    - Require PRs (no direct pushes)
    - Require the `Tests` workflow to pass
 
-This repo also uses `CODEOWNERS` so PRs from non-owners require an approval from `@PatrickSys`.
+3. Allow Release Please to open PRs
+   - GitHub: Settings > Actions > General
+   - Set Workflow permissions to "Read and write"
+   - Enable "Allow GitHub Actions to create and approve pull requests"
 
 ## Normal release flow
 
