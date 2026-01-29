@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.5.0](https://github.com/PatrickSys/codebase-context/compare/v1.4.0...v1.5.0) (2026-01-29)
+
+
+### Features
+
+* add npm Trusted Publishers with provenance ([c5df281](https://github.com/PatrickSys/codebase-context/commit/c5df2812e1126834ff946e27d2e710c052c9d994))
+
+
+### Bug Fixes
+
+* **lint:** disable no-explicit-any rule for AST manipulation code ([41547da](https://github.com/PatrickSys/codebase-context/commit/41547da2aa5529dce3d539c296d5e9d79df379fe))
+
 ## [Unreleased]
 
 ## [1.4.0] - 2026-01-28
