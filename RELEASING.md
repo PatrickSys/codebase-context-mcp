@@ -1,44 +1,48 @@
 # Releasing
 
-This repo publishes an npm package: `codebase-context`.
+This repo publishes `codebase-context` to npm.
 
-We use a clean OSS-style flow:
+## How it works
 
-- PRs merge into `master` (nothing publishes on merge)
-- A release is created by a dedicated **Release PR** opened/updated automatically
-- When the Release PR is merged, CI creates a git tag like `v1.2.3`
-- When a release tag is created, CI publishes to npm automatically
+- Merge PRs to `master` with conventional commit messages (`feat:`, `fix:`, etc.)
+- Release Please bot opens/updates a release PR automatically
+- When you merge the release PR, it publishes to npm with provenance
 
-## One-time setup (maintainers)
+## Setup (one-time)
 
-1. Add a repository secret: `NPM_TOKEN`
-   - Create an npm access token with publish rights for `codebase-context`
-   - Add it in GitHub: Settings > Secrets and variables > Actions > New repository secret
-   - If your npm tokens expire (for example after 90 days), rotate the token and update this secret before it expires
+**1. Configure npm Trusted Publisher:**
+- Go to https://www.npmjs.com/package/codebase-context/access
+- Add GitHub Actions trusted publisher:
+  - Organization: `PatrickSys`
+  - Repository: `codebase-context`
+  - Workflow: `release-please.yml`
+  - Environment: (leave empty)
 
-2. (Recommended) Protect `master`
-   - Require PRs (no direct pushes)
-   - Require the `Tests` workflow to pass
+That's it! No tokens, no rotation, just OIDC.
 
-3. Allow Release Please to open PRs
-   - GitHub: Settings > Actions > General
-   - Set Workflow permissions to "Read and write"
-   - Enable "Allow GitHub Actions to create and approve pull requests"
+**2. Allow Release Please to work:**
+- GitHub Settings > Actions > General
+- Enable "Read and write permissions"
+- Enable "Allow GitHub Actions to create and approve pull requests"
 
-## Normal release flow
+## Releasing
 
-1. Merge changes into `master` via PRs.
-   - Recommended: use **Squash and merge** so the PR title becomes the commit message.
-   - Release automation relies on Conventional-Commits style messages like `feat: ...` / `fix: ...`.
+1. Merge PRs to master
+2. Wait for release PR to appear
+3. Merge the release PR
+4. Done - package is published with provenance
 
-2. Wait for the bot PR named like `release-please--branches--master`.
-   - It bumps `package.json` and updates `CHANGELOG.md`
-   - If it already exists, it gets updated automatically as new PRs merge
+## Verify
 
-3. When you're ready to ship, merge the Release PR.
-   - This creates a git tag `vX.Y.Z` and a GitHub Release
-   - The `Release Please` workflow publishes to npm as part of the same run
+```bash
+npm view codebase-context@X.Y.Z
+npm view codebase-context@X.Y.Z --json | jq .dist.attestations
+```
 
-## Notes
+## Troubleshooting
 
-- If a version is already published on npm, CI skips the publish step (useful when seeding historical tags).
+If publish fails, check:
+- Node 24+ in workflow (required for npm Trusted Publishers)
+- `id-token: write` permission in workflow
+- `registry-url` is set in setup-node
+- Trusted publisher config matches exactly on npmjs.com
