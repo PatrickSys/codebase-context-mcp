@@ -142,3 +142,4 @@ This tool runs **locally** on your machine using your hardware.
 ## License
 
 MIT
+
