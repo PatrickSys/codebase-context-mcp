@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.3](https://github.com/PatrickSys/codebase-context/compare/v1.4.2...v1.4.3) (2026-01-29)
+
+
+### Bug Fixes
+
+* remove registry-url for pure OIDC auth ([336ef3b](https://github.com/PatrickSys/codebase-context/commit/336ef3bc2456d1be5df045fc90776d0fe0afa77c))
+
 ## [1.4.2](https://github.com/PatrickSys/codebase-context/compare/v1.4.1...v1.4.2) (2026-01-29)
 
 

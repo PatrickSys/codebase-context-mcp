@@ -1,6 +1,6 @@
 {
   "name": "codebase-context",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "description": "MCP server that helps AI agents understand your codebase - patterns, libraries, architecture, monorepo support",
   "type": "module",
   "main": "./dist/lib.js",
