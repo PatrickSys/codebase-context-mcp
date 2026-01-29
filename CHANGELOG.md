@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.2](https://github.com/PatrickSys/codebase-context/compare/v1.4.1...v1.4.2) (2026-01-29)
+
+
+### Bug Fixes
+
+* remove expired NPM_TOKEN, use pure OIDC auth ([6b779f5](https://github.com/PatrickSys/codebase-context/commit/6b779f578311b5b5b8f17e899a592e15f793c247))
+
 ## [1.4.1](https://github.com/PatrickSys/codebase-context/compare/v1.4.0...v1.4.1) (2026-01-29)
 
 
