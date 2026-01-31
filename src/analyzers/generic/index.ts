@@ -397,20 +397,6 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
     return components;
   }
 
-  private categorizeDependency(name: string): any {
-    // Basic categorization
-    if (name.includes('test') || name.includes('jest') || name.includes('vitest')) {
-      return 'testing';
-    }
-    if (name.includes('eslint') || name.includes('prettier') || name.includes('lint')) {
-      return 'build';
-    }
-    if (name.startsWith('@types/')) {
-      return 'build';
-    }
-    return 'other';
-  }
-
   /**
    * Generate generic summary for any code chunk
    */
