@@ -8,11 +8,22 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Preflight evidence lock**: `search_codebase` edit/refactor/migrate intents now return risk-aware preflight guidance with evidence lock scoring, impact candidates, preferred/avoid patterns, and related memories.
+- **Trust-aware memory handling**: Added git-aware memory pattern support and confidence decay tests so stale or malformed evidence is surfaced as lower-confidence context instead of trusted guidance.
+
 ### Changed
 
 - **Search ranking**: Removed framework-specific anchor/query promotion heuristics from core ranking flow to keep retrieval behavior generic across codebases.
 - **Search transparency**: `search_codebase` now returns `searchQuality` with confidence and diagnostic signals when retrieval looks ambiguous.
+- **Incremental indexing state**: Persist indexing counters to `indexing-stats.json` and restore them on no-op incremental runs to keep status reporting accurate on large codebases.
 - **Docs**: Updated README performance section to reflect shipped incremental refresh mode (`incrementalOnly`).
+
+### Fixed
+
+- **No-op incremental stats drift**: Fixed under-reported `indexedFiles` and `totalChunks` after no-change incremental refreshes by preferring persisted stats over capped index snapshots.
+- **Memory date validation**: Invalid memory timestamps now degrade to stale evidence rather than being surfaced as semi-trusted data.
 
 ## [1.4.0] - 2026-01-28
 
