@@ -210,6 +210,20 @@ export class CodebaseIndexer {
           this.updateProgress('complete', 100);
           stats.duration = Date.now() - startTime;
           stats.completedAt = new Date();
+
+          // Preserve accurate counts from the existing index (nothing changed, index is intact)
+          try {
+            const existingIndexPath = path.join(contextDir, KEYWORD_INDEX_FILENAME);
+            const existingChunks = JSON.parse(await fs.readFile(existingIndexPath, 'utf-8'));
+            if (Array.isArray(existingChunks)) {
+              stats.totalChunks = existingChunks.length;
+              const uniqueFiles = new Set(existingChunks.map((c: { filePath?: string }) => c.filePath));
+              stats.indexedFiles = uniqueFiles.size;
+            }
+          } catch {
+            // Keyword index doesn't exist yet — keep counts as 0
+          }
+
           return stats;
         }
       }
@@ -591,6 +605,7 @@ export class CodebaseIndexer {
 
   private async scanFiles(): Promise<string[]> {
     const files: string[] = [];
+    const seen = new Set<string>();
 
     // Read .gitignore if respecting it
     let ig: ReturnType<typeof ignore.default> | null = null;
@@ -617,6 +632,12 @@ export class CodebaseIndexer {
       });
 
       for (const file of matches) {
+        const normalizedFile = file.replace(/\\/g, '/');
+        if (seen.has(normalizedFile)) {
+          continue;
+        }
+        seen.add(normalizedFile);
+
         const relativePath = path.relative(this.rootPath, file);
 
         // Check gitignore
