@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.5.0](https://github.com/PatrickSys/codebase-context/compare/v1.4.1...v1.5.0) (2026-02-08)
+
+
+### Features
+
+* prepare v1.5.0 trust and indexing foundation ([#21](https://github.com/PatrickSys/codebase-context/issues/21)) ([a6b65f1](https://github.com/PatrickSys/codebase-context/commit/a6b65f134c32a35de1e305839ef294be9f97a7d0))
+
+
+### Bug Fixes
+
+* harden search reliability and indexing hygiene ([#22](https://github.com/PatrickSys/codebase-context/issues/22)) ([42a32af](https://github.com/PatrickSys/codebase-context/commit/42a32af626f30dc9c8428419f82a6c03c7312e22))
+
 ## [1.4.1](https://github.com/PatrickSys/codebase-context/compare/v1.4.0...v1.4.1) (2026-01-29)
 
 
