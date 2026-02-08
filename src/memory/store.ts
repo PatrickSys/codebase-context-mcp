@@ -41,7 +41,7 @@ export function normalizeMemory(raw: unknown): Memory | null {
 
   if (!id || !category || !memory || !reason || !date) return null;
 
-  const source = m.source === 'git' ? 'git' as const : undefined;
+  const source = m.source === 'git' ? ('git' as const) : undefined;
   return { id, type, category, memory, reason, date, ...(source && { source }) };
 }
 
@@ -135,14 +135,17 @@ export interface MemoryWithConfidence extends Memory {
  * Compute confidence decay: confidence = 2^(-age_days / half_life)
  * Conventions never decay. Memories below 0.3 are flagged stale.
  */
-export function computeConfidence(memory: Memory, now?: Date): { effectiveConfidence: number; stale: boolean } {
+export function computeConfidence(
+  memory: Memory,
+  now?: Date
+): { effectiveConfidence: number; stale: boolean } {
   const halfLife = HALF_LIFE_DAYS[memory.type] ?? 180;
   if (!Number.isFinite(halfLife)) {
     return { effectiveConfidence: 1.0, stale: false };
   }
   const memDate = Date.parse(memory.date);
   if (!Number.isFinite(memDate)) {
-    return { effectiveConfidence: 0.5, stale: false };
+    return { effectiveConfidence: 0, stale: true };
   }
   const ageDays = ((now ?? new Date()).getTime() - memDate) / (1000 * 60 * 60 * 24);
   const confidence = Math.pow(2, -ageDays / halfLife);

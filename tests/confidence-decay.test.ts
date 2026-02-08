@@ -71,8 +71,8 @@ describe('Memory confidence decay', () => {
   it('handles invalid date gracefully', () => {
     const memory = makeMemory({ type: 'decision', date: 'not-a-date' });
     const result = computeConfidence(memory, now);
-    expect(result.effectiveConfidence).toBe(0.5);
-    expect(result.stale).toBe(false);
+    expect(result.effectiveConfidence).toBe(0);
+    expect(result.stale).toBe(true);
   });
 
   it('withConfidence enriches array of memories', () => {
