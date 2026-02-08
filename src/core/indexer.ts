@@ -30,6 +30,7 @@ import {
 import { getFileCommitDates } from '../utils/git-dates.js';
 import {
   CODEBASE_CONTEXT_DIRNAME,
+  INDEXING_STATS_FILENAME,
   INTELLIGENCE_FILENAME,
   KEYWORD_INDEX_FILENAME,
   MANIFEST_FILENAME,
@@ -49,6 +50,13 @@ export interface IndexerOptions {
   config?: Partial<CodebaseConfig>;
   onProgress?: (progress: IndexingProgress) => void;
   incrementalOnly?: boolean;
+}
+
+interface PersistedIndexingStats {
+  indexedFiles: number;
+  totalChunks: number;
+  totalFiles: number;
+  generatedAt: string;
 }
 
 export class CodebaseIndexer {
@@ -181,16 +189,18 @@ export class CodebaseIndexer {
       // Phase 1b: Incremental diff (if incremental mode)
       const contextDir = path.join(this.rootPath, CODEBASE_CONTEXT_DIRNAME);
       const manifestPath = path.join(contextDir, MANIFEST_FILENAME);
+      const indexingStatsPath = path.join(contextDir, INDEXING_STATS_FILENAME);
       let diff: ManifestDiff | null = null;
       let currentHashes: Record<string, string> | null = null;
+      let previousManifest: FileManifest | null = null;
 
       if (this.incrementalOnly) {
         this.updateProgress('scanning', 10);
         console.error('Computing file hashes for incremental diff...');
         currentHashes = await computeFileHashes(files, this.rootPath);
 
-        const oldManifest = await readManifest(manifestPath);
-        diff = diffManifest(oldManifest, currentHashes);
+        previousManifest = await readManifest(manifestPath);
+        diff = diffManifest(previousManifest, currentHashes);
 
         console.error(
           `Incremental diff: ${diff.added.length} added, ${diff.changed.length} changed, ` +
@@ -211,20 +221,50 @@ export class CodebaseIndexer {
           stats.duration = Date.now() - startTime;
           stats.completedAt = new Date();
 
-          // Preserve accurate counts from the existing index (nothing changed, index is intact)
+          let restoredFromPersistedStats = false;
+
           try {
-            const existingIndexPath = path.join(contextDir, KEYWORD_INDEX_FILENAME);
-            const existingChunks = JSON.parse(await fs.readFile(existingIndexPath, 'utf-8'));
-            if (Array.isArray(existingChunks)) {
-              stats.totalChunks = existingChunks.length;
-              const uniqueFiles = new Set(
-                existingChunks.map((c: { filePath?: string }) => c.filePath)
-              );
-              stats.indexedFiles = uniqueFiles.size;
+            const persisted = JSON.parse(
+              await fs.readFile(indexingStatsPath, 'utf-8')
+            ) as Partial<PersistedIndexingStats>;
+
+            if (
+              typeof persisted.indexedFiles === 'number' &&
+              typeof persisted.totalChunks === 'number' &&
+              typeof persisted.totalFiles === 'number'
+            ) {
+              stats.indexedFiles = persisted.indexedFiles;
+              stats.totalChunks = persisted.totalChunks;
+              stats.totalFiles = persisted.totalFiles;
+              restoredFromPersistedStats = true;
             }
           } catch {
-            // Keyword index doesn't exist yet — keep counts as 0
+            // No persisted stats yet — fall back below
           }
+
+          if (!restoredFromPersistedStats) {
+            if (previousManifest) {
+              stats.indexedFiles = Object.keys(previousManifest.files).length;
+            }
+
+            try {
+              const existingIndexPath = path.join(contextDir, KEYWORD_INDEX_FILENAME);
+              const existingChunks = JSON.parse(await fs.readFile(existingIndexPath, 'utf-8'));
+              if (Array.isArray(existingChunks)) {
+                stats.totalChunks = existingChunks.length;
+                if (stats.indexedFiles === 0) {
+                  const uniqueFiles = new Set(
+                    existingChunks.map((c: { filePath?: string }) => c.filePath)
+                  );
+                  stats.indexedFiles = uniqueFiles.size;
+                }
+              }
+            } catch {
+              // Keyword index doesn't exist yet — keep best-known counts
+            }
+          }
+
+          stats.totalFiles = files.length;
 
           return stats;
         }
@@ -574,6 +614,14 @@ export class CodebaseIndexer {
         files: currentHashes ?? (await computeFileHashes(files, this.rootPath))
       };
       await writeManifest(manifestPath, manifest);
+
+      const persistedStats: PersistedIndexingStats = {
+        indexedFiles: stats.indexedFiles,
+        totalChunks: stats.totalChunks,
+        totalFiles: stats.totalFiles,
+        generatedAt: new Date().toISOString()
+      };
+      await fs.writeFile(indexingStatsPath, JSON.stringify(persistedStats, null, 2));
 
       // Phase 5: Complete
       this.updateProgress('complete', 100);

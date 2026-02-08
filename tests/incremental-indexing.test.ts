@@ -4,7 +4,12 @@ import path from 'path';
 import os from 'os';
 import { CodebaseIndexer } from '../src/core/indexer.js';
 import { readManifest } from '../src/core/manifest.js';
-import { CODEBASE_CONTEXT_DIRNAME, MANIFEST_FILENAME, KEYWORD_INDEX_FILENAME } from '../src/constants/codebase-context.js';
+import {
+  CODEBASE_CONTEXT_DIRNAME,
+  MANIFEST_FILENAME,
+  KEYWORD_INDEX_FILENAME,
+  INDEXING_STATS_FILENAME
+} from '../src/constants/codebase-context.js';
 
 describe('Incremental Indexing', () => {
   let tempDir: string;
@@ -68,35 +73,41 @@ describe('Incremental Indexing', () => {
 
   it('should preserve indexedFiles and totalChunks in short-circuit (nothing changed)', async () => {
     // Use files substantial enough to produce chunks
-    await fs.writeFile(path.join(tempDir, 'service.ts'), [
-      'import { Injectable } from "@angular/core";',
-      '',
-      '@Injectable({ providedIn: "root" })',
-      'export class UserService {',
-      '  private users: string[] = [];',
-      '',
-      '  getUsers(): string[] {',
-      '    return this.users;',
-      '  }',
-      '',
-      '  addUser(name: string): void {',
-      '    this.users.push(name);',
-      '  }',
-      '}'
-    ].join('\n'));
-    await fs.writeFile(path.join(tempDir, 'utils.ts'), [
-      'export function formatDate(date: Date): string {',
-      '  return date.toISOString().split("T")[0];',
-      '}',
-      '',
-      'export function capitalize(str: string): string {',
-      '  return str.charAt(0).toUpperCase() + str.slice(1);',
-      '}',
-      '',
-      'export function range(n: number): number[] {',
-      '  return Array.from({ length: n }, (_, i) => i);',
-      '}'
-    ].join('\n'));
+    await fs.writeFile(
+      path.join(tempDir, 'service.ts'),
+      [
+        'import { Injectable } from "@angular/core";',
+        '',
+        '@Injectable({ providedIn: "root" })',
+        'export class UserService {',
+        '  private users: string[] = [];',
+        '',
+        '  getUsers(): string[] {',
+        '    return this.users;',
+        '  }',
+        '',
+        '  addUser(name: string): void {',
+        '    this.users.push(name);',
+        '  }',
+        '}'
+      ].join('\n')
+    );
+    await fs.writeFile(
+      path.join(tempDir, 'utils.ts'),
+      [
+        'export function formatDate(date: Date): string {',
+        '  return date.toISOString().split("T")[0];',
+        '}',
+        '',
+        'export function capitalize(str: string): string {',
+        '  return str.charAt(0).toUpperCase() + str.slice(1);',
+        '}',
+        '',
+        'export function range(n: number): number[] {',
+        '  return Array.from({ length: n }, (_, i) => i);',
+        '}'
+      ].join('\n')
+    );
 
     // Full index first
     const indexer1 = new CodebaseIndexer({
@@ -117,6 +128,43 @@ describe('Incremental Indexing', () => {
     expect(incStats.indexedFiles).toBe(fullStats.indexedFiles);
     expect(incStats.totalChunks).toBe(fullStats.totalChunks);
     expect(incStats.totalFiles).toBe(fullStats.totalFiles);
+  });
+
+  it('should prefer persisted stats over keyword index in no-op incremental runs', async () => {
+    await fs.writeFile(path.join(tempDir, 'index.ts'), 'export const x = 1;');
+
+    const fullIndexer = new CodebaseIndexer({
+      rootPath: tempDir,
+      config: { skipEmbedding: true }
+    });
+    await fullIndexer.index();
+
+    const contextDir = path.join(tempDir, CODEBASE_CONTEXT_DIRNAME);
+    await fs.writeFile(
+      path.join(contextDir, INDEXING_STATS_FILENAME),
+      JSON.stringify(
+        {
+          indexedFiles: 77,
+          totalChunks: 1234,
+          totalFiles: 88,
+          generatedAt: new Date().toISOString()
+        },
+        null,
+        2
+      )
+    );
+    await fs.writeFile(path.join(contextDir, KEYWORD_INDEX_FILENAME), JSON.stringify([]));
+
+    const incIndexer = new CodebaseIndexer({
+      rootPath: tempDir,
+      config: { skipEmbedding: true },
+      incrementalOnly: true
+    });
+    const stats = await incIndexer.index();
+
+    expect(stats.indexedFiles).toBe(77);
+    expect(stats.totalChunks).toBe(1234);
+    expect(stats.totalFiles).toBe(1);
   });
 
   it('should detect changed files in incremental mode', async () => {
@@ -155,7 +203,10 @@ describe('Incremental Indexing', () => {
     await indexer1.index();
 
     // Add a new file
-    await fs.writeFile(path.join(tempDir, 'utils.ts'), 'export function add(a: number, b: number) { return a + b; }');
+    await fs.writeFile(
+      path.join(tempDir, 'utils.ts'),
+      'export function add(a: number, b: number) { return a + b; }'
+    );
 
     // Incremental index
     const indexer2 = new CodebaseIndexer({
