@@ -2,40 +2,28 @@
 
 ## [1.5.0](https://github.com/PatrickSys/codebase-context/compare/v1.4.1...v1.5.0) (2026-02-08)
 
+### Added
 
-### Features
+- **Preflight evidence lock**: `search_codebase` edit/refactor/migrate intents now return risk-aware preflight guidance with evidence lock scoring, impact candidates, preferred/avoid patterns, and related memories. ([#21](https://github.com/PatrickSys/codebase-context/issues/21))
+- **Trust-aware memory handling**: Git-aware memory pattern support and confidence decay so stale or malformed evidence is surfaced as lower-confidence context instead of trusted guidance. ([#21](https://github.com/PatrickSys/codebase-context/issues/21))
 
-* prepare v1.5.0 trust and indexing foundation ([#21](https://github.com/PatrickSys/codebase-context/issues/21)) ([a6b65f1](https://github.com/PatrickSys/codebase-context/commit/a6b65f134c32a35de1e305839ef294be9f97a7d0))
+### Changed
 
+- **Search ranking**: Removed framework-specific anchor/query promotion heuristics from core ranking flow to keep retrieval behavior generic across codebases. ([#22](https://github.com/PatrickSys/codebase-context/issues/22))
+- **Search transparency**: `search_codebase` now returns `searchQuality` with confidence and diagnostic signals when retrieval looks ambiguous. ([#22](https://github.com/PatrickSys/codebase-context/issues/22))
+- **Incremental indexing state**: Persist indexing counters to `indexing-stats.json` and restore them on no-op incremental runs to keep status reporting accurate on large codebases. ([#22](https://github.com/PatrickSys/codebase-context/issues/22))
+- **Docs**: Updated README performance section to reflect shipped incremental refresh mode (`incrementalOnly`).
 
-### Bug Fixes
+### Fixed
 
-* harden search reliability and indexing hygiene ([#22](https://github.com/PatrickSys/codebase-context/issues/22)) ([42a32af](https://github.com/PatrickSys/codebase-context/commit/42a32af626f30dc9c8428419f82a6c03c7312e22))
+- **No-op incremental stats drift**: Fixed under-reported `indexedFiles` and `totalChunks` after no-change incremental refreshes by preferring persisted stats over capped index snapshots. ([#22](https://github.com/PatrickSys/codebase-context/issues/22))
+- **Memory date validation**: Invalid memory timestamps now degrade to stale evidence rather than being surfaced as semi-trusted data. ([#21](https://github.com/PatrickSys/codebase-context/issues/21))
 
 ## [1.4.1](https://github.com/PatrickSys/codebase-context/compare/v1.4.0...v1.4.1) (2026-01-29)
 
 ### Bug Fixes
 
 - **lint:** disable no-explicit-any rule for AST manipulation code ([41547da](https://github.com/PatrickSys/codebase-context/commit/41547da2aa5529dce3d539c296d5e9d79df379fe))
-
-## [Unreleased]
-
-### Added
-
-- **Preflight evidence lock**: `search_codebase` edit/refactor/migrate intents now return risk-aware preflight guidance with evidence lock scoring, impact candidates, preferred/avoid patterns, and related memories.
-- **Trust-aware memory handling**: Added git-aware memory pattern support and confidence decay tests so stale or malformed evidence is surfaced as lower-confidence context instead of trusted guidance.
-
-### Changed
-
-- **Search ranking**: Removed framework-specific anchor/query promotion heuristics from core ranking flow to keep retrieval behavior generic across codebases.
-- **Search transparency**: `search_codebase` now returns `searchQuality` with confidence and diagnostic signals when retrieval looks ambiguous.
-- **Incremental indexing state**: Persist indexing counters to `indexing-stats.json` and restore them on no-op incremental runs to keep status reporting accurate on large codebases.
-- **Docs**: Updated README performance section to reflect shipped incremental refresh mode (`incrementalOnly`).
-
-### Fixed
-
-- **No-op incremental stats drift**: Fixed under-reported `indexedFiles` and `totalChunks` after no-change incremental refreshes by preferring persisted stats over capped index snapshots.
-- **Memory date validation**: Invalid memory timestamps now degrade to stale evidence rather than being surfaced as semi-trusted data.
 
 ## [1.4.0] - 2026-01-28
 
