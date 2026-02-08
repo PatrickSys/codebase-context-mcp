@@ -111,7 +111,7 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
 
     try {
       // Build query
-      let query = this.table.vectorSearch(queryVector).limit(limit);
+      let query = this.table.vectorSearch(queryVector).distanceType('cosine').limit(limit);
 
       // Apply filters if provided
       if (filters) {
@@ -157,7 +157,7 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
           tags: JSON.parse(result.tags || '[]'),
           metadata: JSON.parse(result.metadata || '{}')
         } as CodeChunk,
-        score: 1 - (result._distance || 0), // Convert distance to similarity
+        score: Math.max(0, 1 - (result._distance || 0)), // Cosine distance → similarity, clamped to [0, 1]
         distance: result._distance || 0
       }));
     } catch (error) {

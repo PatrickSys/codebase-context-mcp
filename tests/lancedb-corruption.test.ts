@@ -68,6 +68,7 @@ describe('LanceDBStorageProvider corruption detection', () => {
     const provider = new LanceDBStorageProvider() as any;
 
     const query = {
+      distanceType: vi.fn(() => query),
       limit: vi.fn(() => query),
       where: vi.fn(() => query),
       toArray: vi.fn(async () => {
@@ -88,6 +89,7 @@ describe('LanceDBStorageProvider corruption detection', () => {
     const provider = new LanceDBStorageProvider() as any;
 
     const query = {
+      distanceType: vi.fn(() => query),
       limit: vi.fn(() => query),
       where: vi.fn(() => query),
       toArray: vi.fn(async () => {
@@ -129,6 +131,7 @@ describe('LanceDBStorageProvider corruption detection', () => {
 
     const whereSpy = vi.fn(() => query);
     const query = {
+      distanceType: vi.fn(() => query),
       limit: vi.fn(() => query),
       where: whereSpy,
       toArray: vi.fn(async () => [])
