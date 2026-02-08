@@ -14,9 +14,9 @@ export interface FileManifest {
 }
 
 export interface ManifestDiff {
-  added: string[];    // new files (not in old manifest)
-  changed: string[];  // hash differs
-  deleted: string[];  // in old manifest but not on disk
+  added: string[]; // new files (not in old manifest)
+  changed: string[]; // hash differs
+  deleted: string[]; // in old manifest but not on disk
   unchanged: string[]; // hash matches
 }
 

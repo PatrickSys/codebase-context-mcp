@@ -194,7 +194,7 @@ export class CodebaseIndexer {
 
         console.error(
           `Incremental diff: ${diff.added.length} added, ${diff.changed.length} changed, ` +
-          `${diff.deleted.length} deleted, ${diff.unchanged.length} unchanged`
+            `${diff.deleted.length} deleted, ${diff.unchanged.length} unchanged`
         );
 
         stats.incremental = {
@@ -418,8 +418,8 @@ export class CodebaseIndexer {
         this.updateProgress('embedding', 50);
         console.error(
           `Creating embeddings for ${chunksToEmbed.length} chunks` +
-          (diff ? ` (${allChunks.length} total, ${chunksToEmbed.length} changed)` : '') +
-          '...'
+            (diff ? ` (${allChunks.length} total, ${chunksToEmbed.length} changed)` : '') +
+            '...'
         );
 
         // Initialize embedding provider
@@ -480,11 +480,13 @@ export class CodebaseIndexer {
 
         if (diff) {
           // Incremental: delete old chunks for changed + deleted files, then add new
-          const filesToDelete = [...diff.changed, ...diff.deleted]
-            .map((rel) => path.join(this.rootPath, rel).replace(/\\/g, '/'));
+          const filesToDelete = [...diff.changed, ...diff.deleted].map((rel) =>
+            path.join(this.rootPath, rel).replace(/\\/g, '/')
+          );
           // Also try with OS-native separators for matching
-          const filePathsForDelete = [...diff.changed, ...diff.deleted]
-            .map((rel) => path.resolve(this.rootPath, rel));
+          const filePathsForDelete = [...diff.changed, ...diff.deleted].map((rel) =>
+            path.resolve(this.rootPath, rel)
+          );
           const allDeletePaths = [...new Set([...filesToDelete, ...filePathsForDelete])];
 
           if (allDeletePaths.length > 0) {
@@ -495,7 +497,7 @@ export class CodebaseIndexer {
           }
           console.error(
             `Incremental store: deleted chunks for ${diff.changed.length + diff.deleted.length} files, ` +
-            `added ${chunksWithEmbeddings.length} new chunks`
+              `added ${chunksWithEmbeddings.length} new chunks`
           );
         } else {
           // Full: clear and re-store everything
@@ -508,7 +510,8 @@ export class CodebaseIndexer {
       // Keyword index always uses ALL chunks (full regen)
       const indexPath = path.join(contextDir, KEYWORD_INDEX_FILENAME);
       // Memory safety: cap keyword index too
-      const keywordChunks = allChunks.length > MAX_CHUNKS ? allChunks.slice(0, MAX_CHUNKS) : allChunks;
+      const keywordChunks =
+        allChunks.length > MAX_CHUNKS ? allChunks.slice(0, MAX_CHUNKS) : allChunks;
       await fs.writeFile(indexPath, JSON.stringify(keywordChunks));
 
       // Save library usage and pattern stats (always full regen)
@@ -552,7 +555,7 @@ export class CodebaseIndexer {
       const manifest: FileManifest = {
         version: 1,
         generatedAt: new Date().toISOString(),
-        files: currentHashes ?? await computeFileHashes(files, this.rootPath)
+        files: currentHashes ?? (await computeFileHashes(files, this.rootPath))
       };
       await writeManifest(manifestPath, manifest);
 
@@ -565,8 +568,8 @@ export class CodebaseIndexer {
       if (diff) {
         console.error(
           `Incremental indexing complete in ${stats.duration}ms ` +
-          `(${diff.added.length} added, ${diff.changed.length} changed, ` +
-          `${diff.deleted.length} deleted, ${diff.unchanged.length} unchanged)`
+            `(${diff.added.length} added, ${diff.changed.length} changed, ` +
+            `${diff.deleted.length} deleted, ${diff.unchanged.length} unchanged)`
         );
       } else {
         console.error(`Indexing complete in ${stats.duration}ms`);
