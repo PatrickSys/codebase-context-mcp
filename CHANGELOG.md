@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.1](https://github.com/PatrickSys/codebase-context/compare/v1.5.0...v1.5.1) (2026-02-08)
+
+
+### Bug Fixes
+
+* use cosine distance for vector search scoring ([b41edb7](https://github.com/PatrickSys/codebase-context/commit/b41edb7e4c1969b04d834ec52a9ae43760e796a9))
+
 ## [1.5.0](https://github.com/PatrickSys/codebase-context/compare/v1.4.1...v1.5.0) (2026-02-08)
 
 ### Added
