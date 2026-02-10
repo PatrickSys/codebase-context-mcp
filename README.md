@@ -4,11 +4,60 @@
 
 A second brain for AI coding agents. MCP server that remembers team decisions, tracks pattern evolution, and guides every edit with evidence.
 
+## The Problem
+
+Your AI agent suggests `constructor(private svc: Service)` when 97% of your team
+uses `inject()`. It imports `primeng/button` directly when you have a wrapper
+with 847 uses. It copies declining patterns during migrations because it can't
+tell what's current from what's being phased out.
+
+**codebase-context** fixes this. It's an MCP server that tracks what your team
+actually does, remembers why, and warns before mistakes repeat.
+
+Works with 30+ languages. Deep analysis for Angular, generic support for
+TypeScript, Python, Go, Rust, Java, and more.
+
+## What It Does
+
+### Discovers
+
+Hybrid search (BM25 keyword + vector embeddings) with structured filters across 30+ languages:
+
+- **Framework**: Angular, React, Vue
+- **Language**: TypeScript, JavaScript, Python, Go, Rust, and 25+ more
+- **Component type**: component, service, directive, guard, interceptor, pipe
+- **Architectural layer**: presentation, business, data, state, core, shared
+- Circular dependency detection, style guide auto-detection, architectural layer classification
+
+### Reasons
+
+Quantified pattern analysis with trend direction. Not "use inject()" — "97% of your team uses inject(), and it's rising."
+
+- `inject()`: 97% adoption vs `constructor()`: 3% — with trend direction (rising/declining)
+- `Signals`: rising (last used 2 days ago) vs `RxJS BehaviorSubject`: declining (180+ days)
+- Golden files: real implementations scoring highest on modern pattern density — canonical examples to follow
+- Pattern conflicts detected: when two approaches in the same category both exceed 20% adoption
+
+### Remembers
+
+Decisions, rationale, and past failures persist across sessions. Not just what your team does — why.
+
+- Internal library usage: `@mycompany/ui-toolkit` (847 uses) vs `primeng` (3 uses) — and _why_ the wrapper exists
+- "Tried direct PrimeNG toast, broke event system" — recorded as a failure memory, surfaced before the next agent repeats it
+- Conventions from git history auto-extracted: `refactor:`, `migrate:`, `fix:`, `revert:` commits become memories with zero manual effort
+
+### Protects
+
+Before an edit happens, your agent gets a preflight briefing: what to use, what to avoid, what broke last time.
+
+- Preflight card on `search_codebase` with `intent: "edit"` — risk level, preferred/avoid patterns, failure warnings, golden files, impact candidates
+- Failure memories bump risk level and surface as explicit warnings
+- Confidence decay: memories age (90-day or 180-day half-life). Stale guidance gets flagged, not blindly trusted
+- Epistemic stress detection: when evidence is contradictory, stale, or too thin, the preflight card says "insufficient evidence" instead of guessing
+
 ## Quick Start
 
-### Claude Desktop
-
-Add to `claude_desktop_config.json`:
+Add to your MCP client config:
 
 ```json
 {
@@ -20,6 +69,9 @@ Add to `claude_desktop_config.json`:
   }
 }
 ```
+
+<details>
+<summary>Setup for VS Code, Cursor, Windsurf, Claude Code</summary>
 
 ### VS Code (Copilot)
 
@@ -68,52 +120,13 @@ Open Settings > MCP and add:
 
 ### Claude Code
 
-No config file needed. Add to `.claude/settings.json` or run:
+No config file needed. Run:
 
 ```bash
 claude mcp add codebase-context -- npx -y codebase-context /path/to/your/project
 ```
 
-## What Makes It a Second Brain
-
-Other tools help AI find code. This one helps AI make the right decisions — by remembering what your team does, tracking how patterns evolve, and warning before mistakes repeat.
-
-### Remembers
-
-Decisions, rationale, and past failures persist across sessions. Not just what the team does — why.
-
-- Internal library usage: `@mycompany/ui-toolkit` (847 uses) vs `primeng` (3 uses) — and _why_ the wrapper exists
-- "Tried direct PrimeNG toast, broke event system" — recorded as a failure memory, surfaced before the next agent repeats it
-- Conventions from git history auto-extracted: `refactor:`, `migrate:`, `fix:`, `revert:` commits become memories with zero manual effort
-
-### Reasons
-
-Quantified pattern analysis with trend direction. Not "use inject()" — "97% of the team uses inject(), and it's rising."
-
-- `inject()`: 97% adoption vs `constructor()`: 3% — with trend direction (rising/declining)
-- `Signals`: rising (last used 2 days ago) vs `RxJS BehaviorSubject`: declining (180+ days)
-- Golden files: real implementations scoring highest on modern pattern density — canonical examples to follow
-- Pattern conflicts detected: when two approaches in the same category both exceed 20% adoption
-
-### Protects
-
-Before an edit happens, the agent gets a preflight briefing: what to use, what to avoid, what broke last time.
-
-- Preflight card on `search_codebase` with `intent: "edit"` — risk level, preferred/avoid patterns, failure warnings, golden files, impact candidates
-- Failure memories bump risk level and surface as explicit warnings
-- Confidence decay: memories age (90-day or 180-day half-life). Stale guidance gets flagged, not blindly trusted
-- Epistemic stress detection: when evidence is contradictory, stale, or too thin, the preflight card says "insufficient evidence" instead of guessing
-- Search quality transparency: `search_codebase` includes `searchQuality` (`ok`/`low_confidence`, signals, confidence, next steps) so ambiguous retrieval is explicit instead of hidden
-
-### Discovers
-
-Hybrid search (BM25 keyword 30% + vector embeddings 70%) with structured filters across 30+ languages:
-
-- **Framework**: Angular, React, Vue
-- **Language**: TypeScript, JavaScript, Python, Go, Rust, and 25+ more
-- **Component type**: component, service, directive, guard, interceptor, pipe
-- **Architectural layer**: presentation, business, data, state, core, shared
-- Circular dependency detection, style guide auto-detection, architectural layer classification
+</details>
 
 ## Measured Results
 
@@ -127,7 +140,7 @@ Tested against a real enterprise Angular codebase (~30k files):
 | Wrapper discovery          | `ToastEventService`, `DialogComponent` surfaced over raw |
 | Golden file identification | Top 5 files scoring 4-6 modern patterns each             |
 
-Without this context, AI agents default to generic patterns: raw PrimeNG imports, constructor injection, Jasmine syntax. With the second brain active, generated code matches the existing codebase on first attempt.
+Without this context, AI agents default to generic patterns: raw PrimeNG imports, constructor injection, Jasmine syntax. With the second brain active, generated code matches your existing codebase on first attempt.
 
 ## How It Works
 
@@ -153,27 +166,18 @@ When using `search_codebase` with `intent: "edit"`, `"refactor"`, or `"migrate"`
       "mode": "triangulated",
       "status": "pass",
       "readyToEdit": true,
-      "score": 100,
-      "sources": [
-        { "source": "code", "strength": "strong", "count": 5 },
-        { "source": "patterns", "strength": "strong", "count": 3 },
-        { "source": "memories", "strength": "strong", "count": 2 }
-      ]
+      "score": 100
     },
     "preferredPatterns": [
-      { "pattern": "inject() function", "category": "dependencyInjection", "adoption": "98%", "trend": "Rising" }
+      { "pattern": "inject() function", "adoption": "98%", "trend": "Rising" }
     ],
     "avoidPatterns": [
-      { "pattern": "Constructor injection", "category": "dependencyInjection", "adoption": "2%", "trend": "Declining" }
-    ],
-    "goldenFiles": [
-      { "file": "src/features/auth/auth.service.ts", "score": 6 }
+      { "pattern": "Constructor injection", "adoption": "2%", "trend": "Declining" }
     ],
     "failureWarnings": [
-      { "memory": "Direct PrimeNG toast broke event system", "reason": "Must use ToastEventService" }
+      { "memory": "Direct PrimeNG toast broke event system" }
     ]
-  },
-  "results": [...]
+  }
 }
 ```
 
@@ -237,7 +241,7 @@ The MCP creates the following structure in your project:
 
 ### Memory System
 
-Patterns tell you _what_ the team does ("97% use inject"), but not _why_ ("standalone compatibility"). Use `remember` to capture rationale that prevents repeated mistakes:
+Patterns tell you _what_ your team does ("97% use inject"), but not _why_ ("standalone compatibility"). Use `remember` to capture rationale that prevents repeated mistakes:
 
 ```typescript
 remember({
