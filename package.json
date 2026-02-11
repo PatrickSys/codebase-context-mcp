@@ -85,6 +85,7 @@
     "prepublishOnly": "pnpm run build",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
+    "mcp:inspect": "npx -y @modelcontextprotocol/inspector node --import tsx src/index.ts .",
     "watch": "tsc -w",
     "test": "vitest run",
     "test:watch": "vitest",

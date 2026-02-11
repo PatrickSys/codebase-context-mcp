@@ -74,6 +74,28 @@ No config file needed. Add to `.claude/settings.json` or run:
 claude mcp add codebase-context -- npx -y codebase-context /path/to/your/project
 ```
 
+## Local MCP UI Testing (Inspector)
+
+Use MCP Inspector for the lowest-friction local test loop (browser UI for tools/resources):
+
+```bash
+pnpm mcp:inspect
+```
+
+What this does:
+
+- Starts MCP Inspector
+- Launches this server from source (`src/index.ts`) with project root set to this repo (`.`)
+- Opens a local web UI where you can:
+  - run `tools/list` and call tools like `search_codebase`, `get_memory`, `refresh_index`
+  - run `resources/list` and read `codebase://context`
+
+Equivalent one-off command:
+
+```bash
+npx -y @modelcontextprotocol/inspector node --import tsx src/index.ts .
+```
+
 ## What Makes It a Second Brain
 
 Other tools help AI find code. This one helps AI make the right decisions — by remembering what your team does, tracking how patterns evolve, and warning before mistakes repeat.
