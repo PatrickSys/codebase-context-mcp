@@ -1,6 +1,6 @@
 {
   "name": "codebase-context",
-  "version": "1.5.1",
+  "version": "2.0.0",
   "description": "MCP server for codebase intelligence — patterns, conventions, architecture, and rationale for AI coding agents",
   "type": "module",
   "main": "./dist/lib.js",

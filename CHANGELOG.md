@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.0.0](https://github.com/PatrickSys/codebase-context/compare/v1.5.1...v2.0.0) (2026-02-11)
+
+
+### ⚠ BREAKING CHANGES
+
+* Re-indexing required due to model and chunking changes
+
+### Features
+
+* v1.6.0 search quality improvements ([#26](https://github.com/PatrickSys/codebase-context/issues/26)) ([71354eb](https://github.com/PatrickSys/codebase-context/commit/71354eb00d74e37b9477e9f0f3eee240e2528337))
+
 ## [1.6.0](https://github.com/PatrickSys/codebase-context/compare/v1.5.1...v1.6.0) (2026-02-10)
 
 ### Added
