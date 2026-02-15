@@ -1,7 +1,7 @@
 {
   "name": "codebase-context",
   "version": "1.6.0",
-  "description": "MCP server for codebase intelligence — patterns, conventions, architecture, and rationale for AI coding agents",
+  "description": "Local-first MCP server that gives AI agents team context: patterns and conventions, memory to remember decisions and failures, preflight checks, and hybrid search with evidence quality scoring",
   "type": "module",
   "main": "./dist/lib.js",
   "types": "./dist/lib.d.ts",
@@ -37,7 +37,8 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "docs"
   ],
   "packageManager": "pnpm@10.27.0",
   "engines": {
@@ -47,23 +48,40 @@
     "mcp",
     "mcp-server",
     "model-context-protocol",
-    "codebase",
+    "codebase-context",
     "code-intelligence",
     "code-patterns",
-    "code-conventions",
+    "team-conventions",
+    "pattern-detection",
     "semantic-search",
     "vector-search",
+    "hybrid-search",
+    "retrieval",
+    "reranking",
+    "rrf",
+    "cross-encoder",
+    "context-engineering",
+    "local-first",
+    "privacy-first",
     "embeddings",
-    "ai",
+    "preflight",
+    "evidence-scoring",
+    "golden-files",
+    "ai-coding",
+    "ai-agents",
     "llm",
     "claude",
+    "claude-code",
     "cursor",
     "copilot",
+    "windsurf",
     "angular",
     "react",
+    "typescript",
     "developer-tools",
     "static-analysis",
-    "code-quality"
+    "code-quality",
+    "team-memory"
   ],
   "repository": {
     "type": "git",
@@ -91,7 +109,8 @@
     "lint": "eslint \"src/**/*.ts\"",
     "format": "prettier --write \"src/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\"",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "mcp:inspect": "npx -y @modelcontextprotocol/inspector node dist/index.js ."
   },
   "dependencies": {
     "@huggingface/transformers": "^3.8.1",

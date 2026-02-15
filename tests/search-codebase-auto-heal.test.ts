@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { promises as fs } from 'fs';
+import os from 'os';
+import path from 'path';
 
 const searchMocks = vi.hoisted(() => ({
   search: vi.fn()
@@ -62,18 +65,44 @@ vi.mock('../src/core/indexer.js', () => {
 
 describe('search_codebase auto-heal', () => {
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
+  let tempRoot: string | null = null;
+  let originalArgv: string[] | null = null;
+  let originalEnvRoot: string | undefined;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     searchMocks.search.mockReset();
     indexerMocks.index.mockReset();
+    vi.resetModules();
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    // Ensure src/index.ts resolves ROOT_PATH to an isolated temp workspace, not this repo.
+    // This avoids slow git operations during performIndexing() and keeps the test deterministic.
+    originalArgv = [...process.argv];
+    originalEnvRoot = process.env.CODEBASE_ROOT;
+    tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'codebase-context-auto-heal-'));
+    process.env.CODEBASE_ROOT = tempRoot;
+    process.argv[2] = tempRoot;
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     consoleErrorSpy.mockRestore();
+
+    if (originalArgv) process.argv = originalArgv;
+    if (originalEnvRoot === undefined) {
+      delete process.env.CODEBASE_ROOT;
+    } else {
+      process.env.CODEBASE_ROOT = originalEnvRoot;
+    }
+
+    if (tempRoot) {
+      await fs.rm(tempRoot, { recursive: true, force: true });
+      tempRoot = null;
+    }
   });
 
-  it('triggers indexing and retries when IndexCorruptedError is thrown', async () => {
+  it(
+    'triggers indexing and retries when IndexCorruptedError is thrown',
+    async () => {
     const { IndexCorruptedError } = await import('../src/errors/index.js');
 
     searchMocks.search
@@ -111,6 +140,71 @@ describe('search_codebase auto-heal', () => {
     expect(payload.results).toHaveLength(1);
     expect(searchMocks.search).toHaveBeenCalledTimes(2);
     expect(indexerMocks.index).toHaveBeenCalledTimes(1);
+    },
+    15000
+  );
+
+  it('returns invalid_params when search_codebase query is missing', async () => {
+    const { server } = await import('../src/index.js');
+    const handler = (server as any)._requestHandlers.get('tools/call');
+
+    const response = await handler({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'search_codebase',
+        arguments: {}
+      }
+    });
+
+    const payload = JSON.parse(response.content[0].text);
+    expect(response.isError).toBe(true);
+    expect(payload.errorCode).toBe('invalid_params');
+    expect(payload.message).toContain('query');
+  });
+
+  it('supports get_style_guide with no query in limited mode', async () => {
+    if (!tempRoot) {
+      throw new Error('tempRoot not initialized');
+    }
+
+    await fs.writeFile(
+      path.join(tempRoot, 'STYLE_GUIDE.md'),
+      [
+        '# Style Guide',
+        '',
+        '## Naming',
+        'Use descriptive names.',
+        '',
+        '## Testing',
+        'Write unit tests for business logic.',
+        '',
+        '## Architecture',
+        'Prefer layered architecture boundaries.'
+      ].join('\n')
+    );
+
+    const { server } = await import('../src/index.js');
+    const handler = (server as any)._requestHandlers.get('tools/call');
+
+    const response = await handler({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'get_style_guide',
+        arguments: {}
+      }
+    });
+
+    const payload = JSON.parse(response.content[0].text);
+    expect(payload.status).toBe('success');
+    expect(payload.limited).toBe(true);
+    expect(payload.notice).toContain('No query provided');
+    expect(payload.results.length).toBeGreaterThan(0);
+    expect(payload.results.length).toBeLessThanOrEqual(3);
+    expect(payload.results[0].relevantSections.length).toBeLessThanOrEqual(2);
   });
 });
 

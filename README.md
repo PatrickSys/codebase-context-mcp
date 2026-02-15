@@ -1,10 +1,35 @@
 # codebase-context
 
+## Local-first second brain for AI Agents working on your codebase
+
 [![npm version](https://img.shields.io/npm/v/codebase-context)](https://www.npmjs.com/package/codebase-context) [![license](https://img.shields.io/npm/l/codebase-context)](./LICENSE) [![node](https://img.shields.io/node/v/codebase-context)](./package.json)
 
-A second brain for AI coding agents. MCP server that remembers team decisions, tracks pattern evolution, and guides every edit with evidence.
+You're tired of AI agents writing generic code that compiles but completely ignores how your team does things — even with well-curated instructions. You correct the agent, it doesn't remember. Next session, same mistakes.
+
+This MCP gives agents *just enough* context so they match *how* your team codes, know *why*, and *remember* every correction.
+
+**Finds the right context** — Search that doesn't just return code. Each result comes back with pattern signals, related team memories, file relationships, and quality indicators. The agent gets curated context, not raw hits.
+
+**Knows your conventions** — Detected from your code, not from rules you wrote. Adoption percentages, trend direction (rising/declining), golden files. What patterns the team is moving toward and what's being left behind.
+
+**Remembers across sessions** — Decisions, failures, gotchas — recorded once, surfaced automatically. Conventional git commits (`refactor:`, `migrate:`, `fix:`) auto-extract into memory with zero effort. Stale memories decay and get flagged instead of blindly trusted.
+
+**Checks before editing** — A preflight card with risk level, patterns to use and avoid, failure warnings, and a `readyToEdit` evidence check. If evidence is thin or contradictory, it says so.
+
+One tool call returns all of it. Local-first — your code never leaves your machine.
+
+<!-- TODO: Add demo GIF here showing search_codebase with preflight card output -->
+<!-- ![Demo](./docs/assets/demo.gif) -->
 
 ## Quick Start
+
+### Claude Code
+
+No config file needed:
+
+```bash
+claude mcp add codebase-context -- npx -y codebase-context /path/to/your/project
+```
 
 ### Claude Desktop
 
@@ -66,82 +91,31 @@ Open Settings > MCP and add:
 }
 ```
 
-### Claude Code
+## What It Actually Does
 
-No config file needed. Add to `.claude/settings.json` or run:
+Other tools help AI find code. This one helps AI make the right decisions — by knowing what your team does, tracking where patterns are heading, and warning before mistakes happen.
 
-```bash
-claude mcp add codebase-context -- npx -y codebase-context /path/to/your/project
-```
+### The Difference
 
-## What Makes It a Second Brain
+| Without codebase-context | With codebase-context |
+| --- | --- |
+| Generates code using whatever matches or "feels" right | Sees what's rising vs declining in your codebase |
+| Copies any example that fits | Follows your best implementations (golden files) |
+| Repeats mistakes you already corrected | Surfaces failure memories right before trying again |
+| You re-explain the same things every session | Remembers conventions and decisions automatically |
+| Edits confidently even when context is weak | Gets `readyToEdit: false` - knows to ask first |
 
-Other tools help AI find code. This one helps AI make the right decisions — by remembering what your team does, tracking how patterns evolve, and warning before mistakes repeat.
+### The Search Tool (`search_codebase`)
 
-### Remembers
+This is where it all comes together. One call returns:
 
-Decisions, rationale, and past failures persist across sessions. Not just what the team does — why.
+- **Code results** with `summary`, `snippet`, `filePath`, `score`, and `relevanceReason`
+- **Pattern signals** per result: `trend` (Rising/Stable/Declining) and `patternWarning` when using legacy code
+- **Relationships** per result: `importedBy`, `imports`, `testedIn`, `lastModified`
+- **Related memories**: team decisions, gotchas, and failures matched to the query
+- **Search quality**: `ok` or `low_confidence` with diagnostic signals and next steps
 
-- Internal library usage: `@mycompany/ui-toolkit` (847 uses) vs `primeng` (3 uses) — and _why_ the wrapper exists
-- "Tried direct PrimeNG toast, broke event system" — recorded as a failure memory, surfaced before the next agent repeats it
-- Conventions from git history auto-extracted: `refactor:`, `migrate:`, `fix:`, `revert:` commits become memories with zero manual effort
-
-### Reasons
-
-Quantified pattern analysis with trend direction. Not "use inject()" — "97% of the team uses inject(), and it's rising."
-
-- `inject()`: 97% adoption vs `constructor()`: 3% — with trend direction (rising/declining)
-- `Signals`: rising (last used 2 days ago) vs `RxJS BehaviorSubject`: declining (180+ days)
-- Golden files: real implementations scoring highest on modern pattern density — canonical examples to follow
-- Pattern conflicts detected: when two approaches in the same category both exceed 20% adoption
-
-### Protects
-
-Before an edit happens, the agent gets a preflight briefing: what to use, what to avoid, what broke last time.
-
-- Preflight card on `search_codebase` with `intent: "edit"` — risk level, preferred/avoid patterns, failure warnings, golden files, impact candidates
-- Failure memories bump risk level and surface as explicit warnings
-- Confidence decay: memories age (90-day or 180-day half-life). Stale guidance gets flagged, not blindly trusted
-- Epistemic stress detection: when evidence is contradictory, stale, or too thin, the preflight card says "insufficient evidence" instead of guessing
-- Search quality transparency: `search_codebase` includes `searchQuality` (`ok`/`low_confidence`, signals, confidence, next steps) so ambiguous retrieval is explicit instead of hidden
-
-### Discovers
-
-Hybrid search (BM25 keyword 30% + vector embeddings 70%) with structured filters across 30+ languages:
-
-- **Framework**: Angular, React, Vue
-- **Language**: TypeScript, JavaScript, Python, Go, Rust, and 25+ more
-- **Component type**: component, service, directive, guard, interceptor, pipe
-- **Architectural layer**: presentation, business, data, state, core, shared
-- Circular dependency detection, style guide auto-detection, architectural layer classification
-
-## Measured Results
-
-Tested against a real enterprise Angular codebase (~30k files):
-
-| What was measured          | Result                                                   |
-| -------------------------- | -------------------------------------------------------- |
-| Internal library detection | 336 uses of `@company/ui-toolkit` vs 3 direct PrimeNG    |
-| DI pattern consensus       | 98% `inject()` adoption detected, constructor DI flagged |
-| Test framework detection   | 74% Jest, 26% Jasmine/Karma, per-module awareness        |
-| Wrapper discovery          | `ToastEventService`, `DialogComponent` surfaced over raw |
-| Golden file identification | Top 5 files scoring 4-6 modern patterns each             |
-
-Without this context, AI agents default to generic patterns: raw PrimeNG imports, constructor injection, Jasmine syntax. With the second brain active, generated code matches the existing codebase on first attempt.
-
-## How It Works
-
-The difference in practice:
-
-| Without second brain                     | With second brain                    |
-| ---------------------------------------- | ------------------------------------ |
-| Uses `constructor(private svc: Service)` | Uses `inject()` (97% team adoption)  |
-| Suggests `primeng/button` directly       | Uses `@mycompany/ui-toolkit` wrapper |
-| Generic Jest setup                       | Your team's actual test utilities    |
-
-### Preflight Card
-
-When using `search_codebase` with `intent: "edit"`, `"refactor"`, or `"migrate"`, the response includes a preflight card alongside search results:
+When the intent is `edit`, `refactor`, or `migrate`, the same call also returns a **preflight card**:
 
 ```json
 {
@@ -160,126 +134,115 @@ When using `search_codebase` with `intent: "edit"`, `"refactor"`, or `"migrate"`
         { "source": "memories", "strength": "strong", "count": 2 }
       ]
     },
-    "preferredPatterns": [
-      { "pattern": "inject() function", "category": "dependencyInjection", "adoption": "98%", "trend": "Rising" }
-    ],
-    "avoidPatterns": [
-      { "pattern": "Constructor injection", "category": "dependencyInjection", "adoption": "2%", "trend": "Declining" }
-    ],
-    "goldenFiles": [
-      { "file": "src/features/auth/auth.service.ts", "score": 6 }
-    ],
-    "failureWarnings": [
-      { "memory": "Direct PrimeNG toast broke event system", "reason": "Must use ToastEventService" }
-    ]
+    "preferredPatterns": [...],
+    "avoidPatterns": [...],
+    "goldenFiles": [...],
+    "failureWarnings": [...]
   },
   "results": [...]
 }
 ```
 
-One call. The second brain composes patterns, memories, failures, and risk into a single response.
+Risk level, what to use, what to avoid, what broke last time, and whether the evidence is strong enough to proceed — all in one response.
 
-### Tip: Auto-invoke in your rules
+### Patterns & Conventions (`get_team_patterns`)
 
-Add this to your `.cursorrules`, `CLAUDE.md`, or `AGENTS.md`:
+Detects what your team actually does by analyzing the codebase:
+
+- Adoption percentages for dependency injection, state management, testing, libraries
+- Patterns/conventions trend direction (Rising / Stable / Declining) based on git recency
+- Golden files — your best implementations ranked by modern pattern density
+- Conflicts — when the team hasn't converged (both approaches above 20% adoption)
+
+### Team Memory (`remember` + `get_memory`)
+
+Record a decision once. It surfaces automatically in search results and preflight cards from then on. **Your git commits also become memories** — conventional commits like `refactor:`, `migrate:`, `fix:`, `revert:` from the last 90 days are auto-extracted during indexing.
+
+- **Types**: conventions (style rules), decisions (architecture choices), gotchas (things that break), failures (we tried X, it broke because Y)
+- **Confidence decay**: decisions age over 180 days, gotchas and failures over 90 days. Stale memories get flagged instead of blindly trusted.
+- **Zero-config git extraction**: runs automatically during `refresh_index`. No setup, no manual work.
+
+### All Tools
+
+| Tool | What it does |
+| --- | --- |
+| `search_codebase` | Hybrid search with enrichment. Pass `intent: "edit"` for preflight. |
+| `get_team_patterns` | Pattern frequencies, golden files, conflict detection |
+| `get_component_usage` | "Find Usages" — where a library or component is imported |
+| `remember` | Record a convention, decision, gotcha, or failure |
+| `get_memory` | Query team memory with confidence decay scoring |
+| `get_codebase_metadata` | Project structure, frameworks, dependencies |
+| `get_style_guide` | Style guide rules for the current project |
+| `detect_circular_dependencies` | Import cycles between files |
+| `refresh_index` | Re-index (full or incremental) + extract git memories |
+| `get_indexing_status` | Progress and stats for the current index |
+
+## How the Search Works
+
+The retrieval pipeline is designed around one goal: give the agent the right context, not just any file that matches.
+
+- **Intent classification** - knows whether "AuthService" is a name lookup or "how does auth work" is conceptual. Adjusts keyword/semantic weights accordingly.
+- **Hybrid fusion (RRF)** - combines keyword and semantic search using Reciprocal Rank Fusion instead of brittle score averaging.
+- **Query expansion** - conceptual queries automatically expand with domain-relevant terms (auth → login, token, session, guard).
+- **Contamination control** - test files are filtered/demoted for non-test queries.
+- **Import centrality** - files that are imported more often rank higher.
+- **Cross-encoder reranking** - a stage-2 reranker triggers only when top scores are ambiguous. CPU-only, bounded to top-K.
+- **Incremental Indexing** - Whenever a file is changed, it
+- **Auto-heal** - if the index corrupts, search triggers a full re-index automatically.
+
+## Language Support
+
+Over **30+ languages** are supported: TypeScript, JavaScript, Python, Java, Kotlin, C/C++, C#, Go, Rust, PHP, Ruby, Swift, Scala, Shell, and common config/markup formats.
+However right now only **Angular** has a specific analyzer for enriched context (signals, standalone components, control flow, DI patterns). 
+If you need enriched context from any language or framework, please file an issue - or even better, contribute with a new analyzer
+
+Structured filters available: `framework`, `language`, `componentType`, `layer` (presentation, business, data, state, core, shared).
+
+## Configuration
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `EMBEDDING_PROVIDER` | `transformers` | `openai` (fast, cloud) or `transformers` (local, private) |
+| `OPENAI_API_KEY` | — | Required only if using `openai` provider |
+| `CODEBASE_ROOT` | — | Project root (CLI arg takes precedence) |
+| `CODEBASE_CONTEXT_DEBUG` | — | Set to `1` for verbose logging |
+
+## Performance
+
+- **First indexing**: 2-5 minutes for ~30k files (embedding computation).
+- **Subsequent queries**: milliseconds from cache.
+- **Incremental updates**: `refresh_index` with `incrementalOnly: true` processes only changed files (SHA-256 manifest diffing).
+
+## File Structure
+
+```
+.codebase-context/
+  memory.json         # Team knowledge (commit this)
+  intelligence.json   # Pattern analysis (generated)
+  index.json          # Keyword index (generated)
+  index/              # Vector database (generated)
+```
+
+**Recommended `.gitignore`:**
+
+```gitignore
+# Codebase Context - ignore generated files, keep memory
+.codebase-context/*
+!.codebase-context/memory.json
+```
+
+## Tip: Auto-invoke in Your Rules
+
+Add this to `.cursorrules`, `CLAUDE.md`, or `AGENTS.md`:
 
 ```
 ## Codebase Context
 
 **At start of each task:** Call `get_memory` to load team conventions.
 
-**CRITICAL:** When user says "remember this" or "record this":
-- STOP immediately and call `remember` tool FIRST
-- DO NOT proceed with other actions until memory is recorded
-- This is a blocking requirement, not optional
+**When user says "remember this" or "record this":**
+- Call `remember` tool IMMEDIATELY before doing anything else.
 ```
-
-Now the agent checks patterns automatically instead of waiting for you to ask.
-
-## Tools
-
-| Tool                           | Purpose                                                              |
-| ------------------------------ | -------------------------------------------------------------------- |
-| `search_codebase`              | Hybrid search with filters. Pass `intent: "edit"` for preflight card |
-| `get_component_usage`          | Find where a library/component is used                               |
-| `get_team_patterns`            | Pattern frequencies, golden files, conflict detection                |
-| `get_codebase_metadata`        | Project structure overview                                           |
-| `get_indexing_status`          | Indexing progress + last stats                                       |
-| `get_style_guide`              | Query style guide rules                                              |
-| `detect_circular_dependencies` | Find import cycles between files                                     |
-| `remember`                     | Record memory (conventions/decisions/gotchas/failures)               |
-| `get_memory`                   | Query memory with confidence decay scoring                           |
-| `refresh_index`                | Re-index the codebase + extract git memories                         |
-
-## Language Support
-
-The Angular analyzer provides deep framework-specific analysis (signals, standalone components, control flow syntax, lifecycle hooks, DI patterns). A generic analyzer covers 30+ languages and file types as a fallback: JavaScript, TypeScript, Python, Java, Kotlin, C/C++, C#, Go, Rust, PHP, Ruby, Swift, Scala, Shell, and common config/markup formats.
-
-## File Structure
-
-The MCP creates the following structure in your project:
-
-```
-.codebase-context/
-  ├── memory.json         # Team knowledge (commit this)
-  ├── intelligence.json   # Pattern analysis (generated)
-  ├── index.json          # Keyword index (generated)
-  └── index/              # Vector database (generated)
-```
-
-**Recommended `.gitignore`:** The vector database and generated files can be large. Add this to your `.gitignore` to keep them local while sharing team memory:
-
-```gitignore
-# Codebase Context MCP - ignore generated files, keep memory
-.codebase-context/*
-!.codebase-context/memory.json
-```
-
-### Memory System
-
-Patterns tell you _what_ the team does ("97% use inject"), but not _why_ ("standalone compatibility"). Use `remember` to capture rationale that prevents repeated mistakes:
-
-```typescript
-remember({
-  type: 'decision',
-  category: 'dependencies',
-  memory: 'Use node-linker: hoisted, not isolated',
-  reason: "Some packages don't declare transitive deps."
-});
-```
-
-**Memory types:** `convention` (style rules), `decision` (architecture choices), `gotcha` (things that break), `failure` (tried X, failed because Y).
-
-**Confidence decay:** Memories age. Conventions never decay. Decisions have a 180-day half-life. Gotchas and failures have a 90-day half-life. Memories below 30% confidence are flagged as stale in `get_memory` responses.
-
-**Git auto-extraction:** During indexing, conventional commits (`refactor:`, `migrate:`, `fix:`, `revert:`) from the last 90 days are auto-recorded as memories. Zero manual effort.
-
-**Pattern conflicts:** `get_team_patterns` detects when two patterns in the same category are both above 20% adoption with different trends, and surfaces them as conflicts with both sides.
-
-Memories surface automatically in `search_codebase` results, `get_team_patterns` responses, and preflight cards.
-
-**Known quirks:**
-
-- Agents may bundle multiple things into one entry
-- Edit `.codebase-context/memory.json` directly to clean up
-- Be explicit: "Remember this: use X not Y"
-
-## Configuration
-
-| Variable                 | Default        | Description                                                                    |
-| ------------------------ | -------------- | ------------------------------------------------------------------------------ |
-| `EMBEDDING_PROVIDER`     | `transformers` | `openai` (fast, cloud) or `transformers` (local, private)                      |
-| `OPENAI_API_KEY`         | -              | Required if provider is `openai`                                               |
-| `CODEBASE_ROOT`          | -              | Project root to index (CLI arg takes precedence)                               |
-| `CODEBASE_CONTEXT_DEBUG` | -              | Set to `1` to enable verbose logging (startup messages, analyzer registration) |
-
-## Performance
-
-This tool runs locally on your machine.
-
-- **Initial indexing**: First run may take several minutes (e.g., 2-5 min for 30k files) to compute embeddings.
-- **Subsequent queries**: Instant (milliseconds) from cache.
-- **Updates**: `refresh_index` supports full or incremental mode (`incrementalOnly: true`) to process only changed files.
 
 ## Links
 

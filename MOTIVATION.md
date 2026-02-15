@@ -1,77 +1,65 @@
-# Motivation: Why This Exists
+# Why This Exists
 
 > **TL;DR**: AI coding assistants increase throughput but often degrade stability. Without codebase context, they generate code that works but violates team conventions and architectural rules. This MCP provides structured pattern data and recorded rationale so agents produce code that fits.
 
----
+The generated code compiles, passes basic tests, and completely ignores how your team does things or the business context. You fix it, correct the agent, and next session it starts from zero again. Even if you have curated instructions, you cannot note down every convention your team has and it is hard to maintain over time.
 
 ## The Problem
 
-### The "Stability Paradox"
-AI drastically increases **Throughput** (more code/hour) but often kills **Stability** (more bugs/rework).
+AI agents don't fail because they lack "best practices." They fail because they don't know _your_ practices.
 
-| Pain Point | Evidence |
-|------------|----------|
-| **"AI doesn't know my codebase"** | 64.7% of developers cite lack of codebase context as top AI challenge ([Stack Overflow 2024](https://survey.stackoverflow.co/2024/ai)) |
-| **"Vibe coding" = Tech Debt** | Code churn doubled, rework increased. AI writes "working" code that breaks architectural rules ([GitClear 2024](https://www.gitclear.com/)) |
-| **The "Mirror Problem"** | Semantic search just finds *similar* code. If 80% of your code is legacy/deprecated, AI will copy it. The tool becomes a mirror reflecting your bad habits. |
-| **Trust gap** | Only 29% of developers trust AI output. Teams spend more time reviewing AI code than writing it. |
+| What happens                               | Why                                                               |
+| ------------------------------------------ | ----------------------------------------------------------------- |
+| Agent uses a deprecated pattern            | Can't distinguish modern from legacy when exploring your codebase |
+| Agent ignores your internal wrappers       | Doesn't know they exist — picks raw library imports               |
+| Agent invents patterns that don't exist    | Makes up variable names, component names, CSS tokens              |
+| Agent repeats a mistake you corrected      | No memory across sessions                                         |
+| Agent edits confidently with weak evidence | No way to know when it doesn't know enough                        |
 
-### What Existing Tools Don't Solve
+The root cause isn't the model. It's the context layer. Agents get raw code from search and generic rules from static files. No signal about what's current vs legacy, no team patterns, no memory.
 
-| Tool Category | What They Do | The Gap |
-|---------------|--------------|---------|
-| **AGENTS.md / .cursorrules** | Static instructions (Intent) | Can't handle migration states (e.g., "Use A for new, B for old"). Static = brittle. |
-| **Semantic Search (RAG)** | Finds *relevant* text | Blind to *quality*. Can't distinguish "High Churn Hotspot" from "Stable Core". |
-| **Linters** | Complain *after* coding | Don't guide *during* generation. |
+## What Exists Today (and the missing context)
 
----
+| Approach                     | What it does                                        | What's missing                                                                  |
+| ---------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `.cursorrules` / `AGENTS.md` | Static rules the agent may or may not always follow | Can't express migration states ("use A for new code, B for old"). Goes stale.   |
+| Semantic search / RAG        | Finds similar code                                  | Blind to quality. Can't tell the best example to follow from hacky workarounds. |
+| Linters / formatters         | Enforce static rules after writing                  | Don't guide before or during generation. Agent still writes wrong code first.   |
+| Tool-heavy MCPs (50+ tools)  | Expose everything                                   | Agents don't know which tool to call. More tools = more confusion.              |
 
-## What This Does
+## What This MCP Does Differently
 
-This MCP provides **active context** - not raw data, but structured intelligence derived from actual codebase state.
+### Active context, not passive instructions
 
-### 1. Pattern Discovery (The "Map")
-- **Frequency Detection**: "97% use `inject()`, 3% use `constructor`." (Consensus)
-- **Internal Library Support**: "Use `@company/button`, not `p-button`." (Wrapper Detection)
-- **Golden Files**: "Here is the *best* example of a Service, not just *any* example."
+When the agent searches, it doesn't get raw code. It gets code with codebase intelligence attached:
 
-### 2. Temporal Wisdom (The "Compass")
-- **Pattern Momentum**: "Use `Signals` (Rising), avoid `BehaviorSubject` (Declining)."
-- **Health Context**: "⚠️ Careful, `UserService.ts` is a high-churn hotspot with circular dependencies. Add tests."
+- Is this file using a new or legacy pattern?
+- What other files import it?
+- What team decisions relate to this area?
+- Is the context evidence strong enough to edit?
+- What conventions should the Agent prefer and what to avoid?
 
-### Works with AGENTS.md
-- **AGENTS.md** defines intent: "Use functional patterns."
-- **MCP** provides evidence: "Here are the 5 most recent functional patterns actually used."
+### Conventions from code, not from documentation
 
----
+Pattern detection runs on the actual codebase, not only on rules someone wrote. If 97% of the team uses the (Angular) `inject()` function for DI over constructor DI and it's trending up, the agent knows - even if nobody documented it.
 
-## Known Limitations
+### Memory that compounds
 
-| Limitation | Mitigation |
-|------------|--------|
-| **Pattern frequency ≠ pattern quality** | **Pattern Momentum** (Rise/Fall trends) distinguishes adoption direction from raw count. |
-| **Stale index risk** | Manual re-indexing required for now. |
-| **Framework coverage** | Deep analysis for Angular. Generic analyzer covers 30+ languages. React/Vue specialized analyzers extensible. |
-| **File-level trend detection** | Trend is based on file modification date, not line-by-line content. A recently modified file may still contain legacy patterns on specific lines. Future: AST-based line-level detection. |
+Correct the agent once. Record the decision. From then on, it surfaces in search results and the "preflight" cards - that safeguard AI Agents from generating code that "just compiles". Memories age with confidence decay so stale guidance gets flagged instead of blindly trusted.
 
----
+### Evidence gating
 
-## Key Learnings (The Journey)
+Before an edit, the agent gets a curated "preflight" check from three sources (code, patterns, memories). If evidence is thin or contradictory, the response tells the AI Agent to look for more evidence with a concrete next step. This is the difference between "confident assumption" and "informed decision."
 
-1.  **Context alone is dangerous**: Giving AI "all the context" just confuses it or teaches it bad habits (Search Contamination).
-2.  **Decisions > Data**: AI needs *guidance* ("Use X"), not just *options* ("Here is X and Y").
-3.  **Governance through Discovery**: Blocking PRs is not required. If the AI sees that a pattern is "Declining" and "Dangerous," it self-corrects.
+## Key Design Decisions
 
----
+1. **Fewer tools, richer responses.** 10 tools instead of 50. One search call that aggregates everything.
+2. **Local-first.** Embeddings default to a local model (Transformers.js). No cloud, no API key required - but absolutely optional.
+3. **Evidence over opinions.** Every signal has a source: adoption %, trend direction, confidence score. No "best practice" claims.
+4. **Graceful degradation.** If intelligence isn't available, search still works — just without enrichment. Preflight is additive, not required.
 
 ## Sources
 
-### Industry Research
-1. [Stack Overflow 2024 Developer Survey](https://survey.stackoverflow.co/2024/ai)
-2. [GitClear 2024 AI Code Quality Report](https://www.gitclear.com/) (The "Churn" problem)
-3. [DORA State of DevOps 2024](https://dora.dev/research/2024/dora-report/) (Stability vs Throughput)
-
-### Internal Validation
-- **Search Contamination**: Without MCP, models copied legacy patterns 40% of the time.
-- **Momentum Success**: With "Trending" signals, models adopted modern patterns even when they were the minority (3%).
-
+- [Stack Overflow 2024 Developer Survey](https://survey.stackoverflow.co/2024/ai) — 64.7% cite lack of codebase context as top AI challenge
+- [GitClear 2024](https://www.gitclear.com/) — Code churn correlation with AI adoption
+- [DORA State of DevOps 2024](https://dora.dev/research/2024/dora-report/) — Throughput vs stability tradeoff

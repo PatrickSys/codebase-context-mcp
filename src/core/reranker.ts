@@ -33,7 +33,7 @@ async function ensureModelLoaded(): Promise<void> {
       await import('@huggingface/transformers');
 
     console.error(`[reranker] Loading cross-encoder: ${DEFAULT_RERANKER_MODEL}`);
-    console.error('[reranker] (First run will download the model — this may take a moment)');
+    console.error('[reranker] (First run will download the model - this may take a moment)');
 
     cachedTokenizer = await AutoTokenizer.from_pretrained(DEFAULT_RERANKER_MODEL);
     cachedModel = await AutoModelForSequenceClassification.from_pretrained(DEFAULT_RERANKER_MODEL, {
@@ -48,7 +48,7 @@ async function ensureModelLoaded(): Promise<void> {
 
 /**
  * Build a compact passage from a search result for cross-encoder scoring.
- * Keeps it short — cross-encoders are slow on long inputs.
+ * Keeps it short - cross-encoders are slow on long inputs.
  */
 function buildPassage(result: SearchResult): string {
   const parts: string[] = [];

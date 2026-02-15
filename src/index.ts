@@ -200,8 +200,10 @@ const TOOLS: Tool[] = [
     description:
       'Search the indexed codebase using natural language queries. Returns code summaries with file locations. ' +
       'Supports framework-specific queries and architectural layer filtering. ' +
-      'When intent is "edit", "refactor", or "migrate", returns a preflight card with risk level, ' +
-      'patterns to use/avoid, impact candidates, related memories, and an evidence lock score — all in one call. ' +
+      'Always returns searchQuality and may surface related memories. Results may be enriched with pattern momentum (trend/patternWarning) ' +
+      'and lightweight relationships (imports/importedBy/testedIn/lastModified) when intelligence is available. ' +
+      'When intent is "edit", "refactor", or "migrate", returns a preflight card (when intelligence is available) with risk level, ' +
+      'patterns to prefer/avoid, impact candidates, failure warnings, and an evidence lock score - all in one call. ' +
       'Use the returned filePath with other tools to read complete file contents.',
     inputSchema: {
       type: 'object',
@@ -215,7 +217,7 @@ const TOOLS: Tool[] = [
           enum: ['explore', 'edit', 'refactor', 'migrate'],
           description:
             'Search intent. Use "explore" (default) for read-only browsing. ' +
-            'Use "edit", "refactor", or "migrate" to get a preflight card with risk assessment, ' +
+            'Use "edit", "refactor", or "migrate" to get a preflight card (when intelligence is available) with risk assessment, ' +
             'patterns to prefer/avoid, affected files, relevant team memories, and ready-to-edit evidence checks.'
         },
         limit: {
@@ -311,8 +313,7 @@ const TOOLS: Tool[] = [
           type: 'string',
           description: 'Filter by category (naming, structure, patterns, testing)'
         }
-      },
-      required: ['query']
+      }
     }
   },
   {
@@ -336,7 +337,7 @@ const TOOLS: Tool[] = [
     description:
       'Find WHERE a library or component is used in the codebase. ' +
       "This is 'Find Usages' - returns all files that import a given package/module. " +
-      "Example: get_component_usage('@mycompany/utils') → shows all 34 files using it.",
+      "Example: get_component_usage('@mycompany/utils') -> shows all files using it.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -369,17 +370,17 @@ const TOOLS: Tool[] = [
   {
     name: 'remember',
     description:
-      '📝 CALL IMMEDIATELY when user explicitly asks to remember/record something.\n\n' +
+      'CALL IMMEDIATELY when user explicitly asks to remember/record something.\n\n' +
       'USER TRIGGERS:\n' +
-      '• "Remember this: [X]"\n' +
-      '• "Record this: [Y]"\n' +
-      '• "Save this for next time: [Z]"\n\n' +
-      '⚠️ DO NOT call unless user explicitly requests it.\n\n' +
+      '- "Remember this: [X]"\n' +
+      '- "Record this: [Y]"\n' +
+      '- "Save this for next time: [Z]"\n\n' +
+      'DO NOT call unless user explicitly requests it.\n\n' +
       'HOW TO WRITE:\n' +
-      '• ONE convention per memory (if user lists 5 things, call this 5 times)\n' +
-      '• memory: 5-10 words (the specific rule)\n' +
-      '• reason: 1 sentence (why it matters)\n' +
-      '• Skip: one-time features, code examples, essays',
+      '- ONE convention per memory (if user lists 5 things, call this 5 times)\n' +
+      '- memory: 5-10 words (the specific rule)\n' +
+      '- reason: 1 sentence (why it matters)\n' +
+      '- Skip: one-time features, code examples, essays',
     inputSchema: {
       type: 'object',
       properties: {
@@ -387,7 +388,7 @@ const TOOLS: Tool[] = [
           type: 'string',
           enum: ['convention', 'decision', 'gotcha', 'failure'],
           description:
-            'Type of memory being recorded. Use "failure" for things that were tried and failed — ' +
+            'Type of memory being recorded. Use "failure" for things that were tried and failed - ' +
             'prevents repeating the same mistakes.'
         },
         category: {
@@ -465,9 +466,7 @@ async function generateCodebaseContext(): Promise<string> {
     const lines: string[] = [];
     lines.push('# Codebase Intelligence');
     lines.push('');
-    lines.push(
-      '⚠️  CRITICAL: This is what YOUR codebase actually uses, not generic recommendations.'
-    );
+    lines.push('WARNING: This is what YOUR codebase actually uses, not generic recommendations.');
     lines.push('These are FACTS from analyzing your code, not best practices from the internet.');
     lines.push('');
 
@@ -495,7 +494,7 @@ async function generateCodebaseContext(): Promise<string> {
       lines.push('');
       lines.push('These path aliases map to internal project code:');
       for (const [alias, paths] of Object.entries(intelligence.tsconfigPaths)) {
-        lines.push(`- \`${alias}\` → ${(paths as string[]).join(', ')}`);
+        lines.push(`- \`${alias}\` -> ${(paths as string[]).join(', ')}`);
       }
       lines.push('');
     }
@@ -536,9 +535,9 @@ async function generateCodebaseContext(): Promise<string> {
               `### ${categoryName}: **${primary.name}** (${primary.frequency}) + **${secondary.name}** (${secondary.frequency})`
             );
             lines.push(
-              '   → Computed and effect are complementary Signals primitives and are commonly used together.'
+              '   -> Computed and effect are complementary Signals primitives and are commonly used together.'
             );
-            lines.push('   → Treat this as balanced usage, not a hard split decision.');
+            lines.push('   -> Treat this as balanced usage, not a hard split decision.');
             lines.push('');
             continue;
           }
@@ -552,29 +551,25 @@ async function generateCodebaseContext(): Promise<string> {
 
         if (percentage === 100) {
           lines.push(`### ${categoryName}: **${primary.name}** (${primary.frequency} - unanimous)`);
-          lines.push(`   → Your codebase is 100% consistent - ALWAYS use ${primary.name}`);
+          lines.push(`   -> Your codebase is 100% consistent - ALWAYS use ${primary.name}`);
         } else if (percentage >= 80) {
           lines.push(
             `### ${categoryName}: **${primary.name}** (${primary.frequency} - strong consensus)`
           );
-          lines.push(`   → Your team strongly prefers ${primary.name}`);
+          lines.push(`   -> Your team strongly prefers ${primary.name}`);
           if (alternatives.length) {
             const alt = alternatives[0];
-            lines.push(
-              `   → Minority pattern: ${alt.name} (${alt.frequency}) - avoid for new code`
-            );
+            lines.push(`   -> Minority pattern: ${alt.name} (${alt.frequency}) - avoid for new code`);
           }
         } else if (percentage >= 60) {
           lines.push(`### ${categoryName}: **${primary.name}** (${primary.frequency} - majority)`);
-          lines.push(`   → Most code uses ${primary.name}, but not unanimous`);
+          lines.push(`   -> Most code uses ${primary.name}, but not unanimous`);
           if (alternatives.length) {
-            lines.push(
-              `   → Also detected: ${alternatives[0].name} (${alternatives[0].frequency})`
-            );
+            lines.push(`   -> Also detected: ${alternatives[0].name} (${alternatives[0].frequency})`);
           }
         } else {
           // Split decision
-          lines.push(`### ${categoryName}: ⚠️ NO TEAM CONSENSUS`);
+          lines.push(`### ${categoryName}: WARNING: NO TEAM CONSENSUS`);
           lines.push(`   Your codebase is split between multiple approaches:`);
           lines.push(`   - ${primary.name} (${primary.frequency})`);
           if (alternatives.length) {
@@ -582,7 +577,7 @@ async function generateCodebaseContext(): Promise<string> {
               lines.push(`   - ${alt.name} (${alt.frequency})`);
             }
           }
-          lines.push(`   → ASK the team which approach to use for new features`);
+          lines.push(`   -> ASK the team which approach to use for new features`);
         }
         lines.push('');
       }
@@ -731,6 +726,28 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     switch (name) {
       case 'search_codebase': {
         const { query, limit, filters, intent } = args as any;
+        const queryStr = typeof query === 'string' ? query.trim() : '';
+
+        if (!queryStr) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    status: 'error',
+                    errorCode: 'invalid_params',
+                    message: "Invalid params: 'query' is required and must be a non-empty string.",
+                    hint: "Provide a query like 'how are routes configured' or 'AlbumApiService'."
+                  },
+                  null,
+                  2
+                )
+              }
+            ],
+            isError: true
+          };
+        }
 
         if (indexState.status === 'indexing') {
           return {
@@ -777,7 +794,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             : 'explore';
 
         try {
-          results = await searcher.search(query, limit || 5, filters, {
+          results = await searcher.search(queryStr, limit || 5, filters, {
             profile: searchProfile
           });
         } catch (error) {
@@ -790,7 +807,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               console.error('[Auto-Heal] Success. Retrying search...');
               const freshSearcher = new CodebaseSearcher(ROOT_PATH);
               try {
-                results = await freshSearcher.search(query, limit || 5, filters, {
+                results = await freshSearcher.search(queryStr, limit || 5, filters, {
                   profile: searchProfile
                 });
               } catch (retryError) {
@@ -801,9 +818,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                       text: JSON.stringify(
                         {
                           status: 'error',
-                          message: `Auto-heal retry failed: ${
-                            retryError instanceof Error ? retryError.message : String(retryError)
-                          }`
+                          message: `Auto-heal retry failed: ${retryError instanceof Error ? retryError.message : String(retryError)
+                            }`
                         },
                         null,
                         2
@@ -839,7 +855,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const allMemories = await readMemoriesFile(PATHS.memory);
         const allMemoriesWithConf = withConfidence(allMemories);
 
-        const queryTerms = query.toLowerCase().split(/\s+/);
+        const queryTerms = queryStr.toLowerCase().split(/\s+/).filter(Boolean);
         const relatedMemories = allMemoriesWithConf
           .filter((m) => {
             const searchText = `${m.memory} ${m.reason}`.toLowerCase();
@@ -1189,20 +1205,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   lastIndexed: indexState.lastIndexed?.toISOString(),
                   stats: indexState.stats
                     ? {
-                        totalFiles: indexState.stats.totalFiles,
-                        indexedFiles: indexState.stats.indexedFiles,
-                        totalChunks: indexState.stats.totalChunks,
-                        duration: `${(indexState.stats.duration / 1000).toFixed(2)}s`,
-                        incremental: indexState.stats.incremental
-                      }
+                      totalFiles: indexState.stats.totalFiles,
+                      indexedFiles: indexState.stats.indexedFiles,
+                      totalChunks: indexState.stats.totalChunks,
+                      duration: `${(indexState.stats.duration / 1000).toFixed(2)}s`,
+                      incremental: indexState.stats.incremental
+                    }
                     : undefined,
                   progress: progress
                     ? {
-                        phase: progress.phase,
-                        percentage: progress.percentage,
-                        filesProcessed: progress.filesProcessed,
-                        totalFiles: progress.totalFiles
-                      }
+                      phase: progress.phase,
+                      percentage: progress.percentage,
+                      filesProcessed: progress.filesProcessed,
+                      totalFiles: progress.totalFiles
+                    }
                     : undefined,
                   error: indexState.error,
                   hint: 'Use refresh_index to manually trigger re-indexing when needed.'
@@ -1294,9 +1310,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'get_style_guide': {
         const { query, category } = args as {
-          query: string;
+          query?: string;
           category?: string;
         };
+        const queryStr = typeof query === 'string' ? query.trim() : '';
+        const queryLower = queryStr.toLowerCase();
+        const queryTerms = queryLower.split(/\s+/).filter(Boolean);
+        const categoryLower = typeof category === 'string' ? category.trim().toLowerCase() : '';
+        const limitedMode = queryTerms.length === 0;
+        const LIMITED_MAX_FILES = 3;
+        const LIMITED_MAX_SECTIONS_PER_FILE = 2;
 
         const styleGuidePatterns = [
           'STYLE_GUIDE.md',
@@ -1313,8 +1336,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           content: string;
           relevantSections: string[];
         }> = [];
-        const queryLower = query.toLowerCase();
-        const queryTerms = queryLower.split(/\s+/);
 
         for (const pattern of styleGuidePatterns) {
           try {
@@ -1332,25 +1353,51 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 // Find relevant sections based on query
                 const sections = content.split(/^##\s+/m);
                 const relevantSections: string[] = [];
+                if (limitedMode) {
+                  const headings = (content.match(/^##\s+.+$/gm) || [])
+                    .map((h) => h.trim())
+                    .filter(Boolean)
+                    .slice(0, LIMITED_MAX_SECTIONS_PER_FILE);
 
-                for (const section of sections) {
-                  const sectionLower = section.toLowerCase();
-                  const isRelevant = queryTerms.some((term) => sectionLower.includes(term));
-                  if (isRelevant) {
-                    // Limit section size to ~500 words
-                    const words = section.split(/\s+/);
-                    const truncated = words.slice(0, 500).join(' ');
-                    relevantSections.push(
-                      '## ' + (words.length > 500 ? truncated + '...' : section.trim())
-                    );
+                  if (headings.length > 0) {
+                    relevantSections.push(...headings);
+                  } else {
+                    const words = content.split(/\s+/).filter(Boolean);
+                    if (words.length > 0) {
+                      relevantSections.push(`Overview: ${words.slice(0, 80).join(' ')}...`);
+                    }
                   }
+                } else {
+                  for (const section of sections) {
+                    const sectionLower = section.toLowerCase();
+                    const isRelevant = queryTerms.some((term) => sectionLower.includes(term));
+                    if (isRelevant) {
+                      // Limit section size to ~500 words
+                      const words = section.split(/\s+/);
+                      const truncated = words.slice(0, 500).join(' ');
+                      relevantSections.push(
+                        '## ' + (words.length > 500 ? truncated + '...' : section.trim())
+                      );
+                    }
+                  }
+                }
+
+                const categoryMatch =
+                  !categoryLower ||
+                  relativePath.toLowerCase().includes(categoryLower) ||
+                  relevantSections.some((section) => section.toLowerCase().includes(categoryLower));
+                if (!categoryMatch) {
+                  continue;
                 }
 
                 if (relevantSections.length > 0) {
                   foundGuides.push({
                     file: relativePath,
                     content: content.slice(0, 200) + '...',
-                    relevantSections: relevantSections.slice(0, 3) // Max 3 sections per file
+                    relevantSections: relevantSections.slice(
+                      0,
+                      limitedMode ? LIMITED_MAX_SECTIONS_PER_FILE : 3
+                    )
                   });
                 }
               } catch (_e) {
@@ -1362,7 +1409,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
         }
 
-        if (foundGuides.length === 0) {
+        const results = limitedMode ? foundGuides.slice(0, LIMITED_MAX_FILES) : foundGuides;
+
+        if (results.length === 0) {
           return {
             content: [
               {
@@ -1370,9 +1419,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 text: JSON.stringify(
                   {
                     status: 'no_results',
-                    message: `No style guide content found matching: ${query}`,
+                    message: limitedMode
+                      ? 'No style guide files found in the default locations.'
+                      : `No style guide content found matching: ${queryStr}`,
                     searchedPatterns: styleGuidePatterns,
-                    hint: "Try broader terms like 'naming', 'patterns', 'testing', 'components'"
+                    hint: limitedMode
+                      ? "Run get_style_guide with a query or category (e.g. category: 'testing') for targeted results."
+                      : "Try broader terms like 'naming', 'patterns', 'testing', 'components'"
                   },
                   null,
                   2
@@ -1389,10 +1442,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               text: JSON.stringify(
                 {
                   status: 'success',
-                  query,
+                  query: queryStr || undefined,
                   category,
-                  results: foundGuides,
-                  totalFiles: foundGuides.length
+                  limited: limitedMode,
+                  notice: limitedMode
+                    ? 'No query provided. Results are capped. Provide query and/or category for targeted guidance.'
+                    : undefined,
+                  resultLimits: limitedMode
+                    ? {
+                        maxFiles: LIMITED_MAX_FILES,
+                        maxSectionsPerFile: LIMITED_MAX_SECTIONS_PER_FILE
+                      }
+                    : undefined,
+                  results,
+                  totalFiles: results.length,
+                  totalMatches: foundGuides.length
                 },
                 null,
                 2

@@ -150,7 +150,7 @@ export function buildEvidenceLock(input: BuildEvidenceLockInput): EvidenceLock {
   const staleMemories = input.relatedMemories.filter((m) => m.stale).length;
   if (totalMemories > 0 && staleMemories / totalMemories > 0.5) {
     stressTriggers.push(
-      `${staleMemories}/${totalMemories} related memories are stale — team knowledge may be outdated`
+      `${staleMemories}/${totalMemories} related memories are stale - team knowledge may be outdated`
     );
   }
 

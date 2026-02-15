@@ -48,7 +48,7 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
   private async _initialize(): Promise<void> {
     try {
       console.error(`Loading embedding model: ${this.modelName}`);
-      console.error('(First run will download the model — this may take a moment)');
+      console.error('(First run will download the model - this may take a moment)');
 
       const { pipeline } = await import('@huggingface/transformers');
 

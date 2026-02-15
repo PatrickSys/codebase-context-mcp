@@ -217,7 +217,7 @@ export class CodebaseIndexer {
 
         // Short-circuit: nothing changed
         if (diff.added.length === 0 && diff.changed.length === 0 && diff.deleted.length === 0) {
-          console.error('No files changed — skipping re-index.');
+          console.error('No files changed - skipping re-index.');
           this.updateProgress('complete', 100);
           stats.duration = Date.now() - startTime;
           stats.completedAt = new Date();

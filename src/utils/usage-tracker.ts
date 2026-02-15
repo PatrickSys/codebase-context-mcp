@@ -599,8 +599,8 @@ export class PatternDetector {
     }
 
     // Generic state patterns (framework-agnostic)
-    if (content.includes('BehaviorSubject') || content.includes('ReplaySubject')) {
-      this.track('stateManagement', 'RxJS Subjects');
+    if (/BehaviorSubject|ReplaySubject|Subject|Observable/.test(content)) {
+      this.track('stateManagement', 'RxJS');
     }
     if (content.includes('createStore') || content.includes('configureStore')) {
       this.track('stateManagement', 'Redux-style store');

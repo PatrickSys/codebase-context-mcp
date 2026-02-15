@@ -218,7 +218,7 @@ export class CodebaseSearcher {
                 decliningPatterns.add(alt.name.toLowerCase());
                 patternWarnings.set(
                   alt.name.toLowerCase(),
-                  `⚠️ Uses declining pattern: ${alt.name} (${alt.guidance || 'consider modern alternatives'})`
+                  `WARNING: Uses declining pattern: ${alt.name} (${alt.guidance || 'consider modern alternatives'})`
                 );
               } else if (alt.trend === 'Rising') {
                 risingPatterns.add(alt.name.toLowerCase());
@@ -272,7 +272,7 @@ export class CodebaseSearcher {
     trend: 'Rising' | 'Stable' | 'Declining' | undefined;
     warning?: string;
   } {
-    if (!this.patternIntelligence) {
+    if (!this.patternIntelligence || chunk.content == null) {
       return { trend: undefined };
     }
 
@@ -649,7 +649,7 @@ export class CodebaseSearcher {
         }
 
         const summary = this.generateSummary(chunk);
-        const snippet = this.generateSnippet(chunk.content);
+        const snippet = this.generateSnippet(chunk.content ?? '');
 
         return {
           summary,
@@ -699,7 +699,7 @@ export class CodebaseSearcher {
       if (bestTestChunk) {
         const { trend, warning } = this.detectChunkTrend(bestTestChunk.chunk);
         const summary = this.generateSummary(bestTestChunk.chunk);
-        const snippet = this.generateSnippet(bestTestChunk.chunk.content);
+        const snippet = this.generateSnippet(bestTestChunk.chunk.content ?? '');
 
         finalResults.push({
           summary,
@@ -955,7 +955,7 @@ export class CodebaseSearcher {
     const componentType = chunk.componentType;
 
     // Try to extract a meaningful name from content
-    const classMatch = chunk.content.match(
+    const classMatch = (chunk.content ?? '').match(
       /(?:export\s+)?(?:class|interface|type|enum|function)\s+(\w+)/
     );
     const name = componentName || (classMatch ? classMatch[1] : null);
