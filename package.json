@@ -1,6 +1,6 @@
 {
   "name": "codebase-context",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Local-first MCP server that gives AI agents team context: patterns and conventions, memory to remember decisions and failures, preflight checks, and hybrid search with evidence quality scoring",
   "type": "module",
   "main": "./dist/lib.js",

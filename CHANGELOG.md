@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.1](https://github.com/PatrickSys/codebase-context/compare/v1.6.0...v1.6.1) (2026-02-15)
+
+
+### Bug Fixes
+
+* guard null chunk.content crash + docs rewrite for v1.6.1 ([6b89778](https://github.com/PatrickSys/codebase-context/commit/6b8977897665ea3207e1bbb0f5d685c61d41bbb8))
+
 ## [1.6.0](https://github.com/PatrickSys/codebase-context/compare/v1.5.1...v1.6.0) (2026-02-11)
 
 
