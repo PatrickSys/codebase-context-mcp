@@ -940,15 +940,17 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
         const inputs = metadata.decorator?.inputs?.length || 0;
         const outputs = metadata.decorator?.outputs?.length || 0;
         const lifecycle = this.extractLifecycleMethods(content);
-        return `Angular component '${className}' (selector: ${selector})${lifecycle ? ` with ${lifecycle}` : ''
-          }${inputs ? `, ${inputs} inputs` : ''}${outputs ? `, ${outputs} outputs` : ''}.`;
+        return `Angular component '${className}' (selector: ${selector})${
+          lifecycle ? ` with ${lifecycle}` : ''
+        }${inputs ? `, ${inputs} inputs` : ''}${outputs ? `, ${outputs} outputs` : ''}.`;
       }
 
       case 'service': {
         const providedIn = metadata.decorator?.providedIn || 'unknown';
         const methods = this.extractPublicMethods(content);
-        return `Angular service '${className}' (providedIn: ${providedIn})${methods ? ` providing ${methods}` : ''
-          }.`;
+        return `Angular service '${className}' (providedIn: ${providedIn})${
+          methods ? ` providing ${methods}` : ''
+        }.`;
       }
 
       case 'guard': {

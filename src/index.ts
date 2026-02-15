@@ -559,13 +559,17 @@ async function generateCodebaseContext(): Promise<string> {
           lines.push(`   -> Your team strongly prefers ${primary.name}`);
           if (alternatives.length) {
             const alt = alternatives[0];
-            lines.push(`   -> Minority pattern: ${alt.name} (${alt.frequency}) - avoid for new code`);
+            lines.push(
+              `   -> Minority pattern: ${alt.name} (${alt.frequency}) - avoid for new code`
+            );
           }
         } else if (percentage >= 60) {
           lines.push(`### ${categoryName}: **${primary.name}** (${primary.frequency} - majority)`);
           lines.push(`   -> Most code uses ${primary.name}, but not unanimous`);
           if (alternatives.length) {
-            lines.push(`   -> Also detected: ${alternatives[0].name} (${alternatives[0].frequency})`);
+            lines.push(
+              `   -> Also detected: ${alternatives[0].name} (${alternatives[0].frequency})`
+            );
           }
         } else {
           // Split decision
@@ -818,8 +822,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                       text: JSON.stringify(
                         {
                           status: 'error',
-                          message: `Auto-heal retry failed: ${retryError instanceof Error ? retryError.message : String(retryError)
-                            }`
+                          message: `Auto-heal retry failed: ${
+                            retryError instanceof Error ? retryError.message : String(retryError)
+                          }`
                         },
                         null,
                         2
@@ -1205,20 +1210,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   lastIndexed: indexState.lastIndexed?.toISOString(),
                   stats: indexState.stats
                     ? {
-                      totalFiles: indexState.stats.totalFiles,
-                      indexedFiles: indexState.stats.indexedFiles,
-                      totalChunks: indexState.stats.totalChunks,
-                      duration: `${(indexState.stats.duration / 1000).toFixed(2)}s`,
-                      incremental: indexState.stats.incremental
-                    }
+                        totalFiles: indexState.stats.totalFiles,
+                        indexedFiles: indexState.stats.indexedFiles,
+                        totalChunks: indexState.stats.totalChunks,
+                        duration: `${(indexState.stats.duration / 1000).toFixed(2)}s`,
+                        incremental: indexState.stats.incremental
+                      }
                     : undefined,
                   progress: progress
                     ? {
-                      phase: progress.phase,
-                      percentage: progress.percentage,
-                      filesProcessed: progress.filesProcessed,
-                      totalFiles: progress.totalFiles
-                    }
+                        phase: progress.phase,
+                        percentage: progress.percentage,
+                        filesProcessed: progress.filesProcessed,
+                        totalFiles: progress.totalFiles
+                      }
                     : undefined,
                   error: indexState.error,
                   hint: 'Use refresh_index to manually trigger re-indexing when needed.'
