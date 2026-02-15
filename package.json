@@ -81,7 +81,10 @@
     "developer-tools",
     "static-analysis",
     "code-quality",
-    "team-memory"
+    "team-memory",
+    "second-brain",
+    "code-search",
+    "codebase-intelligence"
   ],
   "repository": {
     "type": "git",
