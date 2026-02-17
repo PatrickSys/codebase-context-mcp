@@ -10,7 +10,7 @@ Technical reference for what `codebase-context` ships today. For the user-facing
 
 | Tool | Input | Output |
 | --- | --- | --- |
-| `search_codebase` | `query`, optional `intent`, `limit`, `filters` | Ranked results with enrichment. Preflight card when `intent` is `edit`/`refactor`/`migrate`. |
+| `search_codebase` | `query`, optional `intent`, `limit`, `filters`, `includeSnippets` | Ranked results (`file`, `summary`, `score`, `type`, `trend`, `patternWarning`) + `searchQuality` (with `hint` when low confidence) + `preflight` ({ready, reason}). Snippets opt-in. |
 | `get_team_patterns` | optional `category` | Pattern frequencies, trends, golden files, conflicts |
 | `get_component_usage` | `name` (import source) | Files importing the given package/module |
 | `remember` | `type`, `category`, `memory`, `reason` | Persists to `.codebase-context/memory.json` |
@@ -38,21 +38,38 @@ Ordered by execution:
 6. **Contamination control** — test file filtering for non-test queries.
 7. **File deduplication** — best chunk per file.
 8. **Stage-2 reranking** — cross-encoder (`Xenova/ms-marco-MiniLM-L-6-v2`) triggers when the score between the top files are very close. CPU-only, top-10 bounded.
-9. **Result enrichment** — pattern momentum (`trend`/`patternWarning`), relationships (`importedBy`/`imports`/`testedIn`/`lastModified`), related memories, search quality assessment.
+9. **Result enrichment** — compact type (`componentType:layer`), pattern momentum (`trend` Rising/Declining only, Stable omitted), `patternWarning`, condensed relationships (`importedByCount`/`hasTests`), related memories (capped to 3), search quality assessment with `hint` when low confidence.
 
-## Preflight Card (Edit Intent)
+### Defaults
 
-Returned when search `intent` is `edit`, `refactor`, or `migrate`:
+- **Chunk size**: 50 lines, 0 overlap
+- **Reranker trigger**: activates when top-3 results are within 0.08 score of each other
+- **Embedding model**: Granite (`ibm-granite/granite-embedding-30m-english`, 8192 token context) via `@huggingface/transformers` v3
+- **Vector DB**: LanceDB with cosine distance
 
-- `riskLevel`: low / medium / high (based on circular deps + impact breadth + failure memories)
-- `confidence`: fresh / aging / stale (based on index age)
-- `evidenceLock`: triangulated score (0-100) from code + patterns + memories, with `readyToEdit` boolean
-- `epistemicStress`: triggers (pattern conflicts, stale memories, thin evidence), abstain signal
-- `preferredPatterns` / `avoidPatterns`: from team pattern analysis with adoption % and trend
-- `goldenFiles`: top exemplar files by modern pattern density
-- `impactCandidates`: files importing the result files (from import graph)
-- `failureWarnings`: recent failure memories related to the query
-- `patternConflicts`: when two patterns in the same category are both > 20% adoption
+## Preflight (Edit Intent)
+
+Returned as `preflight` when search `intent` is `edit`, `refactor`, or `migrate`. Also returned for default searches when intelligence is available.
+
+Output: `{ ready: boolean, reason?: string }`
+
+- `ready`: whether evidence is sufficient to proceed with edits
+- `reason`: when `ready` is false, explains why (e.g., "Search quality is low", "Insufficient pattern evidence")
+
+### How `ready` is determined
+
+1. **Evidence triangulation** — scores code match (45%), pattern alignment (30%), and memory support (25%). Needs combined score ≥ 40 to pass.
+2. **Epistemic stress check** — if pattern conflicts, stale memories, or thin evidence are detected, `ready` is set to false with an abstain signal.
+3. **Search quality gate** — if `searchQuality.status` is `low_confidence`, `ready` is forced to false regardless of evidence scores. This prevents the "confidently wrong" problem where evidence counts look good but retrieval quality is poor.
+
+### Internal analysis (not in output, used to compute `ready`)
+
+- Risk level from circular deps + impact breadth + failure memories
+- Preferred/avoid patterns from team pattern analysis
+- Golden files by pattern density
+- Impact candidates from import graph
+- Failure warnings from related memories
+- Pattern conflicts when two patterns in the same category are both > 20% adoption
 
 ## Memory System
 
@@ -60,11 +77,11 @@ Returned when search `intent` is `edit`, `refactor`, or `migrate`:
 - Confidence decay: conventions never decay, decisions 180-day half-life, gotchas/failures 90-day half-life
 - Stale threshold: memories below 30% confidence are flagged
 - Git auto-extraction: conventional commits from last 90 days
-- Surface locations: `search_codebase` results, `get_team_patterns` responses, preflight cards
+- Surface locations: `search_codebase` results (as `relatedMemories`), `get_team_patterns` responses, preflight analysis
 
 ## Indexing
 
-- Initial: full scan → chunking → embedding → vector DB (LanceDB) + keyword index (Fuse.js)
+- Initial: full scan → chunking (50 lines, 0 overlap) → embedding → vector DB (LanceDB) + keyword index (Fuse.js)
 - Incremental: SHA-256 manifest diffing, selective embed/delete, full intelligence regeneration
 - Auto-heal: corrupted index triggers automatic full re-index on next search
 - Storage: `.codebase-context/` directory (memory.json + generated files)

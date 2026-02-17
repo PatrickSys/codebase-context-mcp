@@ -386,7 +386,10 @@ export class CodebaseIndexer {
             if (result.metadata?.detectedPatterns) {
               for (const pattern of result.metadata.detectedPatterns) {
                 // Try to extract a relevant snippet for the pattern
-                const snippetPattern = this.getSnippetPatternFor(pattern.category, pattern.name);
+                // Ask analyzer registry for snippet pattern (framework-agnostic delegation)
+                const analyzer = analyzerRegistry.findAnalyzer(file);
+                const snippetPattern =
+                  analyzer?.getSnippetPattern?.(pattern.category, pattern.name) ?? null;
                 const snippet = snippetPattern ? extractSnippet(snippetPattern) : undefined;
                 patternDetector.track(
                   pattern.category,
@@ -397,30 +400,19 @@ export class CodebaseIndexer {
               }
             }
 
-            // Track file for Golden File scoring (framework-agnostic based on patterns)
+            // Track file for Golden File scoring (framework-agnostic)
+            // A golden file = file with patterns in ≥3 distinct categories
             const detectedPatterns = result.metadata?.detectedPatterns || [];
-            const hasPattern = (category: string, name: string) =>
-              detectedPatterns.some(
-                (p: { category: string; name: string }) =>
-                  p.category === category && p.name === name
-              );
-
-            const patternScore =
-              (hasPattern('dependencyInjection', 'inject() function') ? 1 : 0) +
-              (hasPattern('stateManagement', 'Signals') ? 1 : 0) +
-              (hasPattern('reactivity', 'Computed') ? 1 : 0) +
-              (hasPattern('reactivity', 'Effect') ? 1 : 0) +
-              (hasPattern('componentStyle', 'Standalone') ? 1 : 0) +
-              (hasPattern('componentInputs', 'Signal-based inputs') ? 1 : 0);
+            const uniqueCategories = new Set(
+              detectedPatterns.map((p: { category: string }) => p.category)
+            );
+            const patternScore = uniqueCategories.size;
             if (patternScore >= 3) {
-              patternDetector.trackGoldenFile(relPath, patternScore, {
-                inject: hasPattern('dependencyInjection', 'inject() function'),
-                signals: hasPattern('stateManagement', 'Signals'),
-                computed: hasPattern('reactivity', 'Computed'),
-                effect: hasPattern('reactivity', 'Effect'),
-                standalone: hasPattern('componentStyle', 'Standalone'),
-                signalInputs: hasPattern('componentInputs', 'Signal-based inputs')
-              });
+              const patternFlags: Record<string, boolean> = {};
+              for (const p of detectedPatterns) {
+                patternFlags[`${p.category}:${p.name}`] = true;
+              }
+              patternDetector.trackGoldenFile(relPath, patternScore, patternFlags as any); // TODO: fix type;
             }
 
             // Update component statistics
@@ -890,36 +882,6 @@ export class CodebaseIndexer {
       componentsByType: { ...base.componentsByType, ...incoming.componentsByType },
       componentsByLayer: this.mergeLayers(base.componentsByLayer, incoming.componentsByLayer)
     };
-  }
-
-  /**
-   * Get regex pattern for extracting code snippets based on pattern category and name
-   * This maps abstract pattern names to actual code patterns
-   */
-  private getSnippetPatternFor(category: string, name: string): RegExp | null {
-    const patterns: Record<string, Record<string, RegExp>> = {
-      dependencyInjection: {
-        'inject() function': /\binject\s*[<(]/,
-        'Constructor injection': /constructor\s*\(/
-      },
-      stateManagement: {
-        RxJS: /BehaviorSubject|ReplaySubject|Subject|Observable/,
-        Signals: /\bsignal\s*[<(]/
-      },
-      reactivity: {
-        Effect: /\beffect\s*\(/,
-        Computed: /\bcomputed\s*[<(]/
-      },
-      componentStyle: {
-        Standalone: /standalone\s*:\s*true/,
-        'NgModule-based': /@(?:Component|Directive|Pipe)\s*\(/
-      },
-      componentInputs: {
-        'Signal-based inputs': /\binput\s*[<(]/,
-        'Decorator-based @Input': /@Input\(\)/
-      }
-    };
-    return patterns[category]?.[name] || null;
   }
 
   getProgress(): IndexingProgress {

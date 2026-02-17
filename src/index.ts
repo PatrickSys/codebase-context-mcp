@@ -35,7 +35,6 @@ import { analyzerRegistry } from './core/analyzer-registry.js';
 import { AngularAnalyzer } from './analyzers/angular/index.js';
 import { GenericAnalyzer } from './analyzers/generic/index.js';
 import { InternalFileGraph } from './utils/usage-tracker.js';
-import { getFileCommitDates } from './utils/git-dates.js';
 import { IndexCorruptedError } from './errors/index.js';
 import {
   CODEBASE_CONTEXT_DIRNAME,
@@ -51,6 +50,7 @@ import {
   applyUnfilteredLimit,
   withConfidence
 } from './memory/store.js';
+import { handleMemoryCli } from './cli.js';
 import { parseGitLogLineToMemory } from './memory/git-memory.js';
 import { buildEvidenceLock } from './preflight/evidence-lock.js';
 import { shouldIncludePatternConflictCategory } from './preflight/query-scope.js';
@@ -198,13 +198,8 @@ const TOOLS: Tool[] = [
   {
     name: 'search_codebase',
     description:
-      'Search the indexed codebase using natural language queries. Returns code summaries with file locations. ' +
-      'Supports framework-specific queries and architectural layer filtering. ' +
-      'Always returns searchQuality and may surface related memories. Results may be enriched with pattern momentum (trend/patternWarning) ' +
-      'and lightweight relationships (imports/importedBy/testedIn/lastModified) when intelligence is available. ' +
-      'When intent is "edit", "refactor", or "migrate", returns a preflight card (when intelligence is available) with risk level, ' +
-      'patterns to prefer/avoid, impact candidates, failure warnings, and an evidence lock score - all in one call. ' +
-      'Use the returned filePath with other tools to read complete file contents.',
+      'Search the indexed codebase. Returns ranked results and a searchQuality confidence summary. ' +
+      'IMPORTANT: Pass the intent="edit"|"refactor"|"migrate" to get preflight: edit readiness check with evidence gating.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -216,14 +211,18 @@ const TOOLS: Tool[] = [
           type: 'string',
           enum: ['explore', 'edit', 'refactor', 'migrate'],
           description:
-            'Search intent. Use "explore" (default) for read-only browsing. ' +
-            'Use "edit", "refactor", or "migrate" to get a preflight card (when intelligence is available) with risk assessment, ' +
-            'patterns to prefer/avoid, affected files, relevant team memories, and ready-to-edit evidence checks.'
+            'Optional. Use "edit", "refactor", or "migrate" to get the full preflight card before making changes.'
         },
         limit: {
           type: 'number',
           description: 'Maximum number of results to return (default: 5)',
           default: 5
+        },
+        includeSnippets: {
+          type: 'boolean',
+          description:
+            'Include code snippets in results (default: false). If you need code, prefer read_file instead.',
+          default: false
         },
         filters: {
           type: 'object',
@@ -729,7 +728,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     switch (name) {
       case 'search_codebase': {
-        const { query, limit, filters, intent } = args as any;
+        const { query, limit, filters, intent, includeSnippets } = args as any;
         const queryStr = typeof query === 'string' ? query.trim() : '';
 
         if (!queryStr) {
@@ -877,6 +876,39 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           /* graceful degradation — intelligence file may not exist yet */
         }
 
+        function computeIndexConfidence(): 'fresh' | 'aging' | 'stale' {
+          let confidence: 'fresh' | 'aging' | 'stale' = 'stale';
+          if (intelligence?.generatedAt) {
+            const indexAge = Date.now() - new Date(intelligence.generatedAt).getTime();
+            const hoursOld = indexAge / (1000 * 60 * 60);
+            if (hoursOld < 24) {
+              confidence = 'fresh';
+            } else if (hoursOld < 168) {
+              confidence = 'aging';
+            }
+          }
+          return confidence;
+        }
+
+        // Cheap impact breadth estimate from the import graph (used for risk assessment).
+        function computeImpactCandidates(resultPaths: string[]): string[] {
+          const impactCandidates: string[] = [];
+          if (!intelligence?.internalFileGraph?.imports) return impactCandidates;
+          const allImports = intelligence.internalFileGraph.imports as Record<string, string[]>;
+          for (const [file, deps] of Object.entries(allImports)) {
+            if (
+              deps.some((dep: string) =>
+                resultPaths.some((rp) => dep.endsWith(rp) || rp.endsWith(dep))
+              )
+            ) {
+              if (!resultPaths.some((rp) => file.endsWith(rp) || rp.endsWith(file))) {
+                impactCandidates.push(file);
+              }
+            }
+          }
+          return impactCandidates;
+        }
+
         // Build reverse import map from intelligence graph
         const reverseImports = new Map<string, string[]>();
         if (intelligence?.internalFileGraph?.imports) {
@@ -888,14 +920,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               reverseImports.get(dep)!.push(file);
             }
           }
-        }
-
-        // Load git dates for lastModified enrichment
-        let gitDates: Map<string, Date> | null = null;
-        try {
-          gitDates = await getFileCommitDates(ROOT_PATH);
-        } catch {
-          /* not a git repo */
         }
 
         // Enrich a search result with relationship data
@@ -937,36 +961,66 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
           }
 
-          // lastModified: from git dates
-          let lastModified: string | undefined;
-          if (gitDates) {
-            // Try matching by relative path (git dates use repo-relative forward-slash paths)
-            const relPath = path.relative(ROOT_PATH, rPath).replace(/\\/g, '/');
-            const date = gitDates.get(relPath);
-            if (date) {
-              lastModified = date.toISOString();
-            }
-          }
-
           // Only return if we have at least one piece of data
-          if (
-            importedBy.length === 0 &&
-            imports.length === 0 &&
-            testedIn.length === 0 &&
-            !lastModified
-          ) {
+          if (importedBy.length === 0 && imports.length === 0 && testedIn.length === 0) {
             return undefined;
           }
 
           return {
             ...(importedBy.length > 0 && { importedBy }),
             ...(imports.length > 0 && { imports }),
-            ...(testedIn.length > 0 && { testedIn }),
-            ...(lastModified && { lastModified })
+            ...(testedIn.length > 0 && { testedIn })
           };
         }
 
         const searchQuality = assessSearchQuality(query, results);
+
+        // Always-on edit preflight (lite): do not require intent and keep payload small.
+        let editPreflight: any = undefined;
+        if (intelligence && (!intent || intent === 'explore')) {
+          try {
+            const resultPaths = results.map((r) => r.filePath);
+            const impactCandidates = computeImpactCandidates(resultPaths);
+
+            let riskLevel: 'low' | 'medium' | 'high' = 'low';
+            if (impactCandidates.length > 10) {
+              riskLevel = 'high';
+            } else if (impactCandidates.length > 3) {
+              riskLevel = 'medium';
+            }
+
+            // Use existing pattern intelligence for evidenceLock scoring, but keep the output payload lite.
+            const preferredPatternsForEvidence: Array<{ pattern: string; example?: string }> = [];
+            const patterns = intelligence.patterns || {};
+            for (const [_, data] of Object.entries<any>(patterns)) {
+              if (data.primary) {
+                const p = data.primary;
+                if (p.trend === 'Rising' || p.trend === 'Stable') {
+                  preferredPatternsForEvidence.push({
+                    pattern: p.name,
+                    ...(p.canonicalExample && { example: p.canonicalExample.file })
+                  });
+                }
+              }
+            }
+
+            editPreflight = {
+              mode: 'lite',
+              riskLevel,
+              confidence: computeIndexConfidence(),
+              evidenceLock: buildEvidenceLock({
+                results,
+                preferredPatterns: preferredPatternsForEvidence.slice(0, 5),
+                relatedMemories,
+                failureWarnings: [],
+                patternConflicts: [],
+                searchQualityStatus: searchQuality.status
+              })
+            };
+          } catch {
+            // editPreflight is best-effort - never fail search over it
+          }
+        }
 
         // Compose preflight card for edit/refactor/migrate intents
         let preflight: any = undefined;
@@ -1009,22 +1063,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
 
             // --- Impact candidates (files importing the result files) ---
-            const impactCandidates: string[] = [];
             const resultPaths = results.map((r) => r.filePath);
-            if (intelligence.internalFileGraph?.imports) {
-              const allImports = intelligence.internalFileGraph.imports as Record<string, string[]>;
-              for (const [file, deps] of Object.entries(allImports)) {
-                if (
-                  deps.some((dep: string) =>
-                    resultPaths.some((rp) => dep.endsWith(rp) || rp.endsWith(dep))
-                  )
-                ) {
-                  if (!resultPaths.some((rp) => file.endsWith(rp) || rp.endsWith(file))) {
-                    impactCandidates.push(file);
-                  }
-                }
-              }
-            }
+            const impactCandidates = computeImpactCandidates(resultPaths);
 
             // --- Risk level (based on circular deps + impact breadth) ---
             let riskLevel: 'low' | 'medium' | 'high' = 'low';
@@ -1061,16 +1101,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }));
 
             // --- Confidence (index freshness) ---
-            let confidence: 'fresh' | 'aging' | 'stale' = 'stale';
-            if (intelligence.generatedAt) {
-              const indexAge = Date.now() - new Date(intelligence.generatedAt).getTime();
-              const hoursOld = indexAge / (1000 * 60 * 60);
-              if (hoursOld < 24) {
-                confidence = 'fresh';
-              } else if (hoursOld < 168) {
-                confidence = 'aging';
-              }
-            }
+            const confidence = computeIndexConfidence();
 
             // --- Failure memories (1.5x relevance boost) ---
             const failureWarnings = relatedMemories
@@ -1117,7 +1148,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               preferredPatterns: preferredPatternsForOutput,
               relatedMemories,
               failureWarnings,
-              patternConflicts
+              patternConflicts,
+              searchQualityStatus: searchQuality.status
             });
 
             // Bump risk if there are active failure memories for this area
@@ -1158,6 +1190,28 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
         }
 
+        // For edit/refactor/migrate: return full preflight card (risk, patterns, impact, etc.).
+        // For explore or lite-only: return flattened { ready, reason }.
+        let preflightPayload:
+          | { ready: boolean; reason?: string }
+          | Record<string, unknown>
+          | undefined;
+        if (preflight) {
+          const el = preflight.evidenceLock;
+          // Full card per tool schema; add top-level ready/reason for backward compatibility
+          preflightPayload = {
+            ...preflight,
+            ready: el?.readyToEdit ?? false,
+            ...(el && !el.readyToEdit && el.nextAction && { reason: el.nextAction })
+          };
+        } else if (editPreflight) {
+          const el = editPreflight.evidenceLock;
+          preflightPayload = {
+            ready: el?.readyToEdit ?? false,
+            ...(el && !el.readyToEdit && el.nextAction && { reason: el.nextAction })
+          };
+        }
+
         return {
           content: [
             {
@@ -1165,27 +1219,46 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               text: JSON.stringify(
                 {
                   status: 'success',
-                  ...(preflight && { preflight }),
-                  searchQuality,
+                  searchQuality: {
+                    status: searchQuality.status,
+                    confidence: searchQuality.confidence,
+                    ...(searchQuality.status === 'low_confidence' &&
+                      searchQuality.nextSteps?.[0] && {
+                        hint: searchQuality.nextSteps[0]
+                      })
+                  },
+                  ...(preflightPayload && { preflight: preflightPayload }),
                   results: results.map((r) => {
                     const relationships = enrichResult(r);
+                    // Condensed relationships: importedBy count + hasTests flag
+                    const condensedRel = relationships
+                      ? {
+                          ...(relationships.importedBy &&
+                            relationships.importedBy.length > 0 && {
+                              importedByCount: relationships.importedBy.length
+                            }),
+                          ...(relationships.testedIn &&
+                            relationships.testedIn.length > 0 && { hasTests: true })
+                        }
+                      : undefined;
+                    const hasCondensedRel = condensedRel && Object.keys(condensedRel).length > 0;
+
                     return {
+                      file: `${r.filePath}:${r.startLine}-${r.endLine}`,
                       summary: r.summary,
-                      snippet: r.snippet,
-                      filePath: `${r.filePath}:${r.startLine}-${r.endLine}`,
-                      score: r.score,
-                      relevanceReason: r.relevanceReason,
-                      componentType: r.componentType,
-                      layer: r.layer,
-                      framework: r.framework,
-                      trend: r.trend,
-                      patternWarning: r.patternWarning,
-                      ...(relationships && { relationships })
+                      score: Math.round(r.score * 100) / 100,
+                      ...(r.componentType && r.layer && { type: `${r.componentType}:${r.layer}` }),
+                      ...(r.trend && r.trend !== 'Stable' && { trend: r.trend }),
+                      ...(r.patternWarning && { patternWarning: r.patternWarning }),
+                      ...(hasCondensedRel && { relationships: condensedRel }),
+                      ...(includeSnippets && r.snippet && { snippet: r.snippet })
                     };
                   }),
                   totalResults: results.length,
                   ...(relatedMemories.length > 0 && {
-                    relatedMemories: relatedMemories.slice(0, 5)
+                    relatedMemories: relatedMemories
+                      .slice(0, 3)
+                      .map((m) => `${m.memory} (${m.effectiveConfidence})`)
                   })
                 },
                 null,
@@ -2052,8 +2125,16 @@ const isDirectRun =
   process.argv[1]?.replace(/\\/g, '/').endsWith('index.ts');
 
 if (isDirectRun) {
-  main().catch((error) => {
-    console.error('Fatal:', error);
-    process.exit(1);
-  });
+  // CLI subcommand: memory list/add/remove
+  if (process.argv[2] === 'memory') {
+    handleMemoryCli(process.argv.slice(3)).catch((error) => {
+      console.error('Error:', error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    });
+  } else {
+    main().catch((error) => {
+      console.error('Fatal:', error);
+      process.exit(1);
+    });
+  }
 }

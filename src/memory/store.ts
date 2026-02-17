@@ -81,6 +81,18 @@ export async function appendMemoryFile(
   return { status: 'added', memory };
 }
 
+export async function removeMemory(
+  memoryPath: string,
+  id: string
+): Promise<{ status: 'removed' | 'not_found' }> {
+  const existing = await readMemoriesFile(memoryPath);
+  const index = existing.findIndex((m) => m.id === id);
+  if (index === -1) return { status: 'not_found' };
+  existing.splice(index, 1);
+  await writeMemoriesFile(memoryPath, existing);
+  return { status: 'removed' };
+}
+
 export function filterMemories(memories: Memory[], filters: MemoryFilters): Memory[] {
   const { category, type, query } = filters;
   let filtered = memories;
