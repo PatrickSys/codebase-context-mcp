@@ -1,0 +1,61 @@
+# Publishes to npm when a GitHub release is created (or on manual run for a given tag).
+# Use when release-please didn't run publish (e.g. manual release or "chore: release" merge).
+name: Publish to npm on release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to publish (e.g. v1.6.2)'
+        required: true
+        default: 'v1.6.2'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.event.release.tag_name }}
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Check if version already published
+        id: check
+        run: |
+          VERSION="$(node -e "console.log(JSON.parse(require('fs').readFileSync('package.json','utf8')).version)")"
+          if npm view "codebase-context@${VERSION}" version 2>/dev/null; then
+            echo "already_published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "already_published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Quality gates
+        if: steps.check.outputs.already_published != 'true'
+        run: |
+          pnpm lint
+          pnpm format:check
+          pnpm type-check
+          pnpm test
+          pnpm build
+
+      - name: Publish to npm with provenance
+        if: steps.check.outputs.already_published != 'true'
+        run: pnpm publish --access public --no-git-checks --provenance
