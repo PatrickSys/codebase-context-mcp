@@ -1192,7 +1192,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         // For edit/refactor/migrate: return full preflight card (risk, patterns, impact, etc.).
         // For explore or lite-only: return flattened { ready, reason }.
-        let preflightPayload: { ready: boolean; reason?: string } | Record<string, unknown> | undefined;
+        let preflightPayload:
+          | { ready: boolean; reason?: string }
+          | Record<string, unknown>
+          | undefined;
         if (preflight) {
           const el = preflight.evidenceLock;
           // Full card per tool schema; add top-level ready/reason for backward compatibility
