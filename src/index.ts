@@ -1190,17 +1190,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
         }
 
-        // Build lean preflight: flatten to { ready, reason } for agent consumption
-        let preflightOutput: { ready: boolean; reason?: string } | undefined;
+        // For edit/refactor/migrate: return full preflight card (risk, patterns, impact, etc.).
+        // For explore or lite-only: return flattened { ready, reason }.
+        let preflightPayload: { ready: boolean; reason?: string } | Record<string, unknown> | undefined;
         if (preflight) {
           const el = preflight.evidenceLock;
-          preflightOutput = {
+          // Full card per tool schema; add top-level ready/reason for backward compatibility
+          preflightPayload = {
+            ...preflight,
             ready: el?.readyToEdit ?? false,
             ...(el && !el.readyToEdit && el.nextAction && { reason: el.nextAction })
           };
         } else if (editPreflight) {
           const el = editPreflight.evidenceLock;
-          preflightOutput = {
+          preflightPayload = {
             ready: el?.readyToEdit ?? false,
             ...(el && !el.readyToEdit && el.nextAction && { reason: el.nextAction })
           };
@@ -1221,7 +1224,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                         hint: searchQuality.nextSteps[0]
                       })
                   },
-                  ...(preflightOutput && { preflight: preflightOutput }),
+                  ...(preflightPayload && { preflight: preflightPayload }),
                   results: results.map((r) => {
                     const relationships = enrichResult(r);
                     // Condensed relationships: importedBy count + hasTests flag

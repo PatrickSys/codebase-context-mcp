@@ -181,10 +181,10 @@ export function buildEvidenceLock(input: BuildEvidenceLockInput): EvidenceLock {
 
   // Hard gate: low search quality overrides everything.
   // If retrieval is bad, we CANNOT claim readiness regardless of evidence counts.
+  // Surface low-confidence guidance so callers see the actual reason edits are blocked.
   if (input.searchQualityStatus === 'low_confidence') {
     if (status === 'pass') status = 'warn';
-    nextAction =
-      nextAction || 'Search quality is low. Refine query or add concrete symbols before editing.';
+    nextAction = 'Search quality is low. Refine query or add concrete symbols before editing.';
     if (!gaps.includes('Search quality is low')) {
       gaps.push('Search quality is low — evidence may be unreliable');
     }
