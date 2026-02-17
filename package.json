@@ -152,7 +152,7 @@
       "sharp"
     ],
     "overrides": {
-      "ajv@<8.18.0": ">=8.18.0"
+      "@modelcontextprotocol/sdk>ajv": "8.18.0"
     }
   }
 }
