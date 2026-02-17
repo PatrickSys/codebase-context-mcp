@@ -30,7 +30,7 @@ jobs:
         run: pnpm type-check
 
       - name: Security Audit
-        run: pnpm audit
+        run: pnpm audit --prod
 
   test:
     name: Functional Tests

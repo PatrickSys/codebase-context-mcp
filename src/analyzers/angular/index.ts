@@ -23,12 +23,19 @@ import {
   CODEBASE_CONTEXT_DIRNAME,
   KEYWORD_INDEX_FILENAME
 } from '../../constants/codebase-context.js';
+import { registerComplementaryPatterns } from '../../patterns/semantics.js';
 
 export class AngularAnalyzer implements FrameworkAnalyzer {
   readonly name = 'angular';
   readonly version = '1.0.0';
   readonly supportedExtensions = ['.ts', '.js', '.html', '.scss', '.css', '.sass', '.less'];
   readonly priority = 100; // Highest priority for Angular files
+
+  constructor() {
+    // Self-register Angular-specific complementary patterns.
+    // computed + effect are complementary, not conflicting.
+    registerComplementaryPatterns('reactivity', ['Computed', 'Effect']);
+  }
 
   private angularPatterns = {
     component: /@Component\s*\(/,
@@ -445,10 +452,14 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
       metadata: {
         angularType,
         selector: decoratorMetadata.selector,
+        providedIn: decoratorMetadata.providedIn,
         isStandalone: decoratorMetadata.standalone === true,
         template: decoratorMetadata.template,
         templateUrl: decoratorMetadata.templateUrl,
         styleUrls: decoratorMetadata.styleUrls,
+        imports: decoratorMetadata.imports,
+        declarations: decoratorMetadata.declarations,
+        pipeName: decoratorMetadata.name,
         inputs: inputs.map((i) => i.name),
         outputs: outputs.map((o) => o.name)
       }
@@ -936,9 +947,9 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
 
     switch (componentType) {
       case 'component': {
-        const selector = metadata.decorator?.selector || 'unknown';
-        const inputs = metadata.decorator?.inputs?.length || 0;
-        const outputs = metadata.decorator?.outputs?.length || 0;
+        const selector = metadata?.selector || 'unknown';
+        const inputs = metadata?.inputs?.length || 0;
+        const outputs = metadata?.outputs?.length || 0;
         const lifecycle = this.extractLifecycleMethods(content);
         return `Angular component '${className}' (selector: ${selector})${
           lifecycle ? ` with ${lifecycle}` : ''
@@ -946,7 +957,7 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
       }
 
       case 'service': {
-        const providedIn = metadata.decorator?.providedIn || 'unknown';
+        const providedIn = metadata?.providedIn || 'unknown';
         const methods = this.extractPublicMethods(content);
         return `Angular service '${className}' (providedIn: ${providedIn})${
           methods ? ` providing ${methods}` : ''
@@ -959,18 +970,18 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
       }
 
       case 'directive': {
-        const directiveSelector = metadata.decorator?.selector || 'unknown';
+        const directiveSelector = metadata?.selector || 'unknown';
         return `Angular directive '${className}' (selector: ${directiveSelector}).`;
       }
 
       case 'pipe': {
-        const pipeName = metadata.decorator?.name || 'unknown';
+        const pipeName = metadata?.pipeName || 'unknown';
         return `Angular pipe '${className}' (name: ${pipeName}) for data transformation.`;
       }
 
       case 'module': {
-        const imports = metadata.decorator?.imports?.length || 0;
-        const declarations = metadata.decorator?.declarations?.length || 0;
+        const imports = metadata?.imports?.length || 0;
+        const declarations = metadata?.declarations?.length || 0;
         return `Angular module '${className}' with ${declarations} declarations and ${imports} imports.`;
       }
 
@@ -1057,5 +1068,33 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
       .split('\n')
       .find((line) => line.trim() && !line.trim().startsWith('import'));
     return firstLine ? firstLine.trim().slice(0, 60) + '...' : '';
+  }
+
+  /** Angular-specific regex patterns for extracting code snippets per detected pattern */
+  private static readonly SNIPPET_PATTERNS: Record<string, Record<string, RegExp>> = {
+    dependencyInjection: {
+      'inject() function': /\binject\s*[<(]/,
+      'Constructor injection': /constructor\s*\(/
+    },
+    stateManagement: {
+      RxJS: /BehaviorSubject|ReplaySubject|Subject|Observable/,
+      Signals: /\bsignal\s*[<(]/
+    },
+    reactivity: {
+      Effect: /\beffect\s*\(/,
+      Computed: /\bcomputed\s*[<(]/
+    },
+    componentStyle: {
+      Standalone: /standalone\s*:\s*true/,
+      'NgModule-based': /@(?:Component|Directive|Pipe)\s*\(/
+    },
+    componentInputs: {
+      'Signal-based inputs': /\binput\s*[<(]/,
+      'Decorator-based @Input': /@Input\(\)/
+    }
+  };
+
+  getSnippetPattern(category: string, name: string): RegExp | null {
+    return AngularAnalyzer.SNIPPET_PATTERNS[category]?.[name] || null;
   }
 }

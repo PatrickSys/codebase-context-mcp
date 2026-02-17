@@ -198,3 +198,39 @@ describe('Epistemic stress detection', () => {
     expect(lock.readyToEdit).toBe(true);
   });
 });
+
+describe('Low-confidence search quality gate', () => {
+  const lowConfidenceMessage =
+    'Search quality is low. Refine query or add concrete symbols before editing.';
+
+  it('forces readyToEdit false when searchQualityStatus is low_confidence', () => {
+    const lock = buildEvidenceLock({
+      results: [makeResult('src/a.ts'), makeResult('src/b.ts'), makeResult('src/c.ts')],
+      preferredPatterns: [
+        { pattern: 'inject()' },
+        { pattern: 'signals' }
+      ],
+      relatedMemories: [makeMemory('1'), makeMemory('2')],
+      failureWarnings: [],
+      searchQualityStatus: 'low_confidence'
+    });
+
+    expect(lock.readyToEdit).toBe(false);
+    expect(lock.nextAction).toBe(lowConfidenceMessage);
+  });
+
+  it('overrides prior warn nextAction with low-confidence guidance', () => {
+    // Evidence that yields status 'warn' and "Proceed cautiously..." before low_confidence gate
+    const lock = buildEvidenceLock({
+      results: [makeResult('src/a.ts')],
+      preferredPatterns: [{ pattern: 'Use service wrapper' }],
+      relatedMemories: [makeMemory('1', { stale: true })],
+      failureWarnings: [],
+      searchQualityStatus: 'low_confidence'
+    });
+
+    expect(lock.readyToEdit).toBe(false);
+    expect(lock.nextAction).toBe(lowConfidenceMessage);
+    expect(lock.nextAction).not.toContain('Proceed cautiously');
+  });
+});

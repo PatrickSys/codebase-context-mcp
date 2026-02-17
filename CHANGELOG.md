@@ -1,18 +1,41 @@
 # Changelog
 
+## [1.6.2] - 2026-02-17
+
+Stripped it down for token efficiency, moved CLI code out of the protocol layer, and cleared structural debt.
+
+### Changed
+
+- **Search output**: `trend: "Stable"` is no longer emitted (only Rising/Declining carry signal). Added a compact `type` field (`service:data`) merging componentType and layer into 2 tokens. Removed `lastModified` considered noise.
+- **searchQuality**: now includes `hint` (for next-step suggestion) when status is `low_confidence`, so agents get actionable guidance without a second tool call.
+- **Tool description**: shortened to 2 actionable sentences, removed reference to `editPreflight` (which didn't exist in output). `intent` parameter is now discoverable on first scan.
+- **CLI extraction**: `handleMemoryCli` moved from `src/index.ts` to `src/cli.ts`. Protocol file is routing only.
+- **Angular self-registration**: `registerComplementaryPatterns('reactivity', ...)` moved from `src/index.ts` into `AngularAnalyzer` constructor. Framework patterns belong in their analyzer.
+
+### Added
+
+- `AGENTS.md` Lessons Learned section - captures behavioral findings from the 0216 eval: AI fluff loop, self-eval bias, static data as noise, agents don't read past first line.
+- Release Checklist in `AGENTS.md`: CHANGELOG + README + capabilities.md + tests before any version bump.
+
 ## [1.6.1](https://github.com/PatrickSys/codebase-context/compare/v1.6.0...v1.6.1) (2026-02-15)
 
+Fixed the quality assessment on the search tool bug, stripped search output from 15 fields to 6 reducing token usage by 50%, added CLI memory access, removed Angular patterns from core.
 
 ### Bug Fixes
 
-* guard null chunk.content crash + docs rewrite for v1.6.1 ([6b89778](https://github.com/PatrickSys/codebase-context/commit/6b8977897665ea3207e1bbb0f5d685c61d41bbb8))
+- **Confident Idiot fix**: evidence lock now checks search quality - if retrieval is `low_confidence`, `readyToEdit` is forced `false` regardless of evidence counts.
+- **Search output overhaul**: stripped from ~15 fields per result down to 6 (`file`, `summary`, `score`, `trend`, `patternWarning`, `relationships`). Snippets opt-in only.
+- **Preflight flattened**: from nested `evidenceLock`/`epistemicStress` to `{ ready, reason }`.
+- **Angular framework leakage**: removed hardcoded Angular patterns from `src/core/indexer.ts` and `src/patterns/semantics.ts`. Core is framework-agnostic again.
+- **Angular analyzer**: fixed `providedIn: unknown` bug — metadata extraction path was wrong.
+- **CLI memory access**: `codebase-context memory list|add|remove` works without any AI agent.
+- guard null chunk.content crash ([6b89778](https://github.com/PatrickSys/codebase-context/commit/6b8977897665ea3207e1bbb0f5d685c61d41bbb8))
 
 ## [1.6.0](https://github.com/PatrickSys/codebase-context/compare/v1.5.1...v1.6.0) (2026-02-11)
 
-
 ### Features
 
-* v1.6.0 search quality improvements ([#26](https://github.com/PatrickSys/codebase-context/issues/26)) ([8207787](https://github.com/PatrickSys/codebase-context/commit/8207787db45c9ee3940e22cb3fd8bc88a2c6a63b))
+- v1.6.0 search quality improvements ([#26](https://github.com/PatrickSys/codebase-context/issues/26)) ([8207787](https://github.com/PatrickSys/codebase-context/commit/8207787db45c9ee3940e22cb3fd8bc88a2c6a63b))
 
 ## [1.6.0](https://github.com/PatrickSys/codebase-context/compare/v1.5.1...v1.6.0) (2026-02-10)
 
@@ -48,10 +71,9 @@ To re-index: `refresh_index(incrementalOnly: false)` or delete `.codebase-contex
 
 ## [1.5.1](https://github.com/PatrickSys/codebase-context/compare/v1.5.0...v1.5.1) (2026-02-08)
 
-
 ### Bug Fixes
 
-* use cosine distance for vector search scoring ([b41edb7](https://github.com/PatrickSys/codebase-context/commit/b41edb7e4c1969b04d834ec52a9ae43760e796a9))
+- use cosine distance for vector search scoring ([b41edb7](https://github.com/PatrickSys/codebase-context/commit/b41edb7e4c1969b04d834ec52a9ae43760e796a9))
 
 ## [1.5.0](https://github.com/PatrickSys/codebase-context/compare/v1.4.1...v1.5.0) (2026-02-08)
 

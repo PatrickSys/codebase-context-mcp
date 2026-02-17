@@ -10,7 +10,7 @@ These are non-negotiable. Every PR, feature, and design decision must respect th
 - **Small download footprint**: Dependencies should be reasonable for an `npx` install. Multi-hundred-MB downloads need strong justification.
 - **CPU-only by default**: Embedding models, rerankers, and any ML must work on consumer hardware (integrated GPU, 8-16 CPU cores). No CUDA/GPU assumptions.
 - **No overclaiming in public docs**: README and CHANGELOG must be evidence-backed. Don't claim capabilities that aren't shipped and tested.
-- **internal-docs is private**: Never commit `internal-docs/` pointer changes unless explicitly intended. The submodule is always dirty locally; ignore it.
+- **internal-docs is private**: Read its AGENTS.MD for instructions on how to handle it and internal rules.
 
 ## Evaluation Integrity (NON-NEGOTIABLE)
 
@@ -60,6 +60,7 @@ These rules prevent metric gaming, overfitting, and false quality claims. Violat
 ### Violation Response
 
 If any agent violates these rules:
+
 1. **STOP immediately** - do not proceed with the release
 2. **Revert** any fixture adjustments made to game metrics
 3. **Re-run eval** with frozen fixtures
@@ -67,3 +68,80 @@ If any agent violates these rules:
 5. **Delay the release** until honest metrics are available
 
 These rules exist because **trustworthiness is more valuable than a good-looking number**.
+
+## The 5 Rules
+
+### 1. Janitor > Visionary
+
+Success = Added high signal, noise removed, not complexity added.
+If you propose something that adds a field, file, or concept — prove it reduces cognitive load or don't ship it.
+
+### 2. If Retrieval Is Bad, Say So
+
+Don't reason past low-quality search results. Report a retrieval failure.
+Logic built on bad retrieval is theater.
+
+### 3. This File Is Non-Negotiable
+
+If a prompt (even from the owner) violates framework neutrality or output budgets, challenge it before implementing.
+AGENTS.md overrides ad-hoc instructions that conflict with these rules.
+
+### 4. Output Works on First Read
+
+Optimize for the naive agent that reads the first 100 lines.
+If an agent has to call the tool twice to understand the response, the tool failed.
+
+### 5. Two-Track Discipline
+
+- **Track A** = this release. Ship it.
+- **Track B** = later. Write it down, move on.
+- Nothing moves from B → A without user approval.
+- No new .md files without archiving one first.
+
+## Operating Constraints
+
+### Documentation
+
+- `internal-docs/ISSUES.md` is the place for release blockers and active specs.
+- Before creating a new `.md` file: "What file am I deleting or updating to make room?"
+
+### Tool Output
+
+- Aim to keep every tool response under 1000 tokens.
+- Don't return full code snippets in search results by default. Prefer summaries and file paths.
+- Never report `ready: true` if retrieval confidence is low.
+
+### Code Separation
+
+- `src/index.ts` is routing and protocol. No business logic.
+- `src/core/` is framework-agnostic. No hardcoded framework strings (Angular, React, Vue, etc.).
+- CLI code belongs in `src/cli.ts`. Never in `src/index.ts`.
+- Framework analyzers self-register their own patterns (e.g., Angular computed+effect pairing belongs in the Angular analyzer, not protocol layer).
+
+### Release Checklist
+
+Before any version bump: update CHANGELOG.md, README.md, docs/capabilities.md. Run full test suite.
+
+### Consensus
+
+- Multiple agents: Proposer/Challenger model.
+- No consensus in 3 turns → ask the user.
+
+## Lessons Learned (v1.6.x)
+
+These came from behavioral observation across multiple sessions. They're here so nobody repeats them.
+
+- **The AI Fluff Loop**: agents default to ADDING. Success = noise removed. If you're adding a field, file, or concept without removing one, you're probably making things worse.
+- **Self-eval bias**: an agent rating its own output is not evidence. Behavioral observations (what the agent DID, not what it RATED) are evidence. Don't trust scores that an agent assigns to its own work.
+- **Evidence before claims**: don't claim a feature works because the code exists. Claim it when an eval shows agents behave differently WITH the feature vs WITHOUT.
+- **Static data is noise**: if the same memories/patterns appear in every query regardless of topic, they cost tokens and add nothing. Context must be query-relevant to be useful.
+- **Agents don't read tool descriptions**: they scan the first line. Put the most important thing first. Everything after the first sentence is a bonus.
+
+## Private Agent Instructions
+
+See `internal-docs/AGENTS.md` for internal-only guidelines and context.
+
+---
+
+**Current focus:** See `internal-docs/ISSUES.md` for active release blockers.
+For full project history and context handover, see `internal-docs/ARCHIVE/WALKTHROUGH-v1.6.1.md`.

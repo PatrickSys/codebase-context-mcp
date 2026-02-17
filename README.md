@@ -10,17 +10,17 @@ This MCP gives agents _just enough_ context so they match _how_ your team codes,
 
 Here's what codebase-context does:
 
-**Finds the right context** - Search that doesn't just return code. Each result comes back with analyzed -and quantified- coding patterns and conventions, related team memories, file relationships, and quality indicators. The agent gets curated context, not raw hits.
+**Finds the right context** - Search that doesn't just return code. Each result comes back with analyzed and quantified coding patterns and conventions, related team memories, file relationships, and quality indicators. It knows whether you're looking for a specific file, a concept, or how things wire together - and filters out the noise (test files, configs, old utilities) before the agent sees them. The agent gets curated context, not raw hits.
 
-**Knows your conventions** - Detected from your code, not only from rules you wrote. Seeks team consensus and direction by adoption percentages and trends (rising/declining), golden files. What patterns the team is moving toward and what's being left behind.
+**Knows your conventions** - Detected from your code and git history, not only from rules you wrote. Seeks team consensus and direction by adoption percentages and trends (rising/declining), golden files. Tells the difference between code that's _common_ and code that's _current_ - what patterns the team is moving toward and what's being left behind.
 
-**Remembers across sessions** - Decisions, failures, things that _should_ work but didn't when you tried - recorded once, surfaced automatically. Conventional git commits (`refactor:`, `migrate:`, `fix:`) auto-extract into memory with zero effort. Stale memories decay and get flagged instead of blindly trusted.
+**Remembers across sessions** - Decisions, failures, workarounds that look wrong but exist for a reason - the battle scars that aren't in the comments. Recorded once, surfaced automatically so the agent doesn't "clean up" something you spent a week getting right. Conventional git commits (`refactor:`, `migrate:`, `fix:`) auto-extract into memory with zero effort. Stale memories decay and get flagged instead of blindly trusted.
 
-**Checks before editing** - A preflight card with risk level, patterns to use and avoid, failure warnings, and a `readyToEdit` evidence check. If evidence is thin or contradictory, it says so.
+**Checks before editing** - A preflight card with risk level, patterns to use and avoid, failure warnings, and a `readyToEdit` evidence check. Catches the "confidently wrong" problem: when code, team memories, and patterns contradict each other, it tells the agent to ask instead of guess. If evidence is thin or contradictory, it says so.
 
 One tool call returns all of it. Local-first - your code never leaves your machine.
 
-<!-- TODO: Add demo GIF here showing search_codebase with preflight card output -->
+<!-- TODO: Add demo GIF: search_codebase("How does this app attach the auth token to outgoing API calls?") → AuthInterceptor top result + preflight + agent proceeds or asks -->
 <!-- ![Demo](./docs/assets/demo.gif) -->
 
 ## Quick Start
@@ -116,41 +116,35 @@ Other tools help AI find code. This one helps AI make the right decisions - by k
 
 This is where it all comes together. One call returns:
 
-- **Code results** with `summary`, `snippet`, `filePath`, `score`, and `relevanceReason`
-- **Pattern signals** per result: `trend` (Rising/Stable/Declining) and `patternWarning` when using legacy code
-- **Relationships** per result: `importedBy`, `imports`, `testedIn`, `lastModified`
-- **Related memories**: team decisions, gotchas, and failures matched to the query
-- **Search quality**: `ok` or `low_confidence` with diagnostic signals and next steps
+- **Code results** with `file` (path + line range), `summary`, `score`
+- **Type** per result: compact `componentType:layer` (e.g., `service:data`) — helps agents orient
+- **Pattern signals** per result: `trend` (Rising/Declining — Stable is omitted) and `patternWarning` when using legacy code
+- **Relationships** per result: `importedByCount` and `hasTests` (condensed)
+- **Related memories**: up to 3 team decisions, gotchas, and failures matched to the query
+- **Search quality**: `ok` or `low_confidence` with confidence score and `hint` when low
+- **Preflight**: `ready` (boolean) + `reason` when evidence is thin. Pass `intent="edit"` to get the full preflight card. If search quality is low, `ready` is always `false`.
 
-When the intent is `edit`, `refactor`, or `migrate`, the same call also returns a **preflight card**:
+Snippets are opt-in (`includeSnippets: true`). Default output is lean — if the agent wants code, it calls `read_file`.
 
 ```json
 {
-  "preflight": {
-    "intent": "refactor",
-    "riskLevel": "medium",
-    "confidence": "fresh",
-    "evidenceLock": {
-      "mode": "triangulated",
-      "status": "pass",
-      "readyToEdit": true,
-      "score": 100,
-      "sources": [
-        { "source": "code", "strength": "strong", "count": 5 },
-        { "source": "patterns", "strength": "strong", "count": 3 },
-        { "source": "memories", "strength": "strong", "count": 2 }
-      ]
-    },
-    "preferredPatterns": [...],
-    "avoidPatterns": [...],
-    "goldenFiles": [...],
-    "failureWarnings": [...]
-  },
-  "results": [...]
+  "searchQuality": { "status": "ok", "confidence": 0.72 },
+  "preflight": { "ready": true },
+  "results": [
+    {
+      "file": "src/auth/auth.interceptor.ts:1-20",
+      "summary": "HTTP interceptor that attaches auth token to outgoing requests",
+      "score": 0.72,
+      "type": "service:core",
+      "trend": "Rising",
+      "relationships": { "importedByCount": 4, "hasTests": true }
+    }
+  ],
+  "relatedMemories": ["Always use HttpInterceptorFn (0.97)"]
 }
 ```
 
-Risk level, what to use, what to avoid, what broke last time, and whether the evidence is strong enough to proceed - all in one response.
+Lean enough to fit on one screen. If search quality is low, preflight blocks edits instead of faking confidence.
 
 ### Patterns & Conventions (`get_team_patterns`)
 
@@ -171,18 +165,18 @@ Record a decision once. It surfaces automatically in search results and prefligh
 
 ### All Tools
 
-| Tool                           | What it does                                                        |
-| ------------------------------ | ------------------------------------------------------------------- |
-| `search_codebase`              | Hybrid search with enrichment. Pass `intent: "edit"` for preflight. |
-| `get_team_patterns`            | Pattern frequencies, golden files, conflict detection               |
-| `get_component_usage`          | "Find Usages" - where a library or component is imported            |
-| `remember`                     | Record a convention, decision, gotcha, or failure                   |
-| `get_memory`                   | Query team memory with confidence decay scoring                     |
-| `get_codebase_metadata`        | Project structure, frameworks, dependencies                         |
-| `get_style_guide`              | Style guide rules for the current project                           |
-| `detect_circular_dependencies` | Import cycles between files                                         |
-| `refresh_index`                | Re-index (full or incremental) + extract git memories               |
-| `get_indexing_status`          | Progress and stats for the current index                            |
+| Tool                           | What it does                                                                     |
+| ------------------------------ | -------------------------------------------------------------------------------- |
+| `search_codebase`              | Hybrid search with enrichment + preflight. Pass `intent="edit"` for edit readiness check. |
+| `get_team_patterns`            | Pattern frequencies, golden files, conflict detection                            |
+| `get_component_usage`          | "Find Usages" - where a library or component is imported                         |
+| `remember`                     | Record a convention, decision, gotcha, or failure                                |
+| `get_memory`                   | Query team memory with confidence decay scoring                                  |
+| `get_codebase_metadata`        | Project structure, frameworks, dependencies                                      |
+| `get_style_guide`              | Style guide rules for the current project                                        |
+| `detect_circular_dependencies` | Import cycles between files                                                      |
+| `refresh_index`                | Re-index (full or incremental) + extract git memories                            |
+| `get_indexing_status`          | Progress and stats for the current index                                         |
 
 ## How the Search Works
 
@@ -194,7 +188,7 @@ The retrieval pipeline is designed around one goal: give the agent the right con
 - **Contamination control** - test files are filtered/demoted for non-test queries.
 - **Import centrality** - files that are imported more often rank higher.
 - **Cross-encoder reranking** - a stage-2 reranker triggers only when top scores are ambiguous. CPU-only, bounded to top-K.
-- **Incremental Indexing** - Whenever a file is changed, it
+- **Incremental indexing** - only re-indexes files that changed since last run (SHA-256 manifest diffing).
 - **Auto-heal** - if the index corrupts, search triggers a full re-index automatically.
 
 ## Language Support
@@ -237,6 +231,32 @@ Structured filters available: `framework`, `language`, `componentType`, `layer` 
 .codebase-context/*
 !.codebase-context/memory.json
 ```
+
+## CLI Access (Vendor-Neutral)
+
+You can manage team memory directly from the terminal without any AI agent:
+
+```bash
+# List all memories
+npx codebase-context memory list
+
+# Filter by category or type
+npx codebase-context memory list --category conventions --type convention
+
+# Search memories
+npx codebase-context memory list --query "auth"
+
+# Add a memory
+npx codebase-context memory add --type convention --category tooling --memory "Use pnpm, not npm" --reason "Workspace support and speed"
+
+# Remove a memory
+npx codebase-context memory remove <id>
+
+# JSON output for scripting
+npx codebase-context memory list --json
+```
+
+Set `CODEBASE_ROOT` to point to your project, or run from the project directory.
 
 ## Tip: Ensuring your AI Agent recalls memory:
 
