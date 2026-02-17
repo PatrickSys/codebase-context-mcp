@@ -150,6 +150,9 @@
       "onnxruntime-node",
       "protobufjs",
       "sharp"
-    ]
+    ],
+    "overrides": {
+      "ajv@<8.18.0": ">=8.18.0"
+    }
   }
 }
