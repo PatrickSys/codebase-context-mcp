@@ -35,6 +35,9 @@ export interface FrameworkAnalyzer {
 
   /** Priority - higher number = higher priority (default: 50) */
   readonly priority: number;
+
+  /** Get a regex to extract a code snippet for a detected pattern (optional) */
+  getSnippetPattern?(category: string, name: string): RegExp | null;
 }
 
 // ============================================================================

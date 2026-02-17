@@ -116,7 +116,6 @@ export {
   scanWorkspacePackageJsons,
   detectWorkspaceType,
   aggregateWorkspaceDependencies,
-  normalizePackageVersion,
-  WorkspacePackageJson,
-  WorkspaceType
+  normalizePackageVersion
 } from './workspace-detection.js';
+export type { WorkspacePackageJson, WorkspaceType } from './workspace-detection.js';

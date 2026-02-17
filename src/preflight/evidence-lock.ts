@@ -39,6 +39,8 @@ interface BuildEvidenceLockInput {
   relatedMemories: MemoryWithConfidence[];
   failureWarnings: Array<{ memory: string }>;
   patternConflicts?: PatternConflict[];
+  /** When search quality is low_confidence, evidence lock MUST block edits. */
+  searchQualityStatus?: 'ok' | 'low_confidence';
 }
 
 function strengthFactor(strength: EvidenceStrength): number {
@@ -128,7 +130,7 @@ export function buildEvidenceLock(input: BuildEvidenceLockInput): EvidenceLock {
   let nextAction: string | undefined;
   if (status === 'block') {
     nextAction =
-      'Broaden the query or run refresh_index, then retry with intent="edit" to collect stronger evidence.';
+      'Broaden the query or run refresh_index, then retry to collect stronger evidence before editing.';
   } else if (status === 'warn') {
     nextAction = 'Proceed cautiously and confirm at least one golden file before editing.';
   }
@@ -177,10 +179,26 @@ export function buildEvidenceLock(input: BuildEvidenceLockInput): EvidenceLock {
     }
   }
 
+  // Hard gate: low search quality overrides everything.
+  // If retrieval is bad, we CANNOT claim readiness regardless of evidence counts.
+  if (input.searchQualityStatus === 'low_confidence') {
+    if (status === 'pass') status = 'warn';
+    nextAction =
+      nextAction || 'Search quality is low. Refine query or add concrete symbols before editing.';
+    if (!gaps.includes('Search quality is low')) {
+      gaps.push('Search quality is low — evidence may be unreliable');
+    }
+  }
+
+  const readyToEdit =
+    status === 'pass' &&
+    (!epistemicStress || !epistemicStress.abstain) &&
+    input.searchQualityStatus !== 'low_confidence';
+
   return {
     mode: 'triangulated',
     status,
-    readyToEdit: status === 'pass' && (!epistemicStress || !epistemicStress.abstain),
+    readyToEdit,
     score,
     sources,
     ...(gaps.length > 0 && { gaps }),
