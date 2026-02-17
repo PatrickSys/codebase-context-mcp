@@ -46,3 +46,6 @@ If publish fails, check:
 - `id-token: write` permission in workflow
 - `registry-url` is set in setup-node
 - Trusted publisher config matches exactly on npmjs.com
+
+**Release Please didn't create a release after merging a "chore: release X.Y.Z" PR:**  
+The bot only creates a release when you merge **its own** PR (from branch `release-please--branches--master--...`). It also skips if it finds "No user facing commits" since the last release (it treats merge commits like `chore: release 1.6.2 (#34)` as non–user-facing). So: merge **feature/fix PRs** to master with conventional commits first; let the bot open "chore(master): release X.Y.Z"; then merge **that** PR to tag and publish. If you already merged a manual release PR and no release was created, either push an empty conventional commit to trigger the bot again, or create the tag and GitHub release manually and publish from a local or manual workflow.
