@@ -8,7 +8,7 @@ Depth: standard
 ## Phases
 
 - [x] **Phase 02: Tree-sitter (UAT gap closures)** - Robust parsing fallback + preserve symbol chunks + `get_symbol_references`
-- [ ] **Phase 03: Evaluation & Guardrails** - Frozen multi-repo eval + regression fixtures before changing chunking/ranking
+- [x] **Phase 03: Evaluation & Guardrails** - Frozen multi-repo eval + regression fixtures before changing chunking/ranking (completed 2026-02-20)
 - [ ] **Phase 04: Grammar Assets & Loader** - Vendored Tree-sitter WASM grammars with CI load/parse verification
 - [ ] **Phase 05: AST-Aligned Chunking** - Symbol-bounded chunks with scope context and deterministic fallback
 - [ ] **Phase 06: Index Versioning & Migration** - Version-gated indexes + transparent full reindex on mismatch/corruption
@@ -116,7 +116,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 02. Tree-sitter (UAT gap closures) | 3/3 | Complete | 2026-02-20 |
-| 03. Evaluation & Guardrails | 2/3 | In Progress|  |
+| 03. Evaluation & Guardrails | 3/3 | Complete   | 2026-02-20 |
 | 04. Grammar Assets & Loader | 0/0 | Not started | - |
 | 05. AST-Aligned Chunking | 0/0 | Not started | - |
 | 06. Index Versioning & Migration | 0/0 | Not started | - |
