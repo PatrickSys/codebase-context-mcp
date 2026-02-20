@@ -144,6 +144,14 @@ export interface ChunkMetadata {
   className?: string;
   functionName?: string;
 
+  // Symbol-aware chunking (AST-aligned)
+  symbolAware?: boolean;
+  symbolName?: string;
+  symbolKind?: string;
+  symbolPath?: string[];
+  parentSymbol?: string;
+  chunkStrategy?: string;
+
   // Framework-specific
   isStandalone?: boolean;
   selector?: string;
