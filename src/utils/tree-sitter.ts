@@ -1,6 +1,10 @@
-import path from 'path';
 import { createRequire } from 'module';
 import { Language, Parser, type Node } from 'web-tree-sitter';
+import {
+  CURATED_LANGUAGE_TO_WASM,
+  supportsCuratedTreeSitter,
+  resolveGrammarPath
+} from '../grammars/manifest.js';
 
 export interface TreeSitterSymbol {
   name: string;
@@ -21,30 +25,6 @@ export interface TreeSitterSymbolExtraction {
 const require = createRequire(import.meta.url);
 
 const CORE_WASM_PATH = require.resolve('web-tree-sitter/tree-sitter.wasm');
-const GRAMMAR_OUT_DIR = path.join(
-  path.dirname(require.resolve('tree-sitter-wasms/package.json')),
-  'out'
-);
-
-const LANGUAGE_TO_WASM: Record<string, string> = {
-  javascript: 'tree-sitter-javascript.wasm',
-  javascriptreact: 'tree-sitter-javascript.wasm',
-  typescript: 'tree-sitter-typescript.wasm',
-  typescriptreact: 'tree-sitter-tsx.wasm',
-  python: 'tree-sitter-python.wasm',
-  go: 'tree-sitter-go.wasm',
-  rust: 'tree-sitter-rust.wasm',
-  java: 'tree-sitter-java.wasm',
-  c: 'tree-sitter-c.wasm',
-  cpp: 'tree-sitter-cpp.wasm',
-  csharp: 'tree-sitter-c_sharp.wasm',
-  ruby: 'tree-sitter-ruby.wasm',
-  php: 'tree-sitter-php.wasm',
-  kotlin: 'tree-sitter-kotlin.wasm',
-  swift: 'tree-sitter-swift.wasm',
-  scala: 'tree-sitter-scala.wasm',
-  shellscript: 'tree-sitter-bash.wasm'
-};
 
 const SYMBOL_CANDIDATE_NODE_TYPES = [
   'class_declaration',
@@ -140,7 +120,7 @@ function isTreeSitterDebugEnabled(): boolean {
 }
 
 export function supportsTreeSitter(language: string): boolean {
-  return Boolean(LANGUAGE_TO_WASM[language]);
+  return supportsCuratedTreeSitter(language);
 }
 
 async function ensureParserInitialized(): Promise<void> {
@@ -159,15 +139,19 @@ async function ensureParserInitialized(): Promise<void> {
 }
 
 async function loadLanguage(language: string): Promise<Language> {
-  const grammarFile = LANGUAGE_TO_WASM[language];
-  if (!grammarFile) {
+  const wasmFile = CURATED_LANGUAGE_TO_WASM[language];
+  if (!wasmFile) {
     throw new Error(`Tree-sitter grammar is not configured for '${language}'.`);
   }
 
   let cachedLanguage = languageCache.get(language);
   if (!cachedLanguage) {
-    const grammarPath = path.join(GRAMMAR_OUT_DIR, grammarFile);
-    cachedLanguage = Language.load(grammarPath);
+    const { wasmPath } = resolveGrammarPath(language, import.meta.url);
+    cachedLanguage = Language.load(wasmPath).catch((err) => {
+      // Evict failed entry so later calls can retry after fixes
+      languageCache.delete(language);
+      throw err;
+    });
     languageCache.set(language, cachedLanguage);
   }
 
@@ -180,7 +164,14 @@ async function getParserForLanguage(language: string): Promise<Parser> {
     cachedParser = (async () => {
       await ensureParserInitialized();
       const parser = new Parser();
-      parser.setLanguage(await loadLanguage(language));
+      try {
+        parser.setLanguage(await loadLanguage(language));
+      } catch (err) {
+        // setLanguage failed — evict both caches so retry is possible
+        parserCache.delete(language);
+        languageCache.delete(language);
+        throw err;
+      }
       return parser;
     })();
     parserCache.set(language, cachedParser);
@@ -372,7 +363,7 @@ export async function extractTreeSitterSymbols(
       });
 
       return {
-        grammarFile: LANGUAGE_TO_WASM[language],
+        grammarFile: CURATED_LANGUAGE_TO_WASM[language] ?? language,
         symbols
       };
     } finally {
