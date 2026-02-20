@@ -211,9 +211,11 @@ The retrieval pipeline is designed around one goal: give the agent the right con
 
 ## Language Support
 
-Over **30+ languages** are supported: TypeScript, JavaScript, Python, Java, Kotlin, C/C++, C#, Go, Rust, PHP, Ruby, Swift, Scala, Shell, and common config/markup formats.
-However right now only **Angular** has a specific analyzer for enriched context (signals, standalone components, control flow, DI patterns).
-If you need enriched context from any language or framework, please file an issue - or even better, contribute with a new analyzer
+Over **30+ languages** are supported for indexing + retrieval: TypeScript/JavaScript, Python (incl `.pyi`), PHP, Ruby, Java, Kotlin (`.kt`/`.kts`), Go, Rust, C/C++ (incl `.cc`/`.cxx`), C#, Swift, Scala, Shell, plus common config/markup formats (JSON/YAML/TOML/XML, etc.).
+
+Enrichment is framework-specific: right now only **Angular** has a dedicated analyzer for rich conventions/context (signals, standalone components, control flow, DI patterns).
+
+For non-Angular projects, the **Generic** analyzer still provides broad coverage, and will use Tree-sitter symbol extraction when a grammar is available (otherwise it falls back to safe parsing).
 
 Structured filters available: `framework`, `language`, `componentType`, `layer` (presentation, business, data, state, core, shared).
 

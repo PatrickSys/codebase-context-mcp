@@ -5,6 +5,7 @@
 ### Added
 
 - Tree-sitter-backed symbol extraction is now used by the Generic analyzer when available (with safe fallbacks).
+- Expanded language/extension detection to improve indexing coverage (e.g. `.pyi`, `.php`, `.kt`/`.kts`, `.cc`/`.cxx`, `.cs`, `.swift`, `.scala`, `.toml`, `.xml`).
 - New tool: `get_symbol_references` for concrete symbol usage evidence (usageCount + top snippets).
 - Multi-codebase eval runner: `npm run eval -- <codebaseA> <codebaseB>` with per-codebase reports and combined summary.
 - Shared eval scoring/reporting module (`src/eval/*`) used by both the CLI runner and the test suite.

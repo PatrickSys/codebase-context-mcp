@@ -92,6 +92,11 @@ Output: `{ ready: boolean, reason?: string }`
 - **Angular**: signals, standalone components, control flow syntax, lifecycle hooks, DI patterns, component metadata
 - **Generic**: 30+ languages — TypeScript, JavaScript, Python, Java, Kotlin, C/C++, C#, Go, Rust, PHP, Ruby, Swift, Scala, Shell, config/markup formats
 
+Notes:
+
+- Language detection covers common extensions including `.pyi`, `.kt`/`.kts`, `.cc`/`.cxx`, and config formats like `.toml`/`.xml`.
+- When Tree-sitter grammars are present, the Generic analyzer can derive symbol components from Tree-sitter extraction (with fallbacks).
+
 ## Evaluation Harness
 
 Reproducible evaluation is shipped as a CLI entrypoint backed by shared scoring/reporting code.
