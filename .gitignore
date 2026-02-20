@@ -2,7 +2,9 @@ node_modules/
 dist/
 .codebase-index/
 .codebase-index.json
-.codebase-context/
+.codebase-context/*
+**/.codebase-context/*
+!/.codebase-context/memory.json
 .codebase/
 *.log
 .DS_Store
@@ -16,3 +18,6 @@ nul
 .claude
 .codebase-intelligence.json
 .cursor/
+.planning/*
+
+.tmp-research-repos/

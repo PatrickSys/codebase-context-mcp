@@ -1,0 +1,133 @@
+[
+  {
+    "id": "55a1fdb60dae",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(lint): disable no-explicit-any rule for AST manipulation code",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-02-07T13:56:59.119Z",
+    "source": "git"
+  },
+  {
+    "id": "7f7b358458d2",
+    "type": "decision",
+    "category": "architecture",
+    "memory": "refactor(lancedb): simplify error handling for auto-heal",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-02-07T13:56:59.122Z",
+    "source": "git"
+  },
+  {
+    "id": "786ecabf0767",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(format): apply prettier formatting to all source files",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-02-07T13:56:59.133Z",
+    "source": "git"
+  },
+  {
+    "id": "2e758757c96c",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix(lint): remove useless try/catch in search.ts",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-02-07T13:56:59.145Z",
+    "source": "git"
+  },
+  {
+    "id": "9c2f4e4dcdc1",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix: update prepublishOnly to use pnpm (Greptile audit)",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-02-07T13:56:59.157Z",
+    "source": "git"
+  },
+  {
+    "id": "d9229d4a6689",
+    "type": "decision",
+    "category": "architecture",
+    "memory": "refactor: clean up Server type annotation in index.ts",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-02-07T13:56:59.171Z",
+    "source": "git"
+  },
+  {
+    "id": "2e88ca0acda0",
+    "type": "decision",
+    "category": "architecture",
+    "memory": "refactor: rename codebase-context-mcp to codebase-context",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-02-07T13:56:59.183Z",
+    "source": "git"
+  },
+  {
+    "id": "f5de19671561",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix: guard startup logs for wide MCP STDIO compatibility",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-02-07T13:56:59.197Z",
+    "source": "git"
+  },
+  {
+    "id": "796632cc0074",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix: singleton embedding provider and LanceDB schema validation",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-02-07T13:56:59.210Z",
+    "source": "git"
+  },
+  {
+    "id": "67376b954d49",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix: use cosine distance for vector search scoring",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-02-08T23:15:36.000Z",
+    "source": "git"
+  },
+  {
+    "id": "09bdfe61829a",
+    "type": "gotcha",
+    "category": "conventions",
+    "memory": "fix: harden search reliability and indexing hygiene (#22)",
+    "reason": "Auto-extracted from git commit history",
+    "date": "2026-02-08T21:49:47.000Z",
+    "source": "git"
+  },
+  {
+    "id": "d2296322334b",
+    "type": "convention",
+    "category": "conventions",
+    "memory": "Update public docs every release",
+    "reason": "Keep README/CHANGELOG/docs accurate and evidence-backed.",
+    "date": "2026-02-20T17:38:45.672Z"
+  },
+  {
+    "id": "a66c504a4840",
+    "type": "convention",
+    "category": "tooling",
+    "memory": "Use memory tool for durable rules",
+    "reason": "So future sessions retain repeatable constraints and practices.",
+    "date": "2026-02-20T17:38:47.936Z"
+  },
+  {
+    "id": "44104cd5e8b5",
+    "type": "convention",
+    "category": "conventions",
+    "memory": "Update README/CHANGELOG/MOTIVATION on releases",
+    "reason": "Public docs must match shipped capabilities and known limits; avoid overclaiming.",
+    "date": "2026-02-20T17:47:14.331Z"
+  },
+  {
+    "id": "6b1bd7d931d8",
+    "type": "failure",
+    "category": "tooling",
+    "memory": "Never commit .planning/** or use gsd-tools commit; always use plain git commits with explicit messages",
+    "reason": "We accidentally committed ignored .planning files and created pushed placeholder commits (e.g., --help). This is explicitly disallowed in this repo.",
+    "date": "2026-02-20T19:08:22.195Z"
+  }
+]

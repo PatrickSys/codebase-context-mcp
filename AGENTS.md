@@ -12,6 +12,17 @@ These are non-negotiable. Every PR, feature, and design decision must respect th
 - **No overclaiming in public docs**: README and CHANGELOG must be evidence-backed. Don't claim capabilities that aren't shipped and tested.
 - **internal-docs is private**: Read its AGENTS.MD for instructions on how to handle it and internal rules.
 
+## Session Startup (Required)
+
+- **At the start of every task/session:** load team memory before doing any work (`get_memory` via MCP when available; otherwise `npx codebase-context memory list`).
+- **When the user says "remember this" / "record this":** record it immediately (use `remember` / `codebase-context memory add`) before proceeding.
+
+## Repo Guardrails (NON-NEGOTIABLE)
+
+- **Never stage/commit `.planning/**`\*\* (or any other local workflow artifacts) unless the user explicitly asks in that message.
+- **Never use `gsd-tools ... commit` wrappers** in this repo. Use plain `git add <exact files>` and `git commit -m "..."`.
+- **Before every commit:** run `git status --short` and confirm staged files match intent; abort if any `.planning/**` is staged.
+
 ## Evaluation Integrity (NON-NEGOTIABLE)
 
 These rules prevent metric gaming, overfitting, and false quality claims. Violation of these rules means the feature CANNOT ship.
