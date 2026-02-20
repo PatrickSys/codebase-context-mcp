@@ -113,7 +113,8 @@
     "format": "prettier --write \"src/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\"",
     "type-check": "tsc --noEmit",
-    "mcp:inspect": "npx -y @modelcontextprotocol/inspector node dist/index.js ."
+    "mcp:inspect": "npx -y @modelcontextprotocol/inspector node dist/index.js .",
+    "eval": "pnpm run build && node scripts/run-eval.mjs"
   },
   "dependencies": {
     "@huggingface/transformers": "^3.8.1",
@@ -124,8 +125,10 @@
     "glob": "^10.3.10",
     "hono": "4.11.7",
     "ignore": "^5.3.1",
+    "tree-sitter-wasms": "^0.1.13",
     "typescript": "^5.3.3",
     "uuid": "^9.0.1",
+    "web-tree-sitter": "^0.25.10",
     "zod": "^4.3.4"
   },
   "devDependencies": {
