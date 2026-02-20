@@ -17,6 +17,7 @@ import {
   Dependency
 } from '../../types/index.js';
 import { createChunksFromCode } from '../../utils/chunking.js';
+import { createASTAlignedChunks } from '../../utils/ast-chunker.js';
 import { detectLanguage } from '../../utils/language-detection.js';
 import { extractTreeSitterSymbols, type TreeSitterSymbol } from '../../utils/tree-sitter.js';
 import {
@@ -103,10 +104,13 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
     let exports: ExportStatement[] = [];
     let treeSitterGrammar: string | undefined;
     let usesTreeSitterSymbols = false;
+    let treeSitterSymbols: TreeSitterSymbol[] = [];
 
     try {
       const treeSitterResult = await extractTreeSitterSymbols(content, language);
       if (treeSitterResult && treeSitterResult.symbols.length > 0) {
+        treeSitterSymbols = treeSitterResult.symbols;
+        // Legacy: replaced by createASTAlignedChunks for AST-aligned chunking
         components = this.convertTreeSitterSymbolsToComponents(treeSitterResult.symbols);
         treeSitterGrammar = treeSitterResult.grammarFile;
         usesTreeSitterSymbols = true;
@@ -137,7 +141,7 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
       analyzer: this.name,
       fileSize: content.length,
       lineCount: content.split('\n').length,
-      chunkStrategy: usesTreeSitterSymbols ? 'tree-sitter-symbol' : 'line-or-component'
+      chunkStrategy: usesTreeSitterSymbols ? 'ast-aligned' : 'line-or-component'
     };
 
     if (usesTreeSitterSymbols && treeSitterGrammar) {
@@ -145,15 +149,31 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
       metadata.symbolAware = true;
     }
 
-    // Create chunks
-    const chunks = await createChunksFromCode(
-      content,
-      filePath,
-      relativePath,
-      language,
-      components,
-      metadata
-    );
+    // Create chunks — use AST-aligned chunker when Tree-sitter symbols are available
+    let chunks: CodeChunk[];
+    if (usesTreeSitterSymbols && treeSitterSymbols.length > 0) {
+      chunks = createASTAlignedChunks(content, treeSitterSymbols, {
+        minChunkLines: 10,
+        maxChunkLines: 150,
+        filePath,
+        language,
+        framework: 'generic',
+        componentType: 'module'
+      });
+      // Enrich AST chunks with the correct relativePath
+      for (const chunk of chunks) {
+        chunk.relativePath = relativePath;
+      }
+    } else {
+      chunks = await createChunksFromCode(
+        content,
+        filePath,
+        relativePath,
+        language,
+        components,
+        metadata
+      );
+    }
 
     return {
       filePath,

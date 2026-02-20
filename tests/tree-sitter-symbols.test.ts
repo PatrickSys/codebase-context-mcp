@@ -39,12 +39,15 @@ describe('Tree-sitter symbol extraction', () => {
 
     const result = await analyzer.analyze('/virtual/sample.py', source);
 
-    expect(result.metadata.chunkStrategy).toBe('tree-sitter-symbol');
+    expect(result.metadata.chunkStrategy).toBe('ast-aligned');
 
-    const classChunk = result.chunks.find((chunk) => chunk.metadata.componentName === 'Greeter');
-    expect(classChunk).toBeDefined();
-    expect(classChunk!.content).toContain('class Greeter');
-    expect(classChunk!.content).not.toContain('def top_level');
+    // AST-aligned chunking splits containers into children: Greeter's child
+    // 'hello' appears as its own chunk with parentSymbol='Greeter'
+    const helloChunk = result.chunks.find((chunk) => chunk.metadata.componentName === 'hello');
+    expect(helloChunk).toBeDefined();
+    expect(helloChunk!.content).toContain('def hello');
+    expect(helloChunk!.content).not.toContain('def top_level');
+    expect((helloChunk!.metadata as Record<string, unknown>).parentSymbol).toBe('Greeter');
 
     const topLevelChunk = result.chunks.find(
       (chunk) => chunk.metadata.componentName === 'top_level'
