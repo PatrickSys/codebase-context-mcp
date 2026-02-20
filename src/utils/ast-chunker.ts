@@ -28,12 +28,79 @@ export interface ASTChunkOptions {
   language: string;
   framework?: string;
   componentType?: string;
+  includeScopePrefix?: boolean;
 }
 
 export const DEFAULT_AST_CHUNK_OPTIONS = {
   minChunkLines: 10,
   maxChunkLines: 150
 } as const;
+
+// File ceiling constants: beyond these, AST chunking is skipped in favor of line chunks
+export const MAX_AST_CHUNK_FILE_SIZE = 500_000; // 500KB
+export const MAX_AST_CHUNK_FILE_LINES = 10_000; // 10K lines
+
+// ---------------------------------------------------------------------------
+// Scope Prefix Generation
+// ---------------------------------------------------------------------------
+
+/**
+ * Generate a human-readable scope prefix for a symbol chunk.
+ *
+ * Format: `// [scope_path] :: [signature_hint]`
+ *
+ * Examples:
+ * - Top-level function: `// getData :: (id: string): Promise<User>`
+ * - Method inside class: `// UserService > getData :: (id: string): Promise<User>`
+ * - Standalone constant: `// MAX_RETRIES :: const`
+ */
+export function generateScopePrefix(node: SymbolNode, ancestors: SymbolNode[]): string {
+  // Build scope path: ancestor names joined with " > ", then current node
+  const pathParts = ancestors.map((a) => a.symbol.name);
+  pathParts.push(node.symbol.name);
+  const scopePath = pathParts.join(' > ');
+
+  // Build signature hint from the symbol content
+  const hint = extractSignatureHint(node.symbol);
+
+  return `// ${scopePath} :: ${hint}`;
+}
+
+/**
+ * Extract a short signature hint from a symbol's content.
+ */
+function extractSignatureHint(sym: TreeSitterSymbol): string {
+  const kind = sym.kind;
+
+  if (kind === 'class') return 'class';
+  if (kind === 'interface') return 'interface';
+  if (kind === 'type') return 'type';
+  if (kind === 'enum') return 'enum';
+  if (kind === 'struct') return 'struct';
+  if (kind === 'trait') return 'trait';
+
+  // For functions/methods, try to extract parameter list and return type
+  if (kind === 'function' || kind === 'method') {
+    const content = sym.content;
+    // Match params and optional return type: (params): ReturnType
+    const match = content.match(/\(([^)]*)\)(?:\s*:\s*([^{=>\n]*))?/);
+    if (match) {
+      let params = match[1].trim();
+      if (params.length > 80) {
+        params = params.slice(0, 77) + '...';
+      }
+      const returnType = match[2]?.trim();
+      if (returnType) {
+        return `(${params}): ${returnType.slice(0, 40)}`;
+      }
+      return `(${params})`;
+    }
+    return 'function';
+  }
+
+  // Constants/variables
+  return 'const';
+}
 
 // ---------------------------------------------------------------------------
 // 1. buildSymbolTree
@@ -120,13 +187,15 @@ export function generateASTChunks(
   const chunks: CodeChunk[] = [];
   let cursor = 1; // 1-based line cursor
 
+  const shouldPrefix = options.includeScopePrefix !== false;
+
   for (const root of roots) {
     // Gap before this root
     if (root.symbol.startLine > cursor) {
       chunks.push(makeFillerChunk(lines, cursor, root.symbol.startLine - 1, options));
     }
     // Process the root symbol (recurse for containers)
-    chunks.push(...processNode(root, lines, options, null));
+    chunks.push(...processNode(root, lines, options, null, [], shouldPrefix));
     cursor = root.symbol.endLine + 1;
   }
 
@@ -143,14 +212,24 @@ function processNode(
   node: SymbolNode,
   lines: string[],
   options: ASTChunkOptions,
-  parentName: string | null
+  parentName: string | null,
+  ancestors: SymbolNode[],
+  shouldPrefix: boolean
 ): CodeChunk[] {
   const sym = node.symbol;
   const symbolPath = parentName ? [parentName, sym.name] : [sym.name];
 
   if (node.children.length === 0) {
     // Leaf symbol → single chunk
-    return [makeSymbolChunk(sym, lines, options, symbolPath, parentName)];
+    const chunk = makeSymbolChunk(sym, lines, options, symbolPath, parentName);
+    if (shouldPrefix) {
+      const prefix = generateScopePrefix(node, ancestors);
+      chunk.content = prefix + '\n' + chunk.content;
+    }
+    if (chunk.metadata) {
+      (chunk.metadata as Record<string, unknown>).symbolPath = symbolPath;
+    }
+    return [chunk];
   }
 
   // Container symbol — split into header, children, footer
@@ -163,22 +242,25 @@ function processNode(
     const headerLines = extractLines(lines, sym.startLine, headerEnd);
     const nonBlank = headerLines.filter((l) => l.trim().length > 0).length;
     if (nonBlank > 2) {
-      chunks.push(
-        makeSymbolChunk(
-          {
-            ...sym,
-            name: `${sym.name}:header`,
-            startLine: sym.startLine,
-            endLine: headerEnd,
-            content: headerLines.join('\n')
-          },
-          lines,
-          options,
-          symbolPath,
-          parentName,
-          true // use provided content
-        )
+      const headerChunk = makeSymbolChunk(
+        {
+          ...sym,
+          name: `${sym.name}:header`,
+          startLine: sym.startLine,
+          endLine: headerEnd,
+          content: headerLines.join('\n')
+        },
+        lines,
+        options,
+        symbolPath,
+        parentName,
+        true // use provided content
       );
+      if (shouldPrefix) {
+        const prefix = generateScopePrefix(node, ancestors);
+        headerChunk.content = `${prefix}\n${headerChunk.content}`;
+      }
+      chunks.push(headerChunk);
     }
   }
 
@@ -195,7 +277,9 @@ function processNode(
         chunks.push(makeFillerChunk(lines, gapStart, gapEnd, options));
       }
     }
-    chunks.push(...processNode(child, lines, options, sym.name));
+    chunks.push(
+      ...processNode(child, lines, options, sym.name, [...ancestors, node], shouldPrefix)
+    );
     childCursor = child.symbol.endLine + 1;
   }
 
@@ -206,22 +290,25 @@ function processNode(
     const footerLines = extractLines(lines, footerStart, sym.endLine);
     const nonBlank = footerLines.filter((l) => l.trim().length > 0).length;
     if (nonBlank > 2) {
-      chunks.push(
-        makeSymbolChunk(
-          {
-            ...sym,
-            name: `${sym.name}:footer`,
-            startLine: footerStart,
-            endLine: sym.endLine,
-            content: footerLines.join('\n')
-          },
-          lines,
-          options,
-          symbolPath,
-          parentName,
-          true
-        )
+      const footerChunk = makeSymbolChunk(
+        {
+          ...sym,
+          name: `${sym.name}:footer`,
+          startLine: footerStart,
+          endLine: sym.endLine,
+          content: footerLines.join('\n')
+        },
+        lines,
+        options,
+        symbolPath,
+        parentName,
+        true
       );
+      if (shouldPrefix) {
+        const prefix = generateScopePrefix(node, ancestors);
+        footerChunk.content = `${prefix}\n${footerChunk.content}`;
+      }
+      chunks.push(footerChunk);
     }
   }
 
