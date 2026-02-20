@@ -17,7 +17,11 @@ import {
   Dependency
 } from '../../types/index.js';
 import { createChunksFromCode } from '../../utils/chunking.js';
-import { createASTAlignedChunks } from '../../utils/ast-chunker.js';
+import {
+  createASTAlignedChunks,
+  MAX_AST_CHUNK_FILE_SIZE,
+  MAX_AST_CHUNK_FILE_LINES
+} from '../../utils/ast-chunker.js';
 import { detectLanguage } from '../../utils/language-detection.js';
 import { extractTreeSitterSymbols, type TreeSitterSymbol } from '../../utils/tree-sitter.js';
 import {
@@ -150,19 +154,46 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
     }
 
     // Create chunks — use AST-aligned chunker when Tree-sitter symbols are available
+    // File ceiling pre-check: skip AST chunking for very large files
+    const lineCount = content.split('\n').length;
+    const byteSize = Buffer.byteLength(content, 'utf8');
+    const useASTChunking =
+      usesTreeSitterSymbols &&
+      treeSitterSymbols.length > 0 &&
+      byteSize <= MAX_AST_CHUNK_FILE_SIZE &&
+      lineCount <= MAX_AST_CHUNK_FILE_LINES;
+
     let chunks: CodeChunk[];
-    if (usesTreeSitterSymbols && treeSitterSymbols.length > 0) {
-      chunks = createASTAlignedChunks(content, treeSitterSymbols, {
-        minChunkLines: 10,
-        maxChunkLines: 150,
-        filePath,
-        language,
-        framework: 'generic',
-        componentType: 'module'
-      });
-      // Enrich AST chunks with the correct relativePath
-      for (const chunk of chunks) {
-        chunk.relativePath = relativePath;
+    if (useASTChunking) {
+      try {
+        chunks = createASTAlignedChunks(content, treeSitterSymbols, {
+          minChunkLines: 10,
+          maxChunkLines: 150,
+          filePath,
+          language,
+          framework: 'generic',
+          componentType: 'module'
+        });
+        // Enrich AST chunks with the correct relativePath
+        for (const chunk of chunks) {
+          chunk.relativePath = relativePath;
+        }
+      } catch (err) {
+        if (process.env.CODEBASE_CONTEXT_DEBUG) {
+          console.error(
+            `[ast-chunker] AST chunking failed for ${filePath}, falling back to line chunks:`,
+            err
+          );
+        }
+        // Fall through to line-based chunking
+        chunks = await createChunksFromCode(
+          content,
+          filePath,
+          relativePath,
+          language,
+          components,
+          metadata
+        );
       }
     } else {
       chunks = await createChunksFromCode(
