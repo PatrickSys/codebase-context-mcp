@@ -1,0 +1,169 @@
+{
+  "description": "Controlled eval set for deterministic local search evaluation",
+  "codebase": "eval-controlled",
+  "repository": "in-repo fixture: tests/fixtures/codebases/eval-controlled",
+  "frozenDate": "2026-02-20",
+  "notes": "Frozen fixture: expected patterns must not be tuned to match system output. Use a new fixture file for revisions.",
+  "queries": [
+    {
+      "id": 1,
+      "query": "skip to next song",
+      "category": "conceptual",
+      "expectedPatterns": ["player", "player-api"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Maps to PlayerApi.nextTrack()"
+    },
+    {
+      "id": 2,
+      "query": "adjust audio volume",
+      "category": "conceptual",
+      "expectedPatterns": ["player", "volume"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Maps to PlayerApi.setVolume()"
+    },
+    {
+      "id": 3,
+      "query": "persist data across browser sessions",
+      "category": "conceptual",
+      "expectedPatterns": ["storage", "local-storage"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Maps to LocalStorageService set/get methods"
+    },
+    {
+      "id": 4,
+      "query": "add authorization token to API requests",
+      "category": "conceptual",
+      "expectedPatterns": ["auth", "interceptor"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Maps to AuthInterceptor.intercept()"
+    },
+    {
+      "id": 5,
+      "query": "handle unauthorized API responses",
+      "category": "conceptual",
+      "expectedPatterns": ["auth", "interceptor", "unauthorized"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Maps to AuthInterceptor.handleUnauthorized()"
+    },
+    {
+      "id": 6,
+      "query": "remember if user is signed in",
+      "category": "conceptual",
+      "expectedPatterns": ["auth", "service"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Maps to AuthService.isAuthenticated()"
+    },
+    {
+      "id": 7,
+      "query": "fetch recently played music",
+      "category": "conceptual",
+      "expectedPatterns": ["player", "recently-played"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Maps to PlayerApi.getRecentlyPlayed()"
+    },
+    {
+      "id": 8,
+      "query": "switch playback to a different device",
+      "category": "conceptual",
+      "expectedPatterns": ["player", "device"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Maps to PlayerApi.transferPlayback()"
+    },
+    {
+      "id": 9,
+      "query": "save and remove session token",
+      "category": "multi-concept",
+      "expectedPatterns": ["auth", "storage"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Maps to AuthService.login/logout plus LocalStorageService"
+    },
+    {
+      "id": 10,
+      "query": "inject auth header before player API call",
+      "category": "multi-concept",
+      "expectedPatterns": ["player", "interceptor"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Maps to PlayerApi.authorizedRequest + AuthInterceptor"
+    },
+    {
+      "id": 11,
+      "query": "manage application state for saved albums",
+      "category": "multi-concept",
+      "expectedPatterns": ["album", "store"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Maps to AlbumStore state"
+    },
+    {
+      "id": 12,
+      "query": "dispatch action to load albums",
+      "category": "multi-concept",
+      "expectedPatterns": ["album", "dispatch"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Maps to AlbumStore.dispatchLoadSavedAlbums()"
+    },
+    {
+      "id": 13,
+      "query": "select album list from app state",
+      "category": "multi-concept",
+      "expectedPatterns": ["album", "select"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Maps to AlbumStore selectors"
+    },
+    {
+      "id": 14,
+      "query": "authenticate user credentials and return tokens",
+      "category": "multi-concept",
+      "expectedPatterns": ["auth", "token"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Maps to AuthService.login()"
+    },
+    {
+      "id": 15,
+      "query": "AuthService",
+      "category": "exact-name",
+      "expectedPatterns": ["auth", "auth.service.ts"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Exact class lookup"
+    },
+    {
+      "id": 16,
+      "query": "AuthInterceptor",
+      "category": "exact-name",
+      "expectedPatterns": ["auth", "interceptor"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Exact class lookup"
+    },
+    {
+      "id": 17,
+      "query": "PlayerApi",
+      "category": "exact-name",
+      "expectedPatterns": ["player", "player-api"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Exact class lookup"
+    },
+    {
+      "id": 18,
+      "query": "AlbumStore",
+      "category": "exact-name",
+      "expectedPatterns": ["album", "store"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Exact class lookup"
+    },
+    {
+      "id": 19,
+      "query": "http interceptor implementation",
+      "category": "structural",
+      "expectedPatterns": ["http", "interceptor"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Structural retrieval for interceptor implementation"
+    },
+    {
+      "id": 20,
+      "query": "store selectors for album state",
+      "category": "structural",
+      "expectedPatterns": ["state", "select"],
+      "expectedNotPatterns": [".spec.", ".test."],
+      "notes": "Structural retrieval for selector methods in store"
+    }
+  ]
+}

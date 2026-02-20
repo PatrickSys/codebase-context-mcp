@@ -5,17 +5,20 @@ This directory contains frozen evaluation sets for testing code search quality.
 ## Files
 
 - `eval-angular-spotify.json` - 20 semantic queries against [angular-spotify](https://github.com/trungk18/angular-spotify) (public, reproducible)
+- `eval-controlled.json` - 20 frozen queries for the in-repo controlled fixture codebase
 
 ## Running Evaluations
 
 ### Prerequisites
 
 1. Clone the test codebase:
+
 ```bash
 git clone https://github.com/trungk18/angular-spotify /path/to/angular-spotify
 ```
 
 2. Build this project:
+
 ```bash
 npm install
 npm run build
@@ -25,11 +28,15 @@ npm run build
 
 ```bash
 node scripts/run-eval.mjs /path/to/angular-spotify --fixture tests/fixtures/eval-angular-spotify.json
+
+# Controlled fixture example (no network)
+node scripts/run-eval.mjs tests/fixtures/codebases/eval-controlled --fixture tests/fixtures/eval-controlled.json
 ```
 
 ### Output Format
 
 The eval script outputs:
+
 - **Top-1 Accuracy**: % of queries where the best result matches expected patterns
 - **Top-3 Recall**: % of queries where top-3 results include a match
 - **Spec Contamination**: % of queries returning test files
@@ -48,12 +55,14 @@ The eval script outputs:
 ### Proper Usage
 
 ✅ **CORRECT**:
+
 - Commit frozen eval BEFORE making changes
 - Use eval to measure improvement honestly
 - Report failures transparently
 - Create NEW eval sets for iteration
 
 ❌ **INCORRECT**:
+
 - Adjusting fixture during development ("fixture fixes")
 - Cherry-picking queries that work well
 - Overfitting to this specific codebase
@@ -84,6 +93,7 @@ Expected results use **patterns** that work across codebases:
 ```
 
 This matches:
+
 - `libs/web/shared/data-access/spotify-api/src/lib/player-api.ts` ✅
 - `apps/music/src/services/player-api.service.ts` ✅
 - `player-api.spec.ts` ❌ (excluded by expectedNotPatterns)
@@ -105,6 +115,7 @@ Ground truth established via manual code review:
 4. Document reasoning in query notes
 
 Example:
+
 - Query: "skip to next song"
 - Expected: `player-api.ts`
 - Reasoning: File contains `next()` method that calls `/me/player/next` API endpoint
@@ -114,6 +125,7 @@ Example:
 To reproduce published results:
 
 1. Clone the exact codebase version:
+
 ```bash
 git clone https://github.com/trungk18/angular-spotify
 cd angular-spotify
