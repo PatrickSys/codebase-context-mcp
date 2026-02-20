@@ -20,4 +20,6 @@ nul
 .cursor/
 .planning/*
 
+grammars/*.wasm
+
 .tmp-research-repos/

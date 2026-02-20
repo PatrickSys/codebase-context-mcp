@@ -36,6 +36,7 @@
   },
   "files": [
     "dist",
+    "grammars",
     "README.md",
     "LICENSE",
     "docs"
@@ -102,8 +103,12 @@
   "license": "MIT",
   "scripts": {
     "preinstall": "npx only-allow pnpm",
+    "sync:grammars": "node scripts/sync-grammars.mjs",
+    "prebuild": "pnpm run sync:grammars",
     "build": "tsc",
+    "prepack": "pnpm run sync:grammars",
     "prepublishOnly": "pnpm run build",
+    "pretest": "pnpm run sync:grammars",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
     "watch": "tsc -w",
@@ -125,7 +130,6 @@
     "glob": "^10.3.10",
     "hono": "4.11.7",
     "ignore": "^5.3.1",
-    "tree-sitter-wasms": "^0.1.13",
     "typescript": "^5.3.3",
     "uuid": "^9.0.1",
     "web-tree-sitter": "^0.25.10",
@@ -143,6 +147,7 @@
     "eslint-plugin-import": "^2.32.0",
     "globals": "^17.0.0",
     "prettier": "^3.7.4",
+    "tree-sitter-wasms": "^0.1.13",
     "tsx": "^4.21.0",
     "typescript-eslint": "^8.51.0",
     "vitest": "^4.0.16"
