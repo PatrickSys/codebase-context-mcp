@@ -51,7 +51,7 @@
 ### Evaluation & Guardrails
 
 - [x] **EVAL-01**: Frozen eval fixture (>=20 queries, >=2 codebases) is committed before implementation; angular-spotify is the primary real-world target; reports both wins and failures honestly.
-- [ ] **EVAL-02**: Regression tests cover Unicode boundaries, large/generated files, parse timeouts/reset, and Tree-sitter resource cleanup.
+- [x] **EVAL-02**: Regression tests cover Unicode boundaries, large/generated files, parse timeouts/reset, and Tree-sitter resource cleanup.
 
 ### Public Docs (Evidence-Backed)
 
@@ -102,7 +102,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MIGR-01 | Phase 06 | Pending |
 | MIGR-02 | Phase 06 | Pending |
 | EVAL-01 | Phase 03 | Complete |
-| EVAL-02 | Phase 03 | Pending |
+| EVAL-02 | Phase 03 | Complete |
 | DOCS-01 | Phase 09 | Pending |
 
 **Coverage:**

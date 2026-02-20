@@ -10,29 +10,30 @@ See: `.planning/PROJECT.md` (updated 2026-02-20)
 ## Current Position
 
 Phase: 03 (in progress)
-Plan: 02 (next)
-Current Plan: 2 of 3
+Plan: 03 (next)
+Current Plan: 3
 Total Plans in Phase: 3
-Status: Plan 01 complete; continuing phase execution
-Last activity: 2026-02-20 — Completed 03-01 controlled eval fixture plan
+Status: Plan 02 complete; continuing phase execution
+Last activity: 2026-02-20 — Completed 03-02 regression guardrails plan
 
 ## Performance Metrics
 
 Velocity:
-- Total plans completed: 4
+- Total plans completed: 5
 - Average duration: 3 min
-- Total execution time: 0.17 hours
+- Total execution time: 0.24 hours
 
 By Phase:
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 02 | 3 | 9 min | 3 min |
-| 03 | 1 | 1 min | 1 min |
+| 03 | 2 | 5 min | 2.5 min |
 
 Recent Trend:
-- Last 3 plans: 2 min, 3 min, 4 min
+- Last 3 plans: 3 min, 1 min, 4 min
 - Trend: Stable
+| Phase 03 P02 | 4 min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -46,6 +47,8 @@ Recent decisions affecting current work:
 - [Phase 02] `get_symbol_references` now replaces import-path-only usage checks.
 - [Phase 03]: Used an in-repo controlled codebase for offline eval reproducibility
 - [Phase 03]: Kept eval expected patterns as filename/path substrings to remain machine-portable
+- [Phase 03]: Use best-effort setTimeoutMicros wiring and fail open when parser timeout signatures differ
+- [Phase 03]: Capture export_statement parent range so exported symbol chunks include full declaration headers
 
 ### Pending Todos
 
@@ -57,6 +60,6 @@ None active.
 
 ## Session Continuity
 
-**Last session:** 2026-02-20T18:34:18.422Z
-**Stopped at:** Completed 03-01-PLAN.md
+**Last session:** 2026-02-20T18:37:34.009Z
+**Stopped at:** Completed 03-02-PLAN.md
 **Resume file:** None
