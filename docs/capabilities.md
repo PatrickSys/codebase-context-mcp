@@ -4,17 +4,18 @@ Technical reference for what `codebase-context` ships today. For the user-facing
 
 ## Tool Surface
 
-10 MCP tools + 1 optional resource (`codebase://context`).
+11 MCP tools + 1 optional resource (`codebase://context`).
 
 ### Core Tools
 
-| Tool                  | Input                                                             | Output                                                                                                                                                                               |
-| --------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `search_codebase`     | `query`, optional `intent`, `limit`, `filters`, `includeSnippets` | Ranked results (`file`, `summary`, `score`, `type`, `trend`, `patternWarning`) + `searchQuality` (with `hint` when low confidence) + `preflight` ({ready, reason}). Snippets opt-in. |
-| `get_team_patterns`   | optional `category`                                               | Pattern frequencies, trends, golden files, conflicts                                                                                                                                 |
-| `get_component_usage` | `name` (import source)                                            | Files importing the given package/module                                                                                                                                             |
-| `remember`            | `type`, `category`, `memory`, `reason`                            | Persists to `.codebase-context/memory.json`                                                                                                                                          |
-| `get_memory`          | optional `category`, `type`, `query`, `limit`                     | Memories with confidence decay scoring                                                                                                                                               |
+| Tool                    | Input                                                             | Output                                                                                                                                                                               |
+| ----------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `search_codebase`       | `query`, optional `intent`, `limit`, `filters`, `includeSnippets` | Ranked results (`file`, `summary`, `score`, `type`, `trend`, `patternWarning`) + `searchQuality` (with `hint` when low confidence) + `preflight` ({ready, reason}). Snippets opt-in. |
+| `get_team_patterns`     | optional `category`                                               | Pattern frequencies, trends, golden files, conflicts                                                                                                                                 |
+| `get_symbol_references` | `symbol`, optional `limit`                                        | Concrete symbol usage evidence: total `usageCount` + top usage snippets                                                                                                              |
+| `get_component_usage`   | `name` (import source)                                            | Files importing the given package/module                                                                                                                                             |
+| `remember`              | `type`, `category`, `memory`, `reason`                            | Persists to `.codebase-context/memory.json`                                                                                                                                          |
+| `get_memory`            | optional `category`, `type`, `query`, `limit`                     | Memories with confidence decay scoring                                                                                                                                               |
 
 ### Utility Tools
 

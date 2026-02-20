@@ -169,6 +169,7 @@ Record a decision once. It surfaces automatically in search results and prefligh
 | ------------------------------ | ----------------------------------------------------------------------------------------- |
 | `search_codebase`              | Hybrid search with enrichment + preflight. Pass `intent="edit"` for edit readiness check. |
 | `get_team_patterns`            | Pattern frequencies, golden files, conflict detection                                     |
+| `get_symbol_references`        | Find concrete references to a symbol (usageCount + top snippets)                          |
 | `get_component_usage`          | "Find Usages" - where a library or component is imported                                  |
 | `remember`                     | Record a convention, decision, gotcha, or failure                                         |
 | `get_memory`                   | Query team memory with confidence decay scoring                                           |

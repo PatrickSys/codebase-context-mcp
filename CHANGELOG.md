@@ -4,6 +4,8 @@
 
 ### Added
 
+- Tree-sitter-backed symbol extraction is now used by the Generic analyzer when available (with safe fallbacks).
+- New tool: `get_symbol_references` for concrete symbol usage evidence (usageCount + top snippets).
 - Multi-codebase eval runner: `npm run eval -- <codebaseA> <codebaseB>` with per-codebase reports and combined summary.
 - Shared eval scoring/reporting module (`src/eval/*`) used by both the CLI runner and the test suite.
 - Second frozen eval fixture plus an in-repo controlled TypeScript codebase for fully-offline eval runs.
