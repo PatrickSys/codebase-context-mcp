@@ -35,7 +35,7 @@ function escapeRegex(value: string): string {
 
 function getUsageFile(rootPath: string, chunk: IndexedChunk): string {
   if (typeof chunk.relativePath === 'string' && chunk.relativePath.trim()) {
-    return chunk.relativePath;
+    return chunk.relativePath.replace(/\\/g, '/');
   }
 
   if (typeof chunk.filePath === 'string' && chunk.filePath.trim()) {
@@ -43,7 +43,7 @@ function getUsageFile(rootPath: string, chunk: IndexedChunk): string {
     if (!relativePath || relativePath.startsWith('..')) {
       return path.basename(chunk.filePath);
     }
-    return relativePath;
+    return relativePath.replace(/\\/g, '/');
   }
 
   return 'unknown';
@@ -62,6 +62,16 @@ export async function findSymbolReferences(
   symbol: string,
   limit = 10
 ): Promise<SymbolReferencesResult> {
+  const normalizedSymbol = symbol.trim();
+  const normalizedLimit = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 10;
+
+  if (!normalizedSymbol) {
+    return {
+      status: 'error',
+      message: 'Symbol is required'
+    };
+  }
+
   const indexPath = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
 
   let chunksRaw: unknown;
@@ -85,7 +95,7 @@ export async function findSymbolReferences(
   const usages: SymbolUsage[] = [];
   let usageCount = 0;
 
-  const escapedSymbol = escapeRegex(symbol);
+  const escapedSymbol = escapeRegex(normalizedSymbol);
   const matcher = new RegExp(`\\b${escapedSymbol}\\b`, 'g');
 
   for (const chunkRaw of chunksRaw) {
@@ -102,7 +112,7 @@ export async function findSymbolReferences(
     while ((match = matcher.exec(chunkContent)) !== null) {
       usageCount += 1;
 
-      if (usages.length >= limit) {
+      if (usages.length >= normalizedLimit) {
         continue;
       }
 
@@ -119,7 +129,7 @@ export async function findSymbolReferences(
 
   return {
     status: 'success',
-    symbol,
+    symbol: normalizedSymbol,
     usageCount,
     usages
   };
