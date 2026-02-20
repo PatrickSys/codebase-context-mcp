@@ -124,6 +124,17 @@ function sliceUtf8(content: string, startIndex: number, endIndex: number): strin
   return utf8.subarray(startIndex, endIndex).toString('utf8');
 }
 
+function extractNodeContent(node: Node, content: string): string {
+  const byteSlice = sliceUtf8(content, node.startIndex, node.endIndex);
+  const codeUnitSlice = content.slice(node.startIndex, node.endIndex);
+
+  if (node.text === codeUnitSlice && node.text !== byteSlice) {
+    return codeUnitSlice;
+  }
+
+  return byteSlice;
+}
+
 function isTreeSitterDebugEnabled(): boolean {
   return Boolean(process.env.CODEBASE_CONTEXT_DEBUG);
 }
@@ -267,15 +278,25 @@ function shouldSkipNode(language: string, node: Node): boolean {
   return false;
 }
 
+function getSymbolRangeNode(node: Node): Node {
+  const parent = node.parent;
+  if (parent?.type === 'export_statement') {
+    return parent;
+  }
+  return node;
+}
+
 function buildSymbol(node: Node, content: string): TreeSitterSymbol {
+  const rangeNode = getSymbolRangeNode(node);
+
   return {
     name: extractNodeName(node),
     kind: getNodeKind(node.type),
-    startLine: node.startPosition.row + 1,
-    endLine: node.endPosition.row + 1,
-    startIndex: node.startIndex,
-    endIndex: node.endIndex,
-    content: sliceUtf8(content, node.startIndex, node.endIndex),
+    startLine: rangeNode.startPosition.row + 1,
+    endLine: rangeNode.endPosition.row + 1,
+    startIndex: rangeNode.startIndex,
+    endIndex: rangeNode.endIndex,
+    content: extractNodeContent(rangeNode, content),
     nodeType: node.type
   };
 }
