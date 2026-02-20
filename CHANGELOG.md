@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Multi-codebase eval runner: `npm run eval -- <codebaseA> <codebaseB>` with per-codebase reports and combined summary.
+- Shared eval scoring/reporting module (`src/eval/*`) used by both the CLI runner and the test suite.
+- Second frozen eval fixture plus an in-repo controlled TypeScript codebase for fully-offline eval runs.
+- Regression tests covering Tree-sitter Unicode slicing, parser cleanup/reset behavior, and large/generated file skipping.
+
+### Fixed
+
+- Tree-sitter symbol extraction now treats node offsets as UTF-8 byte ranges and evicts cached parsers on failures/timeouts.
+
 ## [1.6.2] - 2026-02-17
 
 Stripped it down for token efficiency, moved CLI code out of the protocol layer, and cleared structural debt.

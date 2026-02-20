@@ -165,18 +165,35 @@ Record a decision once. It surfaces automatically in search results and prefligh
 
 ### All Tools
 
-| Tool                           | What it does                                                                     |
-| ------------------------------ | -------------------------------------------------------------------------------- |
+| Tool                           | What it does                                                                              |
+| ------------------------------ | ----------------------------------------------------------------------------------------- |
 | `search_codebase`              | Hybrid search with enrichment + preflight. Pass `intent="edit"` for edit readiness check. |
-| `get_team_patterns`            | Pattern frequencies, golden files, conflict detection                            |
-| `get_component_usage`          | "Find Usages" - where a library or component is imported                         |
-| `remember`                     | Record a convention, decision, gotcha, or failure                                |
-| `get_memory`                   | Query team memory with confidence decay scoring                                  |
-| `get_codebase_metadata`        | Project structure, frameworks, dependencies                                      |
-| `get_style_guide`              | Style guide rules for the current project                                        |
-| `detect_circular_dependencies` | Import cycles between files                                                      |
-| `refresh_index`                | Re-index (full or incremental) + extract git memories                            |
-| `get_indexing_status`          | Progress and stats for the current index                                         |
+| `get_team_patterns`            | Pattern frequencies, golden files, conflict detection                                     |
+| `get_component_usage`          | "Find Usages" - where a library or component is imported                                  |
+| `remember`                     | Record a convention, decision, gotcha, or failure                                         |
+| `get_memory`                   | Query team memory with confidence decay scoring                                           |
+| `get_codebase_metadata`        | Project structure, frameworks, dependencies                                               |
+| `get_style_guide`              | Style guide rules for the current project                                                 |
+| `detect_circular_dependencies` | Import cycles between files                                                               |
+| `refresh_index`                | Re-index (full or incremental) + extract git memories                                     |
+| `get_indexing_status`          | Progress and stats for the current index                                                  |
+
+## Evaluation Harness (`npm run eval`)
+
+Reproducible evaluation with frozen fixtures so ranking/chunking changes are measured honestly and regressions get caught.
+
+- Two codebases: `npm run eval -- <codebaseA> <codebaseB>`
+- Defaults: fixture A = `tests/fixtures/eval-angular-spotify.json`, fixture B = `tests/fixtures/eval-controlled.json`
+- Offline smoke (no network):
+
+```bash
+npm run eval -- tests/fixtures/codebases/eval-controlled tests/fixtures/codebases/eval-controlled \
+  --fixture-a=tests/fixtures/eval-controlled.json \
+  --fixture-b=tests/fixtures/eval-controlled.json \
+  --skip-reindex --no-rerank
+```
+
+- Flags: `--help`, `--fixture-a`, `--fixture-b`, `--skip-reindex`, `--no-rerank`, `--no-redact`
 
 ## How the Search Works
 

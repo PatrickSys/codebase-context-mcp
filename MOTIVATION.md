@@ -51,6 +51,10 @@ Correct the agent once. Record the decision. From then on, it surfaces in search
 
 Before an edit, the agent gets a curated "preflight" check from three sources (code, patterns, memories). If evidence is thin or contradictory, the response tells the AI Agent to look for more evidence with a concrete next step. This is the difference between "confident assumption" and "informed decision."
 
+### Guardrails via frozen eval + regressions
+
+When retrieval quality silently degrades (Unicode slicing bugs, large generated files, parser failures), agents still produce confident output — just with worse evidence. Shipping frozen eval fixtures plus regression tests makes these failures measurable and blocks "fix the tests" style metric gaming.
+
 ## Key Design Decisions
 
 1. **Fewer tools, richer responses.** 10 tools instead of 50. One search call that aggregates everything.

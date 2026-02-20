@@ -8,23 +8,23 @@ Technical reference for what `codebase-context` ships today. For the user-facing
 
 ### Core Tools
 
-| Tool | Input | Output |
-| --- | --- | --- |
-| `search_codebase` | `query`, optional `intent`, `limit`, `filters`, `includeSnippets` | Ranked results (`file`, `summary`, `score`, `type`, `trend`, `patternWarning`) + `searchQuality` (with `hint` when low confidence) + `preflight` ({ready, reason}). Snippets opt-in. |
-| `get_team_patterns` | optional `category` | Pattern frequencies, trends, golden files, conflicts |
-| `get_component_usage` | `name` (import source) | Files importing the given package/module |
-| `remember` | `type`, `category`, `memory`, `reason` | Persists to `.codebase-context/memory.json` |
-| `get_memory` | optional `category`, `type`, `query`, `limit` | Memories with confidence decay scoring |
+| Tool                  | Input                                                             | Output                                                                                                                                                                               |
+| --------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `search_codebase`     | `query`, optional `intent`, `limit`, `filters`, `includeSnippets` | Ranked results (`file`, `summary`, `score`, `type`, `trend`, `patternWarning`) + `searchQuality` (with `hint` when low confidence) + `preflight` ({ready, reason}). Snippets opt-in. |
+| `get_team_patterns`   | optional `category`                                               | Pattern frequencies, trends, golden files, conflicts                                                                                                                                 |
+| `get_component_usage` | `name` (import source)                                            | Files importing the given package/module                                                                                                                                             |
+| `remember`            | `type`, `category`, `memory`, `reason`                            | Persists to `.codebase-context/memory.json`                                                                                                                                          |
+| `get_memory`          | optional `category`, `type`, `query`, `limit`                     | Memories with confidence decay scoring                                                                                                                                               |
 
 ### Utility Tools
 
-| Tool | Purpose |
-| --- | --- |
-| `get_codebase_metadata` | Framework, dependencies, project stats |
-| `get_style_guide` | Style rules from project documentation |
-| `detect_circular_dependencies` | Import cycles in the file graph |
-| `refresh_index` | Full or incremental re-index + git memory extraction |
-| `get_indexing_status` | Index state, progress, last stats |
+| Tool                           | Purpose                                              |
+| ------------------------------ | ---------------------------------------------------- |
+| `get_codebase_metadata`        | Framework, dependencies, project stats               |
+| `get_style_guide`              | Style rules from project documentation               |
+| `detect_circular_dependencies` | Import cycles in the file graph                      |
+| `refresh_index`                | Full or incremental re-index + git memory extraction |
+| `get_indexing_status`          | Index state, progress, last stats                    |
 
 ## Retrieval Pipeline
 
@@ -90,3 +90,14 @@ Output: `{ ready: boolean, reason?: string }`
 
 - **Angular**: signals, standalone components, control flow syntax, lifecycle hooks, DI patterns, component metadata
 - **Generic**: 30+ languages — TypeScript, JavaScript, Python, Java, Kotlin, C/C++, C#, Go, Rust, PHP, Ruby, Swift, Scala, Shell, config/markup formats
+
+## Evaluation Harness
+
+Reproducible evaluation is shipped as a CLI entrypoint backed by shared scoring/reporting code.
+
+- **Command:** `npm run eval -- <codebaseA> <codebaseB>` (builds first, then runs `scripts/run-eval.mjs`)
+- **Shared implementation:** `src/eval/harness.ts` + `src/eval/types.ts` (tests and CLI use the same scoring)
+- **Frozen fixtures:**
+  - `tests/fixtures/eval-angular-spotify.json` (real-world)
+  - `tests/fixtures/eval-controlled.json` + `tests/fixtures/codebases/eval-controlled/` (offline controlled)
+- **Reported metrics:** Top-1 accuracy, Top-3 recall, spec contamination rate, and a gate pass/fail
