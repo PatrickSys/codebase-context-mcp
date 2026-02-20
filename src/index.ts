@@ -61,6 +61,7 @@ import {
 } from './patterns/semantics.js';
 import { CONTEXT_RESOURCE_URI, isContextResourceUri } from './resources/uri.js';
 import { assessSearchQuality } from './core/search-quality.js';
+import { findSymbolReferences } from './core/symbol-references.js';
 
 analyzerRegistry.register(new AngularAnalyzer());
 analyzerRegistry.register(new GenericAnalyzer());
@@ -329,6 +330,27 @@ const TOOLS: Tool[] = [
           enum: ['all', 'di', 'state', 'testing', 'libraries']
         }
       }
+    }
+  },
+  {
+    name: 'get_symbol_references',
+    description:
+      'Find concrete references to a symbol in indexed chunks. Returns total usageCount and top usage snippets.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        symbol: {
+          type: 'string',
+          description:
+            'Symbol name to find references for (for example: parseConfig or UserService)'
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of usage snippets to return (default: 10)',
+          default: 10
+        }
+      },
+      required: ['symbol']
     }
   },
   {
@@ -1659,6 +1681,71 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             ]
           };
         }
+      }
+
+      case 'get_symbol_references': {
+        const { symbol, limit } = args as { symbol?: unknown; limit?: unknown };
+        const normalizedSymbol = typeof symbol === 'string' ? symbol.trim() : '';
+        const normalizedLimit =
+          typeof limit === 'number' && Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 10;
+
+        if (!normalizedSymbol) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    status: 'error',
+                    message: "Invalid params: 'symbol' is required and must be a non-empty string."
+                  },
+                  null,
+                  2
+                )
+              }
+            ],
+            isError: true
+          };
+        }
+
+        const result = await findSymbolReferences(ROOT_PATH, normalizedSymbol, normalizedLimit);
+
+        if (result.status === 'error') {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    status: 'error',
+                    symbol: normalizedSymbol,
+                    message: result.message
+                  },
+                  null,
+                  2
+                )
+              }
+            ]
+          };
+        }
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  status: 'success',
+                  symbol: result.symbol,
+                  usageCount: result.usageCount,
+                  usages: result.usages
+                },
+                null,
+                2
+              )
+            }
+          ]
+        };
       }
 
       case 'get_component_usage': {
