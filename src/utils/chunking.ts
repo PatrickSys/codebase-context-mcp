@@ -59,6 +59,8 @@ function createComponentChunks(
 ): CodeChunk[] {
   const chunks: CodeChunk[] = [];
   const lines = content.split('\n');
+  const contextPaddingBefore = metadata?.symbolAware ? 0 : 5;
+  const contextPaddingAfter = metadata?.symbolAware ? 0 : 5;
 
   // Get imports section (usually at the top)
   const importLines: string[] = [];
@@ -79,8 +81,8 @@ function createComponentChunks(
     const endLine = component.endLine;
 
     // Extract component code with some context
-    const contextStart = Math.max(0, startLine - 5);
-    const contextEnd = Math.min(lines.length, endLine + 5);
+    const contextStart = Math.max(0, startLine - contextPaddingBefore);
+    const contextEnd = Math.min(lines.length, endLine + contextPaddingAfter);
 
     const componentLines = lines.slice(contextStart, contextEnd);
     const componentContent = componentLines.join('\n');
@@ -268,8 +270,15 @@ export function mergeSmallChunks(chunks: CodeChunk[], minSize: number = 20): Cod
     const next = chunks[i];
     const currentLines = current.content.split('\n').length;
     const nextLines = next.content.split('\n').length;
+    const currentIsSymbolAware = current.metadata?.symbolAware === true;
+    const nextIsSymbolAware = next.metadata?.symbolAware === true;
 
-    if (currentLines < minSize && nextLines < minSize) {
+    if (
+      !currentIsSymbolAware &&
+      !nextIsSymbolAware &&
+      currentLines < minSize &&
+      nextLines < minSize
+    ) {
       // Merge chunks
       current = {
         ...current,
