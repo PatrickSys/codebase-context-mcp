@@ -493,7 +493,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       rootPath: ROOT_PATH,
       performIndexing
     };
-    return dispatchTool(name, args as Record<string, unknown>, ctx);
+    return await dispatchTool(name, args as Record<string, unknown>, ctx);
   } catch (error) {
     return {
       content: [
