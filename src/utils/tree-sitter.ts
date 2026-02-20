@@ -81,9 +81,48 @@ const NAME_NODE_TYPE_HINTS = [
   'name'
 ] as const;
 
+const MAX_TREE_SITTER_PARSE_BYTES = 1024 * 1024;
+const TREE_SITTER_PARSE_TIMEOUT_MICROS = 30_000_000n;
+
 let initPromise: Promise<void> | null = null;
 const languageCache = new Map<string, Promise<Language>>();
 const parserCache = new Map<string, Promise<Parser>>();
+
+function maybeResetParser(parser: Parser): void {
+  const maybeReset = (parser as Parser & { reset?: () => void }).reset;
+  if (typeof maybeReset === 'function') {
+    maybeReset.call(parser);
+  }
+}
+
+function evictParser(language: string, parser?: Parser): void {
+  if (parser) {
+    maybeResetParser(parser);
+  }
+  parserCache.delete(language);
+}
+
+function setParseTimeout(parser: Parser): void {
+  const maybeSetTimeout = (
+    parser as Parser & { setTimeoutMicros?: (timeout: number | bigint) => void }
+  ).setTimeoutMicros;
+  if (typeof maybeSetTimeout === 'function') {
+    try {
+      maybeSetTimeout.call(parser, TREE_SITTER_PARSE_TIMEOUT_MICROS);
+    } catch {
+      try {
+        maybeSetTimeout.call(parser, Number(TREE_SITTER_PARSE_TIMEOUT_MICROS));
+      } catch {
+        // Ignore timeout wiring failures; parser execution still proceeds.
+      }
+    }
+  }
+}
+
+function sliceUtf8(content: string, startIndex: number, endIndex: number): string {
+  const utf8 = Buffer.from(content, 'utf8');
+  return utf8.subarray(startIndex, endIndex).toString('utf8');
+}
 
 function isTreeSitterDebugEnabled(): boolean {
   return Boolean(process.env.CODEBASE_CONTEXT_DEBUG);
@@ -236,7 +275,7 @@ function buildSymbol(node: Node, content: string): TreeSitterSymbol {
     endLine: node.endPosition.row + 1,
     startIndex: node.startIndex,
     endIndex: node.endIndex,
-    content: content.slice(node.startIndex, node.endIndex),
+    content: sliceUtf8(content, node.startIndex, node.endIndex),
     nodeType: node.type
   };
 }
@@ -249,11 +288,24 @@ export async function extractTreeSitterSymbols(
     return null;
   }
 
+  if (Buffer.byteLength(content, 'utf8') > MAX_TREE_SITTER_PARSE_BYTES) {
+    return null;
+  }
+
   try {
     const parser = await getParserForLanguage(language);
-    const tree = parser.parse(content);
+    setParseTimeout(parser);
+
+    let tree: ReturnType<Parser['parse']>;
+    try {
+      tree = parser.parse(content);
+    } catch (error) {
+      evictParser(language, parser);
+      throw error;
+    }
 
     if (!tree) {
+      evictParser(language, parser);
       return null;
     }
 
@@ -306,6 +358,8 @@ export async function extractTreeSitterSymbols(
       tree.delete();
     }
   } catch (error) {
+    evictParser(language);
+
     if (isTreeSitterDebugEnabled()) {
       console.error(
         `[DEBUG] Tree-sitter symbol extraction failed for '${language}':`,
