@@ -35,12 +35,18 @@ importers:
       ignore:
         specifier: ^5.3.1
         version: 5.3.2
+      tree-sitter-wasms:
+        specifier: ^0.1.13
+        version: 0.1.13
       typescript:
         specifier: ^5.3.3
         version: 5.9.3
       uuid:
         specifier: ^9.0.1
         version: 9.0.1
+      web-tree-sitter:
+        specifier: ^0.25.10
+        version: 0.25.10
       zod:
         specifier: ^4.3.4
         version: 4.3.4
@@ -2190,6 +2196,9 @@ packages:
   tr46@0.0.3:
     resolution: {integrity: sha512-N3WMsuqV66lT30CrXNbEjx4GEwlow3v6rr4mCcv6prnfwhS01rkgyFdjPNBYd9br7LpXV1+Emh01fHnq2Gdgrw==}
 
+  tree-sitter-wasms@0.1.13:
+    resolution: {integrity: sha512-wT+cR6DwaIz80/vho3AvSF0N4txuNx/5bcRKoXouOfClpxh/qqrF4URNLQXbbt8MaAxeksZcZd1j8gcGjc+QxQ==}
+
   ts-api-utils@1.4.3:
     resolution: {integrity: sha512-i3eMG77UTMD0hZhgRS562pv83RC6ukSAC2GMNWc+9dieh/+jDM5u5YG+NHX6VNDRHQcHwmsTHctP9LhbC3WxVw==}
     engines: {node: '>=16'}
@@ -2363,6 +2372,14 @@ packages:
   web-streams-polyfill@4.0.0-beta.3:
     resolution: {integrity: sha512-QW95TCTaHmsYfHDybGMwO5IJIM93I/6vTRk+daHTWFPhwh+C8Cg7j7XyKrwrj8Ib6vYXe0ocYNrmzY4xAAN6ug==}
     engines: {node: '>= 14'}
+
+  web-tree-sitter@0.25.10:
+    resolution: {integrity: sha512-Y09sF44/13XvgVKgO2cNDw5rGk6s26MgoZPXLESvMXeefBf7i6/73eFurre0IsTW6E14Y0ArIzhUMmjoc7xyzA==}
+    peerDependencies:
+      '@types/emscripten': ^1.40.0
+    peerDependenciesMeta:
+      '@types/emscripten':
+        optional: true
 
   webidl-conversions@3.0.1:
     resolution: {integrity: sha512-2JAn3z8AR6rjK8Sm8orRC0h/bcl/DqL7tRPdGZ4I1CjdF+EaMLmYxBHyXuKL849eucPFhvBoxMsflfOb8kxaeQ==}
@@ -4652,6 +4669,8 @@ snapshots:
 
   tr46@0.0.3: {}
 
+  tree-sitter-wasms@0.1.13: {}
+
   ts-api-utils@1.4.3(typescript@5.9.3):
     dependencies:
       typescript: 5.9.3
@@ -4810,6 +4829,8 @@ snapshots:
       - yaml
 
   web-streams-polyfill@4.0.0-beta.3: {}
+
+  web-tree-sitter@0.25.10: {}
 
   webidl-conversions@3.0.1: {}
 

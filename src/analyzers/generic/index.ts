@@ -18,6 +18,7 @@ import {
 } from '../../types/index.js';
 import { createChunksFromCode } from '../../utils/chunking.js';
 import { detectLanguage } from '../../utils/language-detection.js';
+import { extractTreeSitterSymbols, type TreeSitterSymbol } from '../../utils/tree-sitter.js';
 import {
   detectWorkspaceType,
   scanWorkspacePackageJsons,
@@ -100,19 +101,48 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
     let components: CodeComponent[] = [];
     let imports: ImportStatement[] = [];
     let exports: ExportStatement[] = [];
+    let treeSitterGrammar: string | undefined;
+    let usesTreeSitterSymbols = false;
 
     try {
+      const treeSitterResult = await extractTreeSitterSymbols(content, language);
+      if (treeSitterResult && treeSitterResult.symbols.length > 0) {
+        components = this.convertTreeSitterSymbolsToComponents(treeSitterResult.symbols);
+        treeSitterGrammar = treeSitterResult.grammarFile;
+        usesTreeSitterSymbols = true;
+      }
+
       if (language === 'typescript' || language === 'javascript') {
         const parsed = await this.parseJSTSFile(filePath, content, language);
-        components = parsed.components;
         imports = parsed.imports;
         exports = parsed.exports;
+
+        // Keep legacy parser as fallback if Tree-sitter produced nothing.
+        if (components.length === 0) {
+          components = parsed.components;
+          usesTreeSitterSymbols = false;
+          treeSitterGrammar = undefined;
+        }
       } else {
-        // For other languages, use basic line-based parsing
-        components = this.parseGenericFile(content);
+        // For other languages, use regex fallback if Tree-sitter produced nothing.
+        if (components.length === 0) {
+          components = this.parseGenericFile(content);
+        }
       }
     } catch (error) {
       console.warn(`Failed to parse ${filePath}:`, error);
+    }
+
+    const metadata: Record<string, any> = {
+      analyzer: this.name,
+      fileSize: content.length,
+      lineCount: content.split('\n').length,
+      chunkStrategy: usesTreeSitterSymbols ? 'tree-sitter-symbol' : 'line-or-component'
+    };
+
+    if (usesTreeSitterSymbols && treeSitterGrammar) {
+      metadata.treeSitterGrammar = treeSitterGrammar;
+      metadata.symbolAware = true;
     }
 
     // Create chunks
@@ -121,7 +151,8 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
       filePath,
       relativePath,
       language,
-      components
+      components,
+      metadata
     );
 
     return {
@@ -131,13 +162,25 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
       imports,
       exports,
       dependencies: [],
-      metadata: {
-        analyzer: this.name,
-        fileSize: content.length,
-        lineCount: content.split('\n').length
-      },
+      metadata,
       chunks
     };
+  }
+
+  private convertTreeSitterSymbolsToComponents(symbols: TreeSitterSymbol[]): CodeComponent[] {
+    return symbols.map((symbol) => ({
+      name: symbol.name,
+      type: symbol.kind,
+      componentType: symbol.kind,
+      startLine: symbol.startLine,
+      endLine: symbol.endLine,
+      metadata: {
+        extraction: 'tree-sitter',
+        nodeType: symbol.nodeType,
+        startIndex: symbol.startIndex,
+        endIndex: symbol.endIndex
+      }
+    }));
   }
 
   async detectCodebaseMetadata(rootPath: string): Promise<CodebaseMetadata> {
