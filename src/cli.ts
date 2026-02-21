@@ -32,7 +32,7 @@ import { GenericAnalyzer } from './analyzers/generic/index.js';
 analyzerRegistry.register(new AngularAnalyzer());
 analyzerRegistry.register(new GenericAnalyzer());
 
-const CLI_COMMANDS = [
+const _CLI_COMMANDS = [
   'memory',
   'search',
   'metadata',
@@ -44,7 +44,7 @@ const CLI_COMMANDS = [
   'cycles'
 ] as const;
 
-type CliCommand = (typeof CLI_COMMANDS)[number];
+type CliCommand = (typeof _CLI_COMMANDS)[number];
 
 function printUsage(): void {
   console.log('codebase-context <command> [options]');
