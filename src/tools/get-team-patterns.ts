@@ -73,9 +73,7 @@ export async function handle(
       };
 
       const relevantCategories = categoryMap[category || 'all'] || [];
-      const matchingMemories = allMemories.filter((m) =>
-        relevantCategories.includes(m.category)
-      );
+      const matchingMemories = allMemories.filter((m) => relevantCategories.includes(m.category));
 
       if (matchingMemories.length > 0) {
         result.memories = matchingMemories;

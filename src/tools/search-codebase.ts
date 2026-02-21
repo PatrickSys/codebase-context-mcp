@@ -147,9 +147,7 @@ export async function handle(
   const searcher = new CodebaseSearcher(ctx.rootPath);
   let results: any[];
   const searchProfile =
-    intent && ['explore', 'edit', 'refactor', 'migrate'].includes(intent)
-      ? intent
-      : 'explore';
+    intent && ['explore', 'edit', 'refactor', 'migrate'].includes(intent) ? intent : 'explore';
 
   try {
     results = await searcher.search(queryStr, limit || 5, filters, {
@@ -252,9 +250,7 @@ export async function handle(
     const allImports = intelligence.internalFileGraph.imports as Record<string, string[]>;
     for (const [file, deps] of Object.entries(allImports)) {
       if (
-        deps.some((dep: string) =>
-          resultPaths.some((rp) => dep.endsWith(rp) || rp.endsWith(dep))
-        )
+        deps.some((dep: string) => resultPaths.some((rp) => dep.endsWith(rp) || rp.endsWith(dep)))
       ) {
         if (!resultPaths.some((rp) => file.endsWith(rp) || rp.endsWith(file))) {
           impactCandidates.push(file);
@@ -267,9 +263,7 @@ export async function handle(
   // Build reverse import map from intelligence graph
   const reverseImports = new Map<string, string[]>();
   if (intelligence?.internalFileGraph?.imports) {
-    for (const [file, deps] of Object.entries<string[]>(
-      intelligence.internalFileGraph.imports
-    )) {
+    for (const [file, deps] of Object.entries<string[]>(intelligence.internalFileGraph.imports)) {
       for (const dep of deps) {
         if (!reverseImports.has(dep)) reverseImports.set(dep, []);
         reverseImports.get(dep)!.push(file);
@@ -292,9 +286,7 @@ export async function handle(
     // imports: files this result depends on (forward lookup)
     const imports: string[] = [];
     if (intelligence?.internalFileGraph?.imports) {
-      for (const [file, deps] of Object.entries<string[]>(
-        intelligence.internalFileGraph.imports
-      )) {
+      for (const [file, deps] of Object.entries<string[]>(intelligence.internalFileGraph.imports)) {
         if (file.endsWith(rPath) || rPath.endsWith(file)) {
           imports.push(...deps);
         }
@@ -547,10 +539,7 @@ export async function handle(
 
   // For edit/refactor/migrate: return full preflight card (risk, patterns, impact, etc.).
   // For explore or lite-only: return flattened { ready, reason }.
-  let preflightPayload:
-    | { ready: boolean; reason?: string }
-    | Record<string, unknown>
-    | undefined;
+  let preflightPayload: { ready: boolean; reason?: string } | Record<string, unknown> | undefined;
   if (preflight) {
     const el = preflight.evidenceLock;
     // Full card per tool schema; add top-level ready/reason for backward compatibility

@@ -11,8 +11,7 @@ export const definition: Tool = {
     properties: {
       symbol: {
         type: 'string',
-        description:
-          'Symbol name to find references for (for example: parseConfig or UserService)'
+        description: 'Symbol name to find references for (for example: parseConfig or UserService)'
       },
       limit: {
         type: 'number',

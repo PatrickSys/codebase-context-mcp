@@ -14,8 +14,7 @@ export const definition: Tool = {
     properties: {
       scope: {
         type: 'string',
-        description:
-          "Optional path prefix to limit analysis (e.g., 'src/features', 'libs/shared')"
+        description: "Optional path prefix to limit analysis (e.g., 'src/features', 'libs/shared')"
       }
     }
   }

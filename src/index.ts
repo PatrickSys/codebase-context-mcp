@@ -332,7 +332,8 @@ async function generateCodebaseContext(): Promise<string> {
     lines.push('# Codebase Intelligence');
     lines.push('');
     lines.push(
-      `Index: ${index.status} (${index.confidence}, ${index.action})${index.reason ? ` — ${index.reason}` : ''
+      `Index: ${index.status} (${index.confidence}, ${index.action})${
+        index.reason ? ` — ${index.reason}` : ''
       }`
     );
     lines.push('');
@@ -600,30 +601,45 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // Gate INDEX_CONSUMING tools on a valid, healthy index
     let indexSignal: IndexSignal | undefined;
     if ((INDEX_CONSUMING_TOOL_NAMES as readonly string[]).includes(name)) {
-      if (indexState.status === "indexing") {
+      if (indexState.status === 'indexing') {
         return {
-          content: [{ type: "text", text: JSON.stringify({
-            status: "indexing",
-            message: "Index build in progress — please retry shortly",
-          }) }],
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                status: 'indexing',
+                message: 'Index build in progress — please retry shortly'
+              })
+            }
+          ]
         };
       }
-      if (indexState.status === "error") {
+      if (indexState.status === 'error') {
         return {
-          content: [{ type: "text", text: JSON.stringify({
-            status: "error",
-            message: `Indexer error: ${indexState.error}`,
-          }) }],
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                status: 'error',
+                message: `Indexer error: ${indexState.error}`
+              })
+            }
+          ]
         };
       }
       indexSignal = await ensureValidIndexOrAutoHeal();
-      if (indexSignal.action === "rebuild-failed") {
+      if (indexSignal.action === 'rebuild-failed') {
         return {
-          content: [{ type: "text", text: JSON.stringify({
-            error: "Index is corrupt and could not be rebuilt automatically.",
-            index: indexSignal,
-          }) }],
-          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                error: 'Index is corrupt and could not be rebuilt automatically.',
+                index: indexSignal
+              })
+            }
+          ],
+          isError: true
         };
       }
     }
@@ -632,7 +648,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       indexState,
       paths: PATHS,
       rootPath: ROOT_PATH,
-      performIndexing,
+      performIndexing
     };
 
     const result = await dispatchTool(name, args ?? {}, ctx);
@@ -641,15 +657,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (indexSignal !== undefined && result.content?.[0]) {
       try {
         const parsed = JSON.parse(result.content[0].text);
-        result.content[0] = { type: 'text', text: JSON.stringify({ ...parsed, index: indexSignal }) };
-      } catch { /* response wasn't JSON, skip injection */ }
+        result.content[0] = {
+          type: 'text',
+          text: JSON.stringify({ ...parsed, index: indexSignal })
+        };
+      } catch {
+        /* response wasn't JSON, skip injection */
+      }
     }
 
     return result;
   } catch (error) {
     return {
-      content: [{ type: "text", text: `Unexpected error: ${error instanceof Error ? error.message : String(error)}` }],
-      isError: true,
+      content: [
+        {
+          type: 'text',
+          text: `Unexpected error: ${error instanceof Error ? error.message : String(error)}`
+        }
+      ],
+      isError: true
     };
   }
 });
