@@ -10,7 +10,6 @@
 import { promises as fs } from 'fs';
 
 import path from 'path';
-import { glob } from 'glob';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -18,23 +17,16 @@ import {
   ListToolsRequestSchema,
   ListResourcesRequestSchema,
   ReadResourceRequestSchema,
-  Tool,
   Resource
 } from '@modelcontextprotocol/sdk/types.js';
 import { CodebaseIndexer } from './core/indexer.js';
 import type {
   IndexingStats,
-  SearchResult,
-  RelationshipData,
-  Memory,
-  MemoryCategory,
-  MemoryType
+  Memory
 } from './types/index.js';
-import { CodebaseSearcher } from './core/search.js';
 import { analyzerRegistry } from './core/analyzer-registry.js';
 import { AngularAnalyzer } from './analyzers/angular/index.js';
 import { GenericAnalyzer } from './analyzers/generic/index.js';
-import { InternalFileGraph } from './utils/usage-tracker.js';
 import { IndexCorruptedError } from './errors/index.js';
 import {
   CODEBASE_CONTEXT_DIRNAME,
@@ -44,24 +36,15 @@ import {
   VECTOR_DB_DIRNAME
 } from './constants/codebase-context.js';
 import {
-  appendMemoryFile,
-  readMemoriesFile,
-  filterMemories,
-  applyUnfilteredLimit,
-  withConfidence
+  appendMemoryFile
 } from './memory/store.js';
-import { handleMemoryCli } from './cli.js';
+import { handleCliCommand } from './cli.js';
 import { parseGitLogLineToMemory } from './memory/git-memory.js';
-import { buildEvidenceLock } from './preflight/evidence-lock.js';
-import { shouldIncludePatternConflictCategory } from './preflight/query-scope.js';
 import {
   isComplementaryPatternCategory,
-  isComplementaryPatternConflict,
   shouldSkipLegacyTestingFrameworkCategory
 } from './patterns/semantics.js';
 import { CONTEXT_RESOURCE_URI, isContextResourceUri } from './resources/uri.js';
-import { assessSearchQuality } from './core/search-quality.js';
-import { findSymbolReferences } from './core/symbol-references.js';
 import { readIndexMeta, validateIndexArtifacts } from './core/index-meta.js';
 import { TOOLS, dispatchTool, type ToolContext } from './tools/index.js';
 
@@ -332,8 +315,7 @@ async function generateCodebaseContext(): Promise<string> {
     lines.push('# Codebase Intelligence');
     lines.push('');
     lines.push(
-      `Index: ${index.status} (${index.confidence}, ${index.action})${
-        index.reason ? ` — ${index.reason}` : ''
+      `Index: ${index.status} (${index.confidence}, ${index.action})${index.reason ? ` — ${index.reason}` : ''
       }`
     );
     lines.push('');
@@ -756,10 +738,22 @@ const isDirectRun =
   process.argv[1]?.replace(/\\/g, '/').endsWith('index.js') ||
   process.argv[1]?.replace(/\\/g, '/').endsWith('index.ts');
 
+const CLI_SUBCOMMANDS = [
+  'memory',
+  'search',
+  'metadata',
+  'status',
+  'reindex',
+  'style-guide',
+  'patterns',
+  'refs',
+  'cycles'
+];
+
 if (isDirectRun) {
-  // CLI subcommand: memory list/add/remove
-  if (process.argv[2] === 'memory') {
-    handleMemoryCli(process.argv.slice(3)).catch((error) => {
+  const subcommand = process.argv[2];
+  if (CLI_SUBCOMMANDS.includes(subcommand) || subcommand === '--help') {
+    handleCliCommand(process.argv.slice(2)).catch((error) => {
       console.error('Error:', error instanceof Error ? error.message : String(error));
       process.exit(1);
     });

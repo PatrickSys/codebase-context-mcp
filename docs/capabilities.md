@@ -2,6 +2,35 @@
 
 Technical reference for what `codebase-context` ships today. For the user-facing overview, see [README.md](../README.md).
 
+## CLI Reference
+
+All 10 MCP tools are exposed as CLI subcommands. Set `CODEBASE_ROOT` or run from the project directory.
+
+| Command | Flags | Maps to |
+|---|---|---|
+| `search --query <q>` | `--intent explore\|edit\|refactor\|migrate`, `--limit <n>`, `--lang <l>`, `--framework <f>`, `--layer <l>` | `search_codebase` |
+| `metadata` | — | `get_codebase_metadata` |
+| `status` | — | `get_indexing_status` |
+| `reindex` | `--incremental`, `--reason <r>` | `refresh_index` |
+| `style-guide` | `--query <q>`, `--category <c>` | `get_style_guide` |
+| `patterns` | `--category all\|di\|state\|testing\|libraries` | `get_team_patterns` |
+| `refs --symbol <name>` | `--limit <n>` | `get_symbol_references` |
+| `cycles` | `--scope <path>` | `detect_circular_dependencies` |
+| `memory list` | `--category`, `--type`, `--query`, `--json` | — |
+| `memory add` | `--type`, `--category`, `--memory`, `--reason` | `remember` |
+| `memory remove <id>` | — | — |
+
+All commands accept `--json` for raw JSON output. Errors go to stderr with exit code 1.
+
+```bash
+# Quick examples
+npx codebase-context status
+npx codebase-context search --query "auth middleware" --intent edit
+npx codebase-context refs --symbol "UserService" --limit 10
+npx codebase-context cycles --scope src/features
+npx codebase-context reindex --incremental
+```
+
 ## Tool Surface
 
 10 MCP tools + 1 optional resource (`codebase://context`). **Migration:** `get_component_usage` was removed; use `get_symbol_references` for symbol usage evidence.

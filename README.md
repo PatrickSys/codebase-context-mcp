@@ -287,31 +287,52 @@ Structured filters available: `framework`, `language`, `componentType`, `layer` 
 !.codebase-context/memory.json
 ```
 
-## CLI Access (Vendor-Neutral)
+## CLI Reference
 
-You can manage team memory directly from the terminal without any AI agent:
+All MCP tools are available as CLI commands — no AI agent required. Useful for scripting, debugging, and CI workflows.
+
+Set `CODEBASE_ROOT` to your project root, or run from the project directory.
 
 ```bash
-# List all memories
+# Search the indexed codebase
+npx codebase-context search --query "authentication middleware"
+npx codebase-context search --query "auth" --intent edit --limit 5
+
+# Project structure, frameworks, and dependencies
+npx codebase-context metadata
+
+# Index state and progress
+npx codebase-context status
+
+# Re-index the codebase
+npx codebase-context reindex
+npx codebase-context reindex --incremental --reason "added new service"
+
+# Style guide rules
+npx codebase-context style-guide
+npx codebase-context style-guide --query "naming" --category patterns
+
+# Team patterns (DI, state, testing, etc.)
+npx codebase-context patterns
+npx codebase-context patterns --category testing
+
+# Symbol references
+npx codebase-context refs --symbol "UserService"
+npx codebase-context refs --symbol "handleLogin" --limit 20
+
+# Circular dependency detection
+npx codebase-context cycles
+npx codebase-context cycles --scope src/features
+
+# Memory management
 npx codebase-context memory list
-
-# Filter by category or type
 npx codebase-context memory list --category conventions --type convention
-
-# Search memories
-npx codebase-context memory list --query "auth"
-
-# Add a memory
+npx codebase-context memory list --query "auth" --json
 npx codebase-context memory add --type convention --category tooling --memory "Use pnpm, not npm" --reason "Workspace support and speed"
-
-# Remove a memory
 npx codebase-context memory remove <id>
-
-# JSON output for scripting
-npx codebase-context memory list --json
 ```
 
-Set `CODEBASE_ROOT` to point to your project, or run from the project directory.
+All commands accept `--json` for raw JSON output suitable for piping and scripting.
 
 ## Tip: Ensuring your AI Agent recalls memory:
 
