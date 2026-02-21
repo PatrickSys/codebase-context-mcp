@@ -149,6 +149,17 @@ async function atomicSwapStagingToActive(
     await cleanupDirectory(previousDir);
     await cleanupDirectory(stagingDir);
 
+    // Also clean up the parent .staging/ directory if empty
+    const stagingBase = path.join(contextDir, STAGING_DIRNAME);
+    try {
+      const remaining = await fs.readdir(stagingBase);
+      if (remaining.length === 0) {
+        await fs.rmdir(stagingBase);
+      }
+    } catch {
+      // Directory doesn't exist or not empty - ignore
+    }
+
     console.error(`Atomic swap complete: build ${buildId} now active`);
   } catch (swapError) {
     console.error('Atomic swap failed, attempting rollback:', swapError);
