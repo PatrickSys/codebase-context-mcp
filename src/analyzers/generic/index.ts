@@ -498,6 +498,10 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
     const fileName = path.basename(chunk.filePath);
     const { language, componentType, content } = chunk;
 
+    if (!content) {
+      return `${language} ${componentType || 'code'} in ${fileName}`;
+    }
+
     // Try to extract meaningful information
     const firstComment = this.extractFirstComment(content);
     if (firstComment) {
@@ -526,7 +530,9 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
     return `${language} code in ${fileName}: ${firstLine ? firstLine.trim().slice(0, 60) + '...' : 'code definition'}`;
   }
 
-  private extractFirstComment(content: string): string {
+  private extractFirstComment(content: string | null | undefined): string {
+    if (!content) return '';
+
     // Try JSDoc style
     const jsdocMatch = content.match(/\/\*\*\s*\n?\s*\*\s*(.+?)(?:\n|\*\/)/);
     if (jsdocMatch) return jsdocMatch[1].trim();
