@@ -4,16 +4,15 @@ Technical reference for what `codebase-context` ships today. For the user-facing
 
 ## Tool Surface
 
-11 MCP tools + 1 optional resource (`codebase://context`).
+10 MCP tools + 1 optional resource (`codebase://context`).
 
 ### Core Tools
 
-| Tool                    | Input                                                             | Output                                                                                                                                                                               |
-| ----------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `search_codebase`       | `query`, optional `intent`, `limit`, `filters`, `includeSnippets` | Ranked results (`file`, `summary`, `score`, `type`, `trend`, `patternWarning`) + `searchQuality` (with `hint` when low confidence) + `preflight` ({ready, reason}). Snippets opt-in. |
+| Tool                    | Input                                                             | Output                                                                                                                                                                                                                  |
+| ----------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `search_codebase`       | `query`, optional `intent`, `limit`, `filters`, `includeSnippets` | Ranked results (`file`, `summary`, `score`, `type`, `trend`, `patternWarning`, `relationships`, `hints`) + `searchQuality` (with `hint` when low confidence) + `preflight` ({ready, reason}). Hints capped at 3 per category. |
 | `get_team_patterns`     | optional `category`                                               | Pattern frequencies, trends, golden files, conflicts                                                                                                                                 |
-| `get_symbol_references` | `symbol`, optional `limit`                                        | Concrete symbol usage evidence: total `usageCount` + top usage snippets                                                                                                              |
-| `get_component_usage`   | `name` (import source)                                            | Files importing the given package/module                                                                                                                                             |
+| `get_symbol_references` | `symbol`, optional `limit`                                        | Concrete symbol usage evidence: `usageCount` + top usage snippets + `confidence` ("syntactic") + `isComplete` boolean                                                                |
 | `remember`              | `type`, `category`, `memory`, `reason`                            | Persists to `.codebase-context/memory.json`                                                                                                                                          |
 | `get_memory`            | optional `category`, `type`, `query`, `limit`                     | Memories with confidence decay scoring                                                                                                                                               |
 
@@ -39,7 +38,7 @@ Ordered by execution:
 6. **Contamination control** — test file filtering for non-test queries.
 7. **File deduplication** — best chunk per file.
 8. **Stage-2 reranking** — cross-encoder (`Xenova/ms-marco-MiniLM-L-6-v2`) triggers when the score between the top files are very close. CPU-only, top-10 bounded.
-9. **Result enrichment** — compact type (`componentType:layer`), pattern momentum (`trend` Rising/Declining only, Stable omitted), `patternWarning`, condensed relationships (`importedByCount`/`hasTests`), related memories (capped to 3), search quality assessment with `hint` when low confidence.
+9. **Result enrichment** — compact type (`componentType:layer`), pattern momentum (`trend` Rising/Declining only, Stable omitted), `patternWarning`, condensed relationships (`importedByCount`/`hasTests`), structured hints (capped callers/consumers/tests ranked by frequency), related memories (capped to 3), search quality assessment with `hint` when low confidence.
 
 ### Defaults
 

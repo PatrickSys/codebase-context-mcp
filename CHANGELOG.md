@@ -7,6 +7,7 @@
 - **Index versioning (Phase 06)**: Index artifacts are versioned via `index-meta.json`. Mixed-version indexes are never served; version mismatches or corruption trigger automatic rebuild.
 - **Crash-safe rebuilds (Phase 06)**: Full rebuilds write to `.staging/` and swap atomically only on success. Failed rebuilds don't corrupt the active index.
 - **Relationship sidecar (Phase 07)**: New `relationships.json` artifact containing file import graph, reverse imports, and symbol export index. Updated incrementally alongside the main index.
+- **References confidence + hints (Phase 08)**: `get_symbol_references` now includes `confidence: "syntactic"` and `isComplete: boolean` to help agents assess result completeness. `search_codebase` results now include a structured `hints` object (capped callers/consumers/tests ranked by frequency) drawn from the relationships sidecar. `get_component_usage` removed from MCP surface (11→10 tools).
 - Tree-sitter-backed symbol extraction is now used by the Generic analyzer when available (with safe fallbacks).
 - Expanded language/extension detection to improve indexing coverage (e.g. `.pyi`, `.php`, `.kt`/`.kts`, `.cc`/`.cxx`, `.cs`, `.swift`, `.scala`, `.toml`, `.xml`).
 - New tool: `get_symbol_references` for concrete symbol usage evidence (usageCount + top snippets).

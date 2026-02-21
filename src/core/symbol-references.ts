@@ -21,6 +21,8 @@ interface SymbolReferencesSuccess {
   symbol: string;
   usageCount: number;
   usages: SymbolUsage[];
+  confidence: 'syntactic';
+  isComplete: boolean;
 }
 
 interface SymbolReferencesError {
@@ -141,6 +143,8 @@ export async function findSymbolReferences(
     status: 'success',
     symbol: normalizedSymbol,
     usageCount,
-    usages
+    usages,
+    confidence: 'syntactic',
+    isComplete: usageCount < normalizedLimit
   };
 }
