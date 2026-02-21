@@ -20,9 +20,7 @@ import {
   Resource
 } from '@modelcontextprotocol/sdk/types.js';
 import { CodebaseIndexer } from './core/indexer.js';
-import type {
-  IndexingStats
-} from './types/index.js';
+import type { IndexingStats } from './types/index.js';
 import { analyzerRegistry } from './core/analyzer-registry.js';
 import { AngularAnalyzer } from './analyzers/angular/index.js';
 import { GenericAnalyzer } from './analyzers/generic/index.js';
@@ -34,9 +32,7 @@ import {
   KEYWORD_INDEX_FILENAME,
   VECTOR_DB_DIRNAME
 } from './constants/codebase-context.js';
-import {
-  appendMemoryFile
-} from './memory/store.js';
+import { appendMemoryFile } from './memory/store.js';
 import { handleCliCommand } from './cli.js';
 import { parseGitLogLineToMemory } from './memory/git-memory.js';
 import {
@@ -314,7 +310,8 @@ async function generateCodebaseContext(): Promise<string> {
     lines.push('# Codebase Intelligence');
     lines.push('');
     lines.push(
-      `Index: ${index.status} (${index.confidence}, ${index.action})${index.reason ? ` — ${index.reason}` : ''
+      `Index: ${index.status} (${index.confidence}, ${index.action})${
+        index.reason ? ` — ${index.reason}` : ''
       }`
     );
     lines.push('');

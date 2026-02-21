@@ -51,18 +51,14 @@ function printUsage(): void {
   console.log('');
   console.log('Commands:');
   console.log('  memory <list|add|remove>           Memory CRUD');
-  console.log(
-    '  search --query <q>                 Search the indexed codebase'
-  );
+  console.log('  search --query <q>                 Search the indexed codebase');
   console.log('         [--intent explore|edit|refactor|migrate]');
   console.log('         [--limit <n>] [--lang <l>] [--framework <f>] [--layer <l>]');
   console.log('  metadata                           Project structure, frameworks, deps');
   console.log('  status                             Index state and progress');
   console.log('  reindex [--incremental] [--reason <r>]  Re-index the codebase');
   console.log('  style-guide [--query <q>] [--category <c>]  Style guide rules');
-  console.log(
-    '  patterns [--category all|di|state|testing|libraries]  Team patterns'
-  );
+  console.log('  patterns [--category all|di|state|testing|libraries]  Team patterns');
   console.log('  refs --symbol <name> [--limit <n>]  Symbol references');
   console.log('  cycles [--scope <path>]            Circular dependency detection');
   console.log('');
@@ -202,9 +198,15 @@ export async function handleCliCommand(argv: string[]): Promise<void> {
         query: flags['query'],
         ...(flags['intent'] ? { intent: flags['intent'] } : {}),
         ...(flags['limit'] ? { limit: Number(flags['limit']) } : {}),
-        ...(flags['lang'] ? { filters: { language: flags['lang'] } } : {}),
-        ...(flags['framework'] ? { filters: { framework: flags['framework'] } } : {}),
-        ...(flags['layer'] ? { filters: { layer: flags['layer'] } } : {})
+        ...(flags['lang'] || flags['framework'] || flags['layer']
+          ? {
+              filters: {
+                ...(flags['lang'] ? { language: flags['lang'] } : {}),
+                ...(flags['framework'] ? { framework: flags['framework'] } : {}),
+                ...(flags['layer'] ? { layer: flags['layer'] } : {})
+              }
+            }
+          : {})
       };
       break;
     }
