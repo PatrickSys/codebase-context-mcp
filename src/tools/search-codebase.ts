@@ -9,7 +9,6 @@ import type { SearchResult } from '../types/index.js';
 import { buildEvidenceLock } from '../preflight/evidence-lock.js';
 import { shouldIncludePatternConflictCategory } from '../preflight/query-scope.js';
 import {
-  isComplementaryPatternCategory,
   isComplementaryPatternConflict,
   shouldSkipLegacyTestingFrameworkCategory
 } from '../patterns/semantics.js';
@@ -395,12 +394,6 @@ export async function handle(
       const resultPaths = results.map((r) => r.filePath);
       const impactCandidates = computeImpactCandidates(resultPaths);
 
-      let riskLevel: 'low' | 'medium' | 'high' = 'low';
-      if (impactCandidates.length > 10) {
-        riskLevel = 'high';
-      } else if (impactCandidates.length > 3) {
-        riskLevel = 'medium';
-      }
 
       // Use existing pattern intelligence for evidenceLock scoring, but keep the output payload lite.
       const preferredPatternsForEvidence: Array<{ pattern: string; example?: string }> = [];
@@ -415,6 +408,14 @@ export async function handle(
             });
           }
         }
+      }
+
+
+      let riskLevel: 'low' | 'medium' | 'high' = 'low';
+      if (impactCandidates.length > 10) {
+        riskLevel = 'high';
+      } else if (impactCandidates.length > 3) {
+        riskLevel = 'medium';
       }
 
       editPreflight = {
@@ -533,7 +534,8 @@ export async function handle(
       }));
 
       // --- Confidence (index freshness) ---
-      const confidence = computeIndexConfidence();
+      // TODO: Review this confidence calculation
+      //const confidence = computeIndexConfidence();
 
       // --- Failure memories (1.5x relevance boost) ---
       const failureWarnings = relatedMemories

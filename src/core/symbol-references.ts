@@ -83,8 +83,7 @@ export async function findSymbolReferences(
     chunksRaw = JSON.parse(content);
   } catch (error) {
     throw new IndexCorruptedError(
-      `Keyword index missing or unreadable (rebuild required): ${
-        error instanceof Error ? error.message : String(error)
+      `Keyword index missing or unreadable (rebuild required): ${error instanceof Error ? error.message : String(error)
       }`
     );
   }
