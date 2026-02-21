@@ -499,8 +499,7 @@ export async function handle(
         callersTotal > 0 ? { covered: callersCovered, total: callersTotal } : undefined;
 
       // --- Risk level (based on circular deps + impact breadth) ---
-      //TODO: Review this risk level calculation
-      let _riskLevel: 'low' | 'medium' | 'high' = 'low';
+      let riskLevel: 'low' | 'medium' | 'high' = 'low';
       let cycleCount = 0;
       const graphDataSource = relationships?.graph || intelligence?.internalFileGraph;
       if (graphDataSource) {
@@ -523,9 +522,9 @@ export async function handle(
         }
       }
       if (cycleCount > 0 || impactCandidates.length > 10) {
-        _riskLevel = 'high';
+        riskLevel = 'high';
       } else if (impactCandidates.length > 3) {
-        _riskLevel = 'medium';
+        riskLevel = 'medium';
       }
 
       // --- Golden files (exemplar code) ---
@@ -535,8 +534,7 @@ export async function handle(
       }));
 
       // --- Confidence (index freshness) ---
-      // TODO: Review this confidence calculation
-      //const confidence = computeIndexConfidence();
+      const confidence = computeIndexConfidence();
 
       // --- Failure memories (1.5x relevance boost) ---
       const failureWarnings = relatedMemories
