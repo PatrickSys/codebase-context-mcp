@@ -24,3 +24,4 @@ export const KEYWORD_INDEX_FILENAME = 'index.json' as const;
 export const INDEXING_STATS_FILENAME = 'indexing-stats.json' as const;
 export const VECTOR_DB_DIRNAME = 'index' as const;
 export const MANIFEST_FILENAME = 'manifest.json' as const;
+export const RELATIONSHIPS_FILENAME = 'relationships.json' as const;

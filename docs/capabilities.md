@@ -84,7 +84,10 @@ Output: `{ ready: boolean, reason?: string }`
 
 - Initial: full scan → chunking (50 lines, 0 overlap) → embedding → vector DB (LanceDB) + keyword index (Fuse.js)
 - Incremental: SHA-256 manifest diffing, selective embed/delete, full intelligence regeneration
+- Version gating: `index-meta.json` tracks format version; mismatches trigger automatic rebuild
+- Crash-safe rebuilds: full rebuilds write to `.staging/` and swap atomically only on success
 - Auto-heal: corrupted index triggers automatic full re-index on next search
+- Relationships sidecar: `relationships.json` contains file import graph and symbol export index
 - Storage: `.codebase-context/` directory (memory.json + generated files)
 
 ## Analyzers

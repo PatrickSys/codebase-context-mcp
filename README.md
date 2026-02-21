@@ -207,6 +207,7 @@ The retrieval pipeline is designed around one goal: give the agent the right con
 - **Import centrality** - files that are imported more often rank higher.
 - **Cross-encoder reranking** - a stage-2 reranker triggers only when top scores are ambiguous. CPU-only, bounded to top-K.
 - **Incremental indexing** - only re-indexes files that changed since last run (SHA-256 manifest diffing).
+- **Version gating** - index artifacts are versioned; mismatches trigger automatic rebuild so mixed-version data is never served.
 - **Auto-heal** - if the index corrupts, search triggers a full re-index automatically.
 
 ## Language Support
@@ -239,7 +240,9 @@ Structured filters available: `framework`, `language`, `componentType`, `layer` 
 ```
 .codebase-context/
   memory.json         # Team knowledge (should be persisted in git)
+  index-meta.json     # Index metadata and version (generated)
   intelligence.json   # Pattern analysis (generated)
+  relationships.json  # File/symbol relationships (generated)
   index.json          # Keyword index (generated)
   index/              # Vector database (generated)
 ```
