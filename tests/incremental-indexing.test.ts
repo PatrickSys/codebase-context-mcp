@@ -314,7 +314,12 @@ describe('Incremental Indexing', () => {
     await indexer1.index();
 
     const indexPath = path.join(tempDir, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
-    const fullIndex = JSON.parse(await fs.readFile(indexPath, 'utf-8'));
+    const fullIndexRaw = JSON.parse(await fs.readFile(indexPath, 'utf-8')) as any;
+    const fullIndex = Array.isArray(fullIndexRaw)
+      ? fullIndexRaw
+      : Array.isArray(fullIndexRaw?.chunks)
+        ? fullIndexRaw.chunks
+        : [];
 
     // Modify one file
     await fs.writeFile(path.join(tempDir, 'a.ts'), 'export const a = 999;');
@@ -328,7 +333,12 @@ describe('Incremental Indexing', () => {
     await indexer2.index();
 
     // Keyword index should still contain chunks from ALL files (not just changed ones)
-    const incrementalIndex = JSON.parse(await fs.readFile(indexPath, 'utf-8'));
+    const incrementalRaw = JSON.parse(await fs.readFile(indexPath, 'utf-8')) as any;
+    const incrementalIndex = Array.isArray(incrementalRaw)
+      ? incrementalRaw
+      : Array.isArray(incrementalRaw?.chunks)
+        ? incrementalRaw.chunks
+        : [];
     expect(incrementalIndex.length).toBeGreaterThanOrEqual(fullIndex.length);
   });
 

@@ -4,6 +4,7 @@
  */
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { glob } from 'glob';
@@ -31,7 +32,10 @@ import { mergeSmallChunks } from '../utils/chunking.js';
 import { getFileCommitDates } from '../utils/git-dates.js';
 import {
   CODEBASE_CONTEXT_DIRNAME,
+  INDEX_FORMAT_VERSION,
   INDEXING_STATS_FILENAME,
+  INDEX_META_FILENAME,
+  INDEX_META_VERSION,
   INTELLIGENCE_FILENAME,
   KEYWORD_INDEX_FILENAME,
   MANIFEST_FILENAME,
@@ -45,6 +49,26 @@ import {
   type FileManifest,
   type ManifestDiff
 } from './manifest.js';
+
+let cachedToolVersion: string | null = null;
+
+async function getToolVersion(): Promise<string> {
+  if (cachedToolVersion) return cachedToolVersion;
+
+  try {
+    const pkgRaw = await fs.readFile(new URL('../../package.json', import.meta.url), 'utf-8');
+    const pkg = JSON.parse(pkgRaw) as { version?: unknown };
+    if (typeof pkg.version === 'string' && pkg.version.trim()) {
+      cachedToolVersion = pkg.version;
+      return cachedToolVersion;
+    }
+  } catch {
+    // Best-effort — fall back below
+  }
+
+  cachedToolVersion = 'unknown';
+  return cachedToolVersion;
+}
 
 export interface IndexerOptions {
   rootPath: string;
@@ -166,6 +190,10 @@ export class CodebaseIndexer {
     };
 
     try {
+      const buildId = randomUUID();
+      const generatedAt = new Date().toISOString();
+      const toolVersion = await getToolVersion();
+
       // Phase 1: Scanning
       this.updateProgress('scanning', 0);
       let files = await this.scanFiles();
@@ -250,7 +278,12 @@ export class CodebaseIndexer {
 
             try {
               const existingIndexPath = path.join(contextDir, KEYWORD_INDEX_FILENAME);
-              const existingChunks = JSON.parse(await fs.readFile(existingIndexPath, 'utf-8'));
+              const existing = JSON.parse(await fs.readFile(existingIndexPath, 'utf-8')) as any;
+              const existingChunks: unknown = Array.isArray(existing)
+                ? existing
+                : existing && Array.isArray(existing.chunks)
+                  ? existing.chunks
+                  : null;
               if (Array.isArray(existingChunks)) {
                 stats.totalChunks = existingChunks.length;
                 if (stats.indexedFiles === 0) {
@@ -566,12 +599,27 @@ export class CodebaseIndexer {
         }
       }
 
+      // Vector DB build marker (required for version gating)
+      // Write after semantic store step so marker reflects the latest DB state.
+      const vectorDir = path.join(contextDir, VECTOR_DB_DIRNAME);
+      await fs.mkdir(vectorDir, { recursive: true });
+      await fs.writeFile(
+        path.join(vectorDir, 'index-build.json'),
+        JSON.stringify({ buildId, formatVersion: INDEX_FORMAT_VERSION })
+      );
+
       // Keyword index always uses ALL chunks (full regen)
       const indexPath = path.join(contextDir, KEYWORD_INDEX_FILENAME);
       // Memory safety: cap keyword index too
       const keywordChunks =
         allChunks.length > MAX_CHUNKS ? allChunks.slice(0, MAX_CHUNKS) : allChunks;
-      await fs.writeFile(indexPath, JSON.stringify(keywordChunks));
+      await fs.writeFile(
+        indexPath,
+        JSON.stringify({
+          header: { buildId, formatVersion: INDEX_FORMAT_VERSION },
+          chunks: keywordChunks
+        })
+      );
 
       // Save library usage and pattern stats (always full regen)
       const intelligencePath = path.join(contextDir, INTELLIGENCE_FILENAME);
@@ -594,6 +642,7 @@ export class CodebaseIndexer {
       }
 
       const intelligence = {
+        header: { buildId, formatVersion: INDEX_FORMAT_VERSION },
         libraryUsage: libraryStats,
         patterns: patternDetector.getAllPatterns(),
         goldenFiles: patternDetector.getGoldenFiles(5),
@@ -606,7 +655,7 @@ export class CodebaseIndexer {
         },
         // Internal file graph for circular dependency and unused export detection
         internalFileGraph: internalFileGraph.toJSON(),
-        generatedAt: new Date().toISOString()
+        generatedAt
       };
       await fs.writeFile(intelligencePath, JSON.stringify(intelligence, null, 2));
 
@@ -622,9 +671,33 @@ export class CodebaseIndexer {
         indexedFiles: stats.indexedFiles,
         totalChunks: stats.totalChunks,
         totalFiles: stats.totalFiles,
-        generatedAt: new Date().toISOString()
+        generatedAt
       };
       await fs.writeFile(indexingStatsPath, JSON.stringify(persistedStats, null, 2));
+
+      // Index meta (authoritative) — write last so readers never observe meta pointing to missing artifacts.
+      const metaPath = path.join(contextDir, INDEX_META_FILENAME);
+      await fs.writeFile(
+        metaPath,
+        JSON.stringify(
+          {
+            metaVersion: INDEX_META_VERSION,
+            formatVersion: INDEX_FORMAT_VERSION,
+            buildId,
+            generatedAt,
+            toolVersion,
+            artifacts: {
+              keywordIndex: { path: KEYWORD_INDEX_FILENAME },
+              vectorDb: { path: VECTOR_DB_DIRNAME, provider: 'lancedb' },
+              intelligence: { path: INTELLIGENCE_FILENAME },
+              manifest: { path: MANIFEST_FILENAME },
+              indexingStats: { path: INDEXING_STATS_FILENAME }
+            }
+          },
+          null,
+          2
+        )
+      );
 
       // Phase 5: Complete
       this.updateProgress('complete', 100);

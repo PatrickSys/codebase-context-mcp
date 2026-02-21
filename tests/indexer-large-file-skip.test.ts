@@ -47,7 +47,10 @@ describe('Indexer large file skip regression', () => {
     await indexer.index();
 
     const indexPath = path.join(tempDir, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
-    const chunks = JSON.parse(await fs.readFile(indexPath, 'utf-8')) as Array<{ filePath: string }>;
+    const indexRaw = JSON.parse(await fs.readFile(indexPath, 'utf-8')) as any;
+    const chunks = (
+      Array.isArray(indexRaw) ? indexRaw : Array.isArray(indexRaw?.chunks) ? indexRaw.chunks : []
+    ) as Array<{ filePath: string }>;
     const indexedFiles = new Set(chunks.map((chunk) => chunk.filePath.split(/[\\/]/).pop()));
 
     expect(indexedFiles.has('small.ts')).toBe(true);

@@ -48,7 +48,10 @@ describe('Symbol-aware chunk merge guard', () => {
     await indexer.index();
 
     const indexPath = path.join(tempDir, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
-    const allChunks = JSON.parse(await fs.readFile(indexPath, 'utf-8')) as Array<{
+    const indexRaw = JSON.parse(await fs.readFile(indexPath, 'utf-8')) as any;
+    const allChunks = (
+      Array.isArray(indexRaw) ? indexRaw : Array.isArray(indexRaw?.chunks) ? indexRaw.chunks : []
+    ) as Array<{
       filePath: string;
       relativePath: string;
       metadata?: {
