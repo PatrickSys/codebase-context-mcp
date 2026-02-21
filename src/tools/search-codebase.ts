@@ -5,6 +5,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import type { ToolContext, ToolResponse } from './types.js';
 import { CodebaseSearcher } from '../core/search.js';
+import type { SearchResult } from '../types/index.js';
 import { buildEvidenceLock } from '../preflight/evidence-lock.js';
 import { shouldIncludePatternConflictCategory } from '../preflight/query-scope.js';
 import {
@@ -297,24 +298,28 @@ export async function handle(
     }
   }
 
-  // Enrich a search result with relationship data
-  function enrichResult(r: any): any | undefined {
-    const rPath = r.filePath;
+  // Build relationship hints with capped arrays ranked by importedByCount
+  interface RelationshipHints {
+    relationships?: {
+      importedByCount?: number;
+      hasTests?: boolean;
+    };
+    hints?: {
+      callers?: string[];
+      consumers?: string[];
+      tests?: string[];
+    };
+  }
 
-    // importedBy: files that import this result (reverse lookup)
-    const importedBy: string[] = [];
+  function buildRelationshipHints(result: SearchResult): RelationshipHints {
+    const rPath = result.filePath;
+
+    // importedBy: files that import this result (reverse lookup), collect with counts
+    const importedByMap = new Map<string, number>();
     for (const [dep, importers] of reverseImports) {
       if (dep.endsWith(rPath) || rPath.endsWith(dep)) {
-        importedBy.push(...importers);
-      }
-    }
-
-    // imports: files this result depends on (forward lookup)
-    const imports: string[] = [];
-    if (importsGraph) {
-      for (const [file, deps] of Object.entries<string[]>(importsGraph)) {
-        if (file.endsWith(rPath) || rPath.endsWith(file)) {
-          imports.push(...deps);
+        for (const importer of importers) {
+          importedByMap.set(importer, (importedByMap.get(importer) || 0) + 1);
         }
       }
     }
@@ -334,16 +339,50 @@ export async function handle(
       }
     }
 
-    // Only return if we have at least one piece of data
-    if (importedBy.length === 0 && imports.length === 0 && testedIn.length === 0) {
-      return undefined;
+    // Build condensed relationships
+    const condensedRel: Record<string, number | boolean> = {};
+    if (importedByMap.size > 0) {
+      condensedRel.importedByCount = importedByMap.size;
+    }
+    if (testedIn.length > 0) {
+      condensedRel.hasTests = true;
     }
 
-    return {
-      ...(importedBy.length > 0 && { importedBy }),
-      ...(imports.length > 0 && { imports }),
-      ...(testedIn.length > 0 && { testedIn })
-    };
+    // Build hints object with capped arrays
+    const hintsObj: Record<string, string[]> = {};
+
+    // Rank importers by count descending, cap at 3
+    if (importedByMap.size > 0) {
+      const sortedCallers = Array.from(importedByMap.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([file]) => file);
+      hintsObj.callers = sortedCallers;
+      hintsObj.consumers = sortedCallers; // Same data, different label
+    }
+
+    // Cap tests at 3
+    if (testedIn.length > 0) {
+      hintsObj.tests = testedIn.slice(0, 3);
+    }
+
+    // Return both condensed and hints (hints only included if non-empty)
+    const output: RelationshipHints = {};
+    if (Object.keys(condensedRel).length > 0) {
+      output.relationships = condensedRel as {
+        importedByCount?: number;
+        hasTests?: boolean;
+      };
+    }
+    if (Object.keys(hintsObj).length > 0) {
+      output.hints = hintsObj as {
+        callers?: string[];
+        consumers?: string[];
+        tests?: string[];
+      };
+    }
+
+    return output;
   }
 
   const searchQuality = assessSearchQuality(query, results);
@@ -600,19 +639,7 @@ export async function handle(
             },
             ...(preflightPayload && { preflight: preflightPayload }),
             results: results.map((r) => {
-              const relationships = enrichResult(r);
-              // Condensed relationships: importedBy count + hasTests flag
-              const condensedRel = relationships
-                ? {
-                    ...(relationships.importedBy &&
-                      relationships.importedBy.length > 0 && {
-                        importedByCount: relationships.importedBy.length
-                      }),
-                    ...(relationships.testedIn &&
-                      relationships.testedIn.length > 0 && { hasTests: true })
-                  }
-                : undefined;
-              const hasCondensedRel = condensedRel && Object.keys(condensedRel).length > 0;
+              const relationshipsAndHints = buildRelationshipHints(r);
 
               return {
                 file: `${r.filePath}:${r.startLine}-${r.endLine}`,
@@ -621,7 +648,8 @@ export async function handle(
                 ...(r.componentType && r.layer && { type: `${r.componentType}:${r.layer}` }),
                 ...(r.trend && r.trend !== 'Stable' && { trend: r.trend }),
                 ...(r.patternWarning && { patternWarning: r.patternWarning }),
-                ...(hasCondensedRel && { relationships: condensedRel }),
+                ...(relationshipsAndHints.relationships && { relationships: relationshipsAndHints.relationships }),
+                ...(relationshipsAndHints.hints && { hints: relationshipsAndHints.hints }),
                 ...(includeSnippets && r.snippet && { snippet: r.snippet })
               };
             }),

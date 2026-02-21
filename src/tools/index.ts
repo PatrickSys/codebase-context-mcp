@@ -9,14 +9,13 @@ import { definition as d4, handle as h4 } from './refresh-index.js';
 import { definition as d5, handle as h5 } from './get-style-guide.js';
 import { definition as d6, handle as h6 } from './get-team-patterns.js';
 import { definition as d7, handle as h7 } from './get-symbol-references.js';
-import { definition as d8, handle as h8 } from './get-component-usage.js';
-import { definition as d9, handle as h9 } from './detect-circular-dependencies.js';
-import { definition as d10, handle as h10 } from './remember.js';
-import { definition as d11, handle as h11 } from './get-memory.js';
+import { definition as d8, handle as h8 } from './detect-circular-dependencies.js';
+import { definition as d9, handle as h9 } from './remember.js';
+import { definition as d10, handle as h10 } from './get-memory.js';
 
 import type { ToolContext, ToolResponse } from './types.js';
 
-export const TOOLS: Tool[] = [d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11];
+export const TOOLS: Tool[] = [d1, d2, d3, d4, d5, d6, d7, d8, d9, d10];
 
 export async function dispatchTool(
   name: string,
@@ -38,14 +37,12 @@ export async function dispatchTool(
       return h6(args, ctx);
     case 'get_symbol_references':
       return h7(args, ctx);
-    case 'get_component_usage':
-      return h8(args, ctx);
     case 'detect_circular_dependencies':
-      return h9(args, ctx);
+      return h8(args, ctx);
     case 'remember':
-      return h10(args, ctx);
+      return h9(args, ctx);
     case 'get_memory':
-      return h11(args, ctx);
+      return h10(args, ctx);
     default:
       return {
         content: [{ type: 'text', text: JSON.stringify({ error: `Unknown tool: ${name}` }) }],

@@ -81,7 +81,9 @@ export async function handle(
             status: 'success',
             symbol: result.symbol,
             usageCount: result.usageCount,
-            usages: result.usages
+            usages: result.usages,
+            confidence: result.confidence,
+            isComplete: result.isComplete
           },
           null,
           2

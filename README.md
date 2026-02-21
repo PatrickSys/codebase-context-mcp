@@ -119,7 +119,7 @@ This is where it all comes together. One call returns:
 - **Code results** with `file` (path + line range), `summary`, `score`
 - **Type** per result: compact `componentType:layer` (e.g., `service:data`) — helps agents orient
 - **Pattern signals** per result: `trend` (Rising/Declining — Stable is omitted) and `patternWarning` when using legacy code
-- **Relationships** per result: `importedByCount` and `hasTests` (condensed)
+- **Relationships** per result: `importedByCount` and `hasTests` (condensed) + **hints** (capped ranked callers, consumers, tests)
 - **Related memories**: up to 3 team decisions, gotchas, and failures matched to the query
 - **Search quality**: `ok` or `low_confidence` with confidence score and `hint` when low
 - **Preflight**: `ready` (boolean) + `reason` when evidence is thin. Pass `intent="edit"` to get the full preflight card. If search quality is low, `ready` is always `false`.
@@ -137,7 +137,11 @@ Snippets are opt-in (`includeSnippets: true`). Default output is lean — if the
       "score": 0.72,
       "type": "service:core",
       "trend": "Rising",
-      "relationships": { "importedByCount": 4, "hasTests": true }
+      "relationships": { "importedByCount": 4, "hasTests": true },
+      "hints": {
+        "callers": ["src/app.module.ts", "src/boot.ts"],
+        "tests": ["src/auth/auth.interceptor.spec.ts"]
+      }
     }
   ],
   "relatedMemories": ["Always use HttpInterceptorFn (0.97)"]
@@ -165,19 +169,18 @@ Record a decision once. It surfaces automatically in search results and prefligh
 
 ### All Tools
 
-| Tool                           | What it does                                                                              |
-| ------------------------------ | ----------------------------------------------------------------------------------------- |
-| `search_codebase`              | Hybrid search with enrichment + preflight. Pass `intent="edit"` for edit readiness check. |
-| `get_team_patterns`            | Pattern frequencies, golden files, conflict detection                                     |
-| `get_symbol_references`        | Find concrete references to a symbol (usageCount + top snippets)                          |
-| `get_component_usage`          | "Find Usages" - where a library or component is imported                                  |
-| `remember`                     | Record a convention, decision, gotcha, or failure                                         |
-| `get_memory`                   | Query team memory with confidence decay scoring                                           |
-| `get_codebase_metadata`        | Project structure, frameworks, dependencies                                               |
-| `get_style_guide`              | Style guide rules for the current project                                                 |
-| `detect_circular_dependencies` | Import cycles between files                                                               |
-| `refresh_index`                | Re-index (full or incremental) + extract git memories                                     |
-| `get_indexing_status`          | Progress and stats for the current index                                                  |
+| Tool                           | What it does                                                                                |
+| ------------------------------ | ------------------------------------------------------------------------------------------- |
+| `search_codebase`              | Hybrid search with enrichment + preflight + ranked relationship hints. Pass `intent="edit"` for edit readiness check. |
+| `get_team_patterns`            | Pattern frequencies, golden files, conflict detection                                      |
+| `get_symbol_references`        | Find concrete references to a symbol (usageCount + top snippets + confidence + completeness) |
+| `remember`                     | Record a convention, decision, gotcha, or failure                                          |
+| `get_memory`                   | Query team memory with confidence decay scoring                                            |
+| `get_codebase_metadata`        | Project structure, frameworks, dependencies                                                |
+| `get_style_guide`              | Style guide rules for the current project                                                  |
+| `detect_circular_dependencies` | Import cycles between files                                                                |
+| `refresh_index`                | Re-index (full or incremental) + extract git memories                                      |
+| `get_indexing_status`          | Progress and stats for the current index                                                   |
 
 ## Evaluation Harness (`npm run eval`)
 
