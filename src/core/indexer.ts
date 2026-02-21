@@ -41,6 +41,9 @@ import {
   MANIFEST_FILENAME,
   VECTOR_DB_DIRNAME
 } from '../constants/codebase-context.js';
+
+const STAGING_DIRNAME = '.staging';
+const PREVIOUS_DIRNAME = '.previous';
 import {
   computeFileHashes,
   readManifest,
