@@ -44,6 +44,7 @@ import {
 
 const STAGING_DIRNAME = '.staging';
 const PREVIOUS_DIRNAME = '.previous';
+
 import {
   computeFileHashes,
   readManifest,
@@ -71,6 +72,113 @@ async function getToolVersion(): Promise<string> {
 
   cachedToolVersion = 'unknown';
   return cachedToolVersion;
+}
+
+/**
+ * Perform a Windows-safe atomic swap of staging artifacts into active location.
+ * Strategy: move current active to .previous, then rename staging to active.
+ * If staging rename fails, restore from .previous.
+ */
+async function atomicSwapStagingToActive(
+  contextDir: string,
+  stagingDir: string,
+  buildId: string
+): Promise<void> {
+  const previousDir = path.join(contextDir, PREVIOUS_DIRNAME);
+  const activeMetaPath = path.join(contextDir, INDEX_META_FILENAME);
+  const activeIndexPath = path.join(contextDir, KEYWORD_INDEX_FILENAME);
+  const activeIntelligencePath = path.join(contextDir, INTELLIGENCE_FILENAME);
+  const activeVectorDir = path.join(contextDir, VECTOR_DB_DIRNAME);
+  const activeManifestPath = path.join(contextDir, MANIFEST_FILENAME);
+  const activeStatsPath = path.join(contextDir, INDEXING_STATS_FILENAME);
+
+  const stagingMetaPath = path.join(stagingDir, INDEX_META_FILENAME);
+  const stagingIndexPath = path.join(stagingDir, KEYWORD_INDEX_FILENAME);
+  const stagingIntelligencePath = path.join(stagingDir, INTELLIGENCE_FILENAME);
+  const stagingVectorDir = path.join(stagingDir, VECTOR_DB_DIRNAME);
+  const stagingManifestPath = path.join(stagingDir, MANIFEST_FILENAME);
+  const stagingStatsPath = path.join(stagingDir, INDEXING_STATS_FILENAME);
+
+  // Step 1: Create .previous directory and move current active there
+  await fs.mkdir(previousDir, { recursive: true });
+
+  const moveIfExists = async (src: string, dest: string): Promise<void> => {
+    try {
+      await fs.rename(src, dest);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== 'ENOENT') {
+        // File doesn't exist is OK, other errors are problems
+        throw error;
+      }
+    }
+  };
+
+  const moveDirIfExists = async (src: string, dest: string): Promise<void> => {
+    try {
+      const stat = await fs.stat(src);
+      if (stat.isDirectory()) {
+        await fs.rename(src, dest);
+      }
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== 'ENOENT') {
+        throw error;
+      }
+    }
+  };
+
+  // Move active artifacts to .previous
+  await moveIfExists(activeMetaPath, path.join(previousDir, INDEX_META_FILENAME));
+  await moveIfExists(activeIndexPath, path.join(previousDir, KEYWORD_INDEX_FILENAME));
+  await moveIfExists(activeIntelligencePath, path.join(previousDir, INTELLIGENCE_FILENAME));
+  await moveIfExists(activeManifestPath, path.join(previousDir, MANIFEST_FILENAME));
+  await moveIfExists(activeStatsPath, path.join(previousDir, INDEXING_STATS_FILENAME));
+  await moveDirIfExists(activeVectorDir, path.join(previousDir, VECTOR_DB_DIRNAME));
+
+  // Step 2: Move staging artifacts to active location
+  try {
+    await moveIfExists(stagingMetaPath, activeMetaPath);
+    await moveIfExists(stagingIndexPath, activeIndexPath);
+    await moveIfExists(stagingIntelligencePath, activeIntelligencePath);
+    await moveIfExists(stagingManifestPath, activeManifestPath);
+    await moveIfExists(stagingStatsPath, activeStatsPath);
+    await moveDirIfExists(stagingVectorDir, activeVectorDir);
+
+    // Step 3: Clean up .previous and staging directories
+    await cleanupDirectory(previousDir);
+    await cleanupDirectory(stagingDir);
+
+    console.error(`Atomic swap complete: build ${buildId} now active`);
+  } catch (swapError) {
+    console.error('Atomic swap failed, attempting rollback:', swapError);
+
+    // Attempt rollback: restore from .previous
+    try {
+      await moveIfExists(path.join(previousDir, INDEX_META_FILENAME), activeMetaPath);
+      await moveIfExists(path.join(previousDir, KEYWORD_INDEX_FILENAME), activeIndexPath);
+      await moveIfExists(path.join(previousDir, INTELLIGENCE_FILENAME), activeIntelligencePath);
+      await moveIfExists(path.join(previousDir, MANIFEST_FILENAME), activeManifestPath);
+      await moveIfExists(path.join(previousDir, INDEXING_STATS_FILENAME), activeStatsPath);
+      await moveDirIfExists(path.join(previousDir, VECTOR_DB_DIRNAME), activeVectorDir);
+      console.error('Rollback successful');
+    } catch (rollbackError) {
+      console.error('Rollback also failed:', rollbackError);
+    }
+
+    throw swapError;
+  }
+}
+
+/**
+ * Best-effort cleanup of a directory and its contents.
+ */
+async function cleanupDirectory(dirPath: string): Promise<void> {
+  try {
+    await fs.rm(dirPath, { recursive: true, force: true });
+  } catch {
+    // Best-effort: ignore cleanup failures
+  }
 }
 
 export interface IndexerOptions {
@@ -191,6 +299,8 @@ export class CodebaseIndexer {
       errors: [],
       startedAt: new Date()
     };
+
+    let stagingDir: string | null = null;
 
     try {
       const buildId = randomUUID();
@@ -567,10 +677,24 @@ export class CodebaseIndexer {
       // Phase 4: Storing
       this.updateProgress('storing', 75);
 
-      await fs.mkdir(contextDir, { recursive: true });
+      // For full rebuilds, use staging directory for atomic swap
+      // For incremental, write directly to active location
+      const isFullRebuild = !diff;
+      let activeContextDir = contextDir;
+
+      if (isFullRebuild) {
+        // Create staging directory for atomic swap
+        const stagingBase = path.join(contextDir, STAGING_DIRNAME);
+        stagingDir = path.join(stagingBase, buildId);
+        await fs.mkdir(stagingDir, { recursive: true });
+        activeContextDir = stagingDir;
+        console.error(`Full rebuild: writing to staging ${stagingDir}`);
+      }
+
+      await fs.mkdir(activeContextDir, { recursive: true });
 
       if (!this.config.skipEmbedding) {
-        const storagePath = path.join(contextDir, VECTOR_DB_DIRNAME);
+        const storagePath = path.join(activeContextDir, VECTOR_DB_DIRNAME);
         const storageProvider = await getStorageProvider({ path: storagePath });
 
         if (diff) {
@@ -595,16 +719,15 @@ export class CodebaseIndexer {
               `added ${chunksWithEmbeddings.length} new chunks`
           );
         } else {
-          // Full: clear and re-store everything
-          console.error(`Storing ${chunksToEmbed.length} chunks...`);
-          await storageProvider.clear();
+          // Full rebuild: store to staging (no clear - fresh directory)
+          console.error(`Storing ${chunksToEmbed.length} chunks to staging...`);
           await storageProvider.store(chunksWithEmbeddings);
         }
       }
 
       // Vector DB build marker (required for version gating)
       // Write after semantic store step so marker reflects the latest DB state.
-      const vectorDir = path.join(contextDir, VECTOR_DB_DIRNAME);
+      const vectorDir = path.join(activeContextDir, VECTOR_DB_DIRNAME);
       await fs.mkdir(vectorDir, { recursive: true });
       await fs.writeFile(
         path.join(vectorDir, 'index-build.json'),
@@ -612,7 +735,7 @@ export class CodebaseIndexer {
       );
 
       // Keyword index always uses ALL chunks (full regen)
-      const indexPath = path.join(contextDir, KEYWORD_INDEX_FILENAME);
+      const indexPath = path.join(activeContextDir, KEYWORD_INDEX_FILENAME);
       // Memory safety: cap keyword index too
       const keywordChunks =
         allChunks.length > MAX_CHUNKS ? allChunks.slice(0, MAX_CHUNKS) : allChunks;
@@ -625,7 +748,7 @@ export class CodebaseIndexer {
       );
 
       // Save library usage and pattern stats (always full regen)
-      const intelligencePath = path.join(contextDir, INTELLIGENCE_FILENAME);
+      const intelligencePath = path.join(activeContextDir, INTELLIGENCE_FILENAME);
       const libraryStats = libraryTracker.getStats();
 
       // Extract tsconfig paths for AI to understand import aliases
@@ -663,12 +786,14 @@ export class CodebaseIndexer {
       await fs.writeFile(intelligencePath, JSON.stringify(intelligence, null, 2));
 
       // Write manifest (both full and incremental)
+      // For full rebuild, write to staging; for incremental, write to active
+      const activeManifestPath = path.join(activeContextDir, MANIFEST_FILENAME);
       const manifest: FileManifest = {
         version: 1,
         generatedAt: new Date().toISOString(),
         files: currentHashes ?? (await computeFileHashes(files, this.rootPath))
       };
-      await writeManifest(manifestPath, manifest);
+      await writeManifest(activeManifestPath, manifest);
 
       const persistedStats: PersistedIndexingStats = {
         indexedFiles: stats.indexedFiles,
@@ -676,10 +801,11 @@ export class CodebaseIndexer {
         totalFiles: stats.totalFiles,
         generatedAt
       };
-      await fs.writeFile(indexingStatsPath, JSON.stringify(persistedStats, null, 2));
+      const activeIndexingStatsPath = path.join(activeContextDir, INDEXING_STATS_FILENAME);
+      await fs.writeFile(activeIndexingStatsPath, JSON.stringify(persistedStats, null, 2));
 
       // Index meta (authoritative) — write last so readers never observe meta pointing to missing artifacts.
-      const metaPath = path.join(contextDir, INDEX_META_FILENAME);
+      const metaPath = path.join(activeContextDir, INDEX_META_FILENAME);
       await fs.writeFile(
         metaPath,
         JSON.stringify(
@@ -701,6 +827,12 @@ export class CodebaseIndexer {
           2
         )
       );
+
+      // Atomic swap for full rebuilds: move staging into active location
+      if (isFullRebuild && stagingDir) {
+        console.error('Performing atomic swap of staging to active...');
+        await atomicSwapStagingToActive(contextDir, stagingDir, buildId);
+      }
 
       // Phase 5: Complete
       this.updateProgress('complete', 100);
@@ -728,6 +860,11 @@ export class CodebaseIndexer {
         phase: this.progress.phase,
         timestamp: new Date()
       });
+      // Clean up staging directory on failure (best-effort)
+      if (stagingDir) {
+        console.error('Cleaning up staging directory after failure...');
+        await cleanupDirectory(stagingDir);
+      }
       throw error;
     }
   }

@@ -17,7 +17,13 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
   private storagePath: string = '';
   private initialized = false;
 
-  async initialize(storagePath: string): Promise<void> {
+  /**
+   * Initialize the storage provider at the given path.
+   * @param storagePath - Directory path for LanceDB storage
+   * @param options - Optional configuration
+   * @param options.expectExisting - If true, throws IndexCorruptedError if table doesn't exist
+   */
+  async initialize(storagePath: string, options?: { expectExisting?: boolean }): Promise<void> {
     if (this.initialized) return;
 
     try {
@@ -39,6 +45,10 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
           throw new IndexCorruptedError('LanceDB index corrupted: missing vector column');
         }
         console.error('Opened existing LanceDB table');
+      } else if (options?.expectExisting) {
+        throw new IndexCorruptedError(
+          `LanceDB index missing: no code_chunks table found at ${storagePath}`
+        );
       } else {
         this.table = null;
       }
@@ -50,7 +60,10 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
         throw error;
       }
       console.error('Failed to initialize LanceDB:', error);
-      throw error;
+      // Wrap connection/open failures as corruption errors for fail-closed behavior
+      throw new IndexCorruptedError(
+        `LanceDB initialization failed: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 
@@ -105,8 +118,15 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
     limit: number,
     filters?: SearchFilters
   ): Promise<VectorSearchResult[]> {
-    if (!this.initialized || !this.table) {
-      throw new IndexCorruptedError('LanceDB index corrupted: no table available for search');
+    if (!this.initialized) {
+      throw new IndexCorruptedError(
+        'LanceDB index corrupted: storage not initialized (rebuild required)'
+      );
+    }
+    if (!this.table) {
+      throw new IndexCorruptedError(
+        'LanceDB index corrupted: no table available for search (rebuild required)'
+      );
     }
 
     try {
@@ -161,12 +181,22 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
         distance: result._distance || 0
       }));
     } catch (error) {
-      // Only trigger auto-heal for verified corruption patterns
-      if (error instanceof Error && error.message.toLowerCase().includes('no vector column')) {
-        throw new IndexCorruptedError(`LanceDB index corrupted: ${error.message}`);
+      // Fail closed: treat search errors as corruption requiring rebuild
+      const errorMsg =
+        error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+      if (
+        errorMsg.includes('no vector column') ||
+        errorMsg.includes('not found') ||
+        errorMsg.includes('does not exist') ||
+        errorMsg.includes('corrupted') ||
+        errorMsg.includes('schema')
+      ) {
+        throw new IndexCorruptedError(
+          `LanceDB query failed (rebuild required): ${error instanceof Error ? error.message : String(error)}`
+        );
       }
 
-      // Transient errors - log and gracefully degrade
+      // Transient errors - log and gracefully degrade (don't trigger rebuild for network/IO hiccups)
       console.error('[LanceDB] Search error:', error instanceof Error ? error.message : error);
       return [];
     }
