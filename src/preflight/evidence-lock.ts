@@ -25,6 +25,7 @@ export interface EvidenceLock {
   gaps?: string[];
   nextAction?: string;
   epistemicStress?: EpistemicStress;
+  whatWouldHelp?: string[];
 }
 
 interface PatternConflict {
@@ -41,6 +42,8 @@ interface BuildEvidenceLockInput {
   patternConflicts?: PatternConflict[];
   /** When search quality is low_confidence, evidence lock MUST block edits. */
   searchQualityStatus?: 'ok' | 'low_confidence';
+  /** Impact coverage: number of known callers covered by results */
+  impactCoverage?: { covered: number; total: number };
 }
 
 function strengthFactor(strength: EvidenceStrength): number {
@@ -162,6 +165,17 @@ export function buildEvidenceLock(input: BuildEvidenceLockInput): EvidenceLock {
     stressTriggers.push('Insufficient evidence: most evidence sources are empty');
   }
 
+  // Trigger: low caller coverage 
+  if (
+    input.impactCoverage &&
+    input.impactCoverage.total > 3 &&
+    input.impactCoverage.covered / input.impactCoverage.total < 0.4
+  ) {
+    stressTriggers.push(
+      `Low caller coverage: only ${input.impactCoverage.covered} of ${input.impactCoverage.total} callers appear in results`
+    );
+  }
+
   let epistemicStress: EpistemicStress | undefined;
   if (stressTriggers.length > 0) {
     const level: EpistemicStress['level'] =
@@ -195,6 +209,41 @@ export function buildEvidenceLock(input: BuildEvidenceLockInput): EvidenceLock {
     (!epistemicStress || !epistemicStress.abstain) &&
     input.searchQualityStatus !== 'low_confidence';
 
+  //  Generate whatWouldHelp recommendations
+  const whatWouldHelp: string[] = [];
+  if (!readyToEdit) {
+    // Code evidence weak/missing
+    if (codeStrength === 'weak' || codeStrength === 'missing') {
+      whatWouldHelp.push(
+        'Search with a more specific query targeting the implementation files'
+      );
+    }
+
+    // Pattern evidence missing
+    if (patternsStrength === 'missing') {
+      whatWouldHelp.push('Call get_team_patterns to see what patterns apply to this area');
+    }
+
+    // Low caller coverage with many callers
+    if (
+      input.impactCoverage &&
+      input.impactCoverage.total > 3 &&
+      input.impactCoverage.covered / input.impactCoverage.total < 0.4
+    ) {
+      const uncoveredCallers = input.impactCoverage.total - input.impactCoverage.covered;
+      if (uncoveredCallers > 0) {
+        whatWouldHelp.push(
+          `Search specifically for uncovered callers to check ${Math.min(2, uncoveredCallers)} more files`
+        );
+      }
+    }
+
+    // Memory evidence missing + failure warnings
+    if (memoriesStrength === 'missing' && input.failureWarnings.length > 0) {
+      whatWouldHelp.push('Review related memories with get_memory to understand past issues');
+    }
+  }
+
   return {
     mode: 'triangulated',
     status,
@@ -203,6 +252,7 @@ export function buildEvidenceLock(input: BuildEvidenceLockInput): EvidenceLock {
     sources,
     ...(gaps.length > 0 && { gaps }),
     ...(nextAction && { nextAction }),
-    ...(epistemicStress && { epistemicStress })
+    ...(epistemicStress && { epistemicStress }),
+    ...(whatWouldHelp.length > 0 && { whatWouldHelp: whatWouldHelp.slice(0, 4) })
   };
 }

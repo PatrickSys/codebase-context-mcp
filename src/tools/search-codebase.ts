@@ -440,15 +440,15 @@ export async function handle(
   if (intent && preflightIntents.includes(intent) && intelligence) {
     try {
       // --- Avoid / Prefer patterns ---
-      const avoidPatterns: any[] = [];
-      const preferredPatterns: any[] = [];
+      const avoidPatternsList: any[] = [];
+      const preferredPatternsList: any[] = [];
       const patterns = intelligence.patterns || {};
       for (const [category, data] of Object.entries<any>(patterns)) {
         // Primary pattern = preferred if Rising or Stable
         if (data.primary) {
           const p = data.primary;
           if (p.trend === 'Rising' || p.trend === 'Stable') {
-            preferredPatterns.push({
+            preferredPatternsList.push({
               pattern: p.name,
               category,
               adoption: p.frequency,
@@ -462,7 +462,7 @@ export async function handle(
         if (data.alsoDetected) {
           for (const alt of data.alsoDetected) {
             if (alt.trend === 'Declining') {
-              avoidPatterns.push({
+              avoidPatternsList.push({
                 pattern: alt.name,
                 category,
                 adoption: alt.frequency,
@@ -477,6 +477,24 @@ export async function handle(
       // --- Impact candidates (files importing the result files) ---
       const resultPaths = results.map((r) => r.filePath);
       const impactCandidates = computeImpactCandidates(resultPaths);
+
+      // PREF-02: Compute impact coverage (callers of result files that appear in results)
+      const callerFiles = resultPaths.flatMap((p) => {
+        const importers: string[] = [];
+        for (const [dep, importerList] of reverseImports) {
+          if (dep.endsWith(p) || p.endsWith(dep)) {
+            importers.push(...importerList);
+          }
+        }
+        return importers;
+      });
+      const uniqueCallers = new Set(callerFiles);
+      const callersCovered = Array.from(uniqueCallers).filter((f) =>
+        resultPaths.some((rp) => f.endsWith(rp) || rp.endsWith(f))
+      ).length;
+      const callersTotal = uniqueCallers.size;
+      const impactCoverage =
+        callersTotal > 0 ? { covered: callersCovered, total: callersTotal } : undefined;
 
       // --- Risk level (based on circular deps + impact breadth) ---
       let riskLevel: 'low' | 'medium' | 'high' = 'low';
@@ -526,8 +544,8 @@ export async function handle(
         }))
         .slice(0, 3);
 
-      const preferredPatternsForOutput = preferredPatterns.slice(0, 5);
-      const avoidPatternsForOutput = avoidPatterns.slice(0, 5);
+      const preferredPatternsForOutput = preferredPatternsList.slice(0, 5);
+      const avoidPatternsForOutput = avoidPatternsList.slice(0, 5);
 
       // --- Pattern conflicts (split decisions within categories) ---
       const patternConflicts: Array<{
@@ -562,64 +580,124 @@ export async function handle(
         relatedMemories,
         failureWarnings,
         patternConflicts,
-        searchQualityStatus: searchQuality.status
+        searchQualityStatus: searchQuality.status,
+        impactCoverage
       });
 
-      // Bump risk if there are active failure memories for this area
-      if (failureWarnings.length > 0 && riskLevel === 'low') {
-        riskLevel = 'medium';
+      // Build clean decision card (PREF-01 to PREF-04)
+      interface DecisionCard {
+        ready: boolean;
+        nextAction?: string;
+        warnings?: string[];
+        patterns?: {
+          do?: string[];
+          avoid?: string[];
+        };
+        bestExample?: string;
+        impact?: {
+          coverage?: string;
+          files?: string[];
+        };
+        whatWouldHelp?: string[];
       }
 
-      // If evidence triangulation is weak, avoid claiming low risk
-      if (evidenceLock.status === 'block' && riskLevel === 'low') {
-        riskLevel = 'medium';
-      }
-
-      // If epistemic stress says abstain, bump risk
-      if (evidenceLock.epistemicStress?.abstain && riskLevel === 'low') {
-        riskLevel = 'medium';
-      }
-
-      preflight = {
-        intent,
-        riskLevel,
-        confidence,
-        evidenceLock,
-        ...(preferredPatternsForOutput.length > 0 && {
-          preferredPatterns: preferredPatternsForOutput
-        }),
-        ...(avoidPatternsForOutput.length > 0 && {
-          avoidPatterns: avoidPatternsForOutput
-        }),
-        ...(goldenFiles.length > 0 && { goldenFiles }),
-        ...(impactCandidates.length > 0 && {
-          impactCandidates: impactCandidates.slice(0, 10)
-        }),
-        ...(cycleCount > 0 && { circularDependencies: cycleCount }),
-        ...(failureWarnings.length > 0 && { failureWarnings })
+      const decisionCard: DecisionCard = {
+        ready: evidenceLock.readyToEdit
       };
+
+      // Add nextAction if not ready
+      if (!decisionCard.ready && evidenceLock.nextAction) {
+        decisionCard.nextAction = evidenceLock.nextAction;
+      }
+
+      // Add warnings from failure memories (capped at 3)
+      if (failureWarnings.length > 0) {
+        decisionCard.warnings = failureWarnings.slice(0, 3).map((w) => w.memory);
+      }
+
+      // Add patterns (do/avoid, capped at 3 each, with adoption %)
+      const doPatterns = preferredPatternsForOutput.slice(0, 3).map((p) => `${p.pattern} — ${p.frequency || 'N/A'}`);
+      const avoidPatterns = avoidPatternsForOutput.slice(0, 3).map((p) => `${p.pattern} — ${p.frequency || 'N/A'} (declining)`);
+      if (doPatterns.length > 0 || avoidPatterns.length > 0) {
+        decisionCard.patterns = {
+          ...(doPatterns.length > 0 && { do: doPatterns }),
+          ...(avoidPatterns.length > 0 && { avoid: avoidPatterns })
+        };
+      }
+
+      // Add bestExample (top 1 golden file)
+      if (goldenFiles.length > 0) {
+        decisionCard.bestExample = `${goldenFiles[0].file}`;
+      }
+
+      // Add impact (coverage + top 3 files)
+      if (impactCoverage || impactCandidates.length > 0) {
+        const impactObj: { coverage?: string; files?: string[] } = {};
+        if (impactCoverage) {
+          impactObj.coverage = `${impactCoverage.covered}/${impactCoverage.total} callers in results`;
+        }
+        if (impactCandidates.length > 0) {
+          impactObj.files = impactCandidates.slice(0, 3);
+        }
+        if (Object.keys(impactObj).length > 0) {
+          decisionCard.impact = impactObj;
+        }
+      }
+
+      // Add whatWouldHelp from evidenceLock
+      if (evidenceLock.whatWouldHelp && evidenceLock.whatWouldHelp.length > 0) {
+        decisionCard.whatWouldHelp = evidenceLock.whatWouldHelp;
+      }
+
+      preflight = decisionCard;
     } catch {
       // Preflight construction failed — skip preflight, don't fail the search
     }
   }
 
-  // For edit/refactor/migrate: return full preflight card (risk, patterns, impact, etc.).
-  // For explore or lite-only: return flattened { ready, reason }.
+  // For edit/refactor/migrate: return clean decision card.
+  // For explore or lite-only: return lightweight { ready, reason }.
   let preflightPayload: { ready: boolean; reason?: string } | Record<string, unknown> | undefined;
   if (preflight) {
-    const el = preflight.evidenceLock;
-    // Full card per tool schema; add top-level ready/reason for backward compatibility
-    preflightPayload = {
-      ...preflight,
-      ready: el?.readyToEdit ?? false,
-      ...(el && !el.readyToEdit && el.nextAction && { reason: el.nextAction })
-    };
+    // preflight is already a clean decision card (DecisionCard type)
+    preflightPayload = preflight;
   } else if (editPreflight) {
+    // Lite preflight for explore intent
     const el = editPreflight.evidenceLock;
     preflightPayload = {
       ready: el?.readyToEdit ?? false,
       ...(el && !el.readyToEdit && el.nextAction && { reason: el.nextAction })
     };
+  }
+
+  // Helper: Build scope header for symbol-aware chunks (SEARCH-02)
+  function buildScopeHeader(metadata: any): string | null {
+    // Try symbolPath first (most reliable for AST-based symbols)
+    if (metadata?.symbolPath && Array.isArray(metadata.symbolPath)) {
+      return metadata.symbolPath.join('.');
+    }
+    // Fallback: className + functionName
+    if (metadata?.className && metadata?.functionName) {
+      return `${metadata.className}.${metadata.functionName}`;
+    }
+    // Class only
+    if (metadata?.className) {
+      return metadata.className;
+    }
+    // Function only
+    if (metadata?.functionName) {
+      return metadata.functionName;
+    }
+    return null;
+  }
+
+  function enrichSnippetWithScope(snippet: string | undefined, metadata: any): string | undefined {
+    if (!snippet) return undefined;
+    const scopeHeader = buildScopeHeader(metadata);
+    if (scopeHeader) {
+      return `// ${scopeHeader}\n${snippet}`;
+    }
+    return snippet;
   }
 
   return {
@@ -640,6 +718,9 @@ export async function handle(
             ...(preflightPayload && { preflight: preflightPayload }),
             results: results.map((r) => {
               const relationshipsAndHints = buildRelationshipHints(r);
+              const enrichedSnippet = includeSnippets
+                ? enrichSnippetWithScope(r.snippet, r.metadata)
+                : undefined;
 
               return {
                 file: `${r.filePath}:${r.startLine}-${r.endLine}`,
@@ -650,7 +731,7 @@ export async function handle(
                 ...(r.patternWarning && { patternWarning: r.patternWarning }),
                 ...(relationshipsAndHints.relationships && { relationships: relationshipsAndHints.relationships }),
                 ...(relationshipsAndHints.hints && { hints: relationshipsAndHints.hints }),
-                ...(includeSnippets && r.snippet && { snippet: r.snippet })
+                ...(enrichedSnippet && { snippet: enrichedSnippet })
               };
             }),
             totalResults: results.length,
