@@ -9,7 +9,6 @@ import type { SearchResult } from '../types/index.js';
 import { buildEvidenceLock } from '../preflight/evidence-lock.js';
 import { shouldIncludePatternConflictCategory } from '../preflight/query-scope.js';
 import {
-  isComplementaryPatternCategory,
   isComplementaryPatternConflict,
   shouldSkipLegacyTestingFrameworkCategory
 } from '../patterns/semantics.js';
@@ -176,8 +175,9 @@ export async function handle(
                 text: JSON.stringify(
                   {
                     status: 'error',
-                    message: `Auto-heal retry failed: ${retryError instanceof Error ? retryError.message : String(retryError)
-                      }`
+                    message: `Auto-heal retry failed: ${
+                      retryError instanceof Error ? retryError.message : String(retryError)
+                    }`
                   },
                   null,
                   2
@@ -313,7 +313,8 @@ export async function handle(
   function buildRelationshipHints(result: SearchResult): RelationshipHints {
     const rPath = result.filePath;
     // Graph keys are relative paths with forward slashes; normalize for comparison
-    const rPathNorm = path.relative(ctx.rootPath, rPath).replace(/\\/g, '/') || rPath.replace(/\\/g, '/');
+    const rPathNorm =
+      path.relative(ctx.rootPath, rPath).replace(/\\/g, '/') || rPath.replace(/\\/g, '/');
 
     // importedBy: files that import this result (reverse lookup), collect with counts
     const importedByMap = new Map<string, number>();
@@ -395,13 +396,6 @@ export async function handle(
       const resultPaths = results.map((r) => r.filePath);
       const impactCandidates = computeImpactCandidates(resultPaths);
 
-      let riskLevel: 'low' | 'medium' | 'high' = 'low';
-      if (impactCandidates.length > 10) {
-        riskLevel = 'high';
-      } else if (impactCandidates.length > 3) {
-        riskLevel = 'medium';
-      }
-
       // Use existing pattern intelligence for evidenceLock scoring, but keep the output payload lite.
       const preferredPatternsForEvidence: Array<{ pattern: string; example?: string }> = [];
       const patterns = intelligence.patterns || {};
@@ -415,6 +409,13 @@ export async function handle(
             });
           }
         }
+      }
+
+      let riskLevel: 'low' | 'medium' | 'high' = 'low';
+      if (impactCandidates.length > 10) {
+        riskLevel = 'high';
+      } else if (impactCandidates.length > 3) {
+        riskLevel = 'medium';
       }
 
       editPreflight = {
@@ -498,7 +499,8 @@ export async function handle(
         callersTotal > 0 ? { covered: callersCovered, total: callersTotal } : undefined;
 
       // --- Risk level (based on circular deps + impact breadth) ---
-      let riskLevel: 'low' | 'medium' | 'high' = 'low';
+      //TODO: Review this risk level calculation
+      let _riskLevel: 'low' | 'medium' | 'high' = 'low';
       let cycleCount = 0;
       const graphDataSource = relationships?.graph || intelligence?.internalFileGraph;
       if (graphDataSource) {
@@ -521,9 +523,9 @@ export async function handle(
         }
       }
       if (cycleCount > 0 || impactCandidates.length > 10) {
-        riskLevel = 'high';
+        _riskLevel = 'high';
       } else if (impactCandidates.length > 3) {
-        riskLevel = 'medium';
+        _riskLevel = 'medium';
       }
 
       // --- Golden files (exemplar code) ---
@@ -533,7 +535,8 @@ export async function handle(
       }));
 
       // --- Confidence (index freshness) ---
-      const confidence = computeIndexConfidence();
+      // TODO: Review this confidence calculation
+      //const confidence = computeIndexConfidence();
 
       // --- Failure memories (1.5x relevance boost) ---
       const failureWarnings = relatedMemories
@@ -617,8 +620,12 @@ export async function handle(
       }
 
       // Add patterns (do/avoid, capped at 3 each, with adoption %)
-      const doPatterns = preferredPatternsForOutput.slice(0, 3).map((p) => `${p.pattern} — ${p.adoption ? ` ${p.adoption}% adoption` : ''}`);
-      const avoidPatterns = avoidPatternsForOutput.slice(0, 3).map((p) => `${p.pattern} — ${p.adoption ? ` ${p.adoption}% adoption` : ''} (declining)`);
+      const doPatterns = preferredPatternsForOutput
+        .slice(0, 3)
+        .map((p) => `${p.pattern} — ${p.adoption ? ` ${p.adoption}% adoption` : ''}`);
+      const avoidPatterns = avoidPatternsForOutput
+        .slice(0, 3)
+        .map((p) => `${p.pattern} — ${p.adoption ? ` ${p.adoption}% adoption` : ''} (declining)`);
       if (doPatterns.length > 0 || avoidPatterns.length > 0) {
         decisionCard.patterns = {
           ...(doPatterns.length > 0 && { do: doPatterns }),
@@ -717,8 +724,8 @@ export async function handle(
               confidence: searchQuality.confidence,
               ...(searchQuality.status === 'low_confidence' &&
                 searchQuality.nextSteps?.[0] && {
-                hint: searchQuality.nextSteps[0]
-              })
+                  hint: searchQuality.nextSteps[0]
+                })
             },
             ...(preflightPayload && { preflight: preflightPayload }),
             results: results.map((r) => {
@@ -734,7 +741,9 @@ export async function handle(
                 ...(r.componentType && r.layer && { type: `${r.componentType}:${r.layer}` }),
                 ...(r.trend && r.trend !== 'Stable' && { trend: r.trend }),
                 ...(r.patternWarning && { patternWarning: r.patternWarning }),
-                ...(relationshipsAndHints.relationships && { relationships: relationshipsAndHints.relationships }),
+                ...(relationshipsAndHints.relationships && {
+                  relationships: relationshipsAndHints.relationships
+                }),
                 ...(relationshipsAndHints.hints && { hints: relationshipsAndHints.hints }),
                 ...(enrichedSnippet && { snippet: enrichedSnippet })
               };

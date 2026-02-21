@@ -165,7 +165,7 @@ export function buildEvidenceLock(input: BuildEvidenceLockInput): EvidenceLock {
     stressTriggers.push('Insufficient evidence: most evidence sources are empty');
   }
 
-  // Trigger: low caller coverage 
+  // Trigger: low caller coverage
   if (
     input.impactCoverage &&
     input.impactCoverage.total > 3 &&
@@ -214,9 +214,7 @@ export function buildEvidenceLock(input: BuildEvidenceLockInput): EvidenceLock {
   if (!readyToEdit) {
     // Code evidence weak/missing
     if (codeStrength === 'weak' || codeStrength === 'missing') {
-      whatWouldHelp.push(
-        'Search with a more specific query targeting the implementation files'
-      );
+      whatWouldHelp.push('Search with a more specific query targeting the implementation files');
     }
 
     // Pattern evidence missing
