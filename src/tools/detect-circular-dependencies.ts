@@ -1,7 +1,9 @@
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { promises as fs } from 'fs';
+import path from 'path';
 import type { ToolContext, ToolResponse } from './types.js';
 import { InternalFileGraph } from '../utils/usage-tracker.js';
+import { RELATIONSHIPS_FILENAME } from '../constants/codebase-context.js';
 
 export const definition: Tool = {
   name: 'detect_circular_dependencies',
@@ -27,11 +29,36 @@ export async function handle(
   const { scope } = args as { scope?: string };
 
   try {
-    const intelligencePath = ctx.paths.intelligence;
-    const content = await fs.readFile(intelligencePath, 'utf-8');
-    const intelligence = JSON.parse(content);
+    // Try relationships sidecar first (preferred), then intelligence
+    let graphDataSource: any = null;
+    let graphStats: any = null;
 
-    if (!intelligence.internalFileGraph) {
+    const relationshipsPath = path.join(
+      path.dirname(ctx.paths.intelligence),
+      RELATIONSHIPS_FILENAME
+    );
+    try {
+      const relationshipsContent = await fs.readFile(relationshipsPath, 'utf-8');
+      const relationships = JSON.parse(relationshipsContent);
+      if (relationships?.graph) {
+        graphDataSource = relationships.graph;
+        graphStats = relationships.stats;
+      }
+    } catch {
+      // Relationships sidecar not available, try intelligence
+    }
+
+    if (!graphDataSource) {
+      const intelligencePath = ctx.paths.intelligence;
+      const content = await fs.readFile(intelligencePath, 'utf-8');
+      const intelligence = JSON.parse(content);
+      if (intelligence.internalFileGraph) {
+        graphDataSource = intelligence.internalFileGraph;
+        graphStats = intelligence.internalFileGraph.stats;
+      }
+    }
+
+    if (!graphDataSource) {
       return {
         content: [
           {
@@ -51,9 +78,9 @@ export async function handle(
     }
 
     // Reconstruct the graph from stored data
-    const graph = InternalFileGraph.fromJSON(intelligence.internalFileGraph, ctx.rootPath);
+    const graph = InternalFileGraph.fromJSON(graphDataSource, ctx.rootPath);
     const cycles = graph.findCycles(scope);
-    const graphStats = intelligence.internalFileGraph.stats || graph.getStats();
+    const stats = graphStats || graph.getStats();
 
     if (cycles.length === 0) {
       return {
@@ -67,7 +94,7 @@ export async function handle(
                   ? `No circular dependencies detected in scope: ${scope}`
                   : 'No circular dependencies detected in the codebase.',
                 scope,
-                graphStats
+                graphStats: stats
               },
               null,
               2
@@ -92,7 +119,7 @@ export async function handle(
                 severity: c.length === 2 ? 'high' : c.length <= 3 ? 'medium' : 'low'
               })),
               count: cycles.length,
-              graphStats,
+              graphStats: stats,
               advice:
                 'Shorter cycles (length 2-3) are typically more problematic. Consider breaking the cycle by extracting shared dependencies.'
             },

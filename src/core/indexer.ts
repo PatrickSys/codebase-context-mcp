@@ -39,6 +39,7 @@ import {
   INTELLIGENCE_FILENAME,
   KEYWORD_INDEX_FILENAME,
   MANIFEST_FILENAME,
+  RELATIONSHIPS_FILENAME,
   VECTOR_DB_DIRNAME
 } from '../constants/codebase-context.js';
 
@@ -91,6 +92,7 @@ async function atomicSwapStagingToActive(
   const activeVectorDir = path.join(contextDir, VECTOR_DB_DIRNAME);
   const activeManifestPath = path.join(contextDir, MANIFEST_FILENAME);
   const activeStatsPath = path.join(contextDir, INDEXING_STATS_FILENAME);
+  const activeRelationshipsPath = path.join(contextDir, RELATIONSHIPS_FILENAME);
 
   const stagingMetaPath = path.join(stagingDir, INDEX_META_FILENAME);
   const stagingIndexPath = path.join(stagingDir, KEYWORD_INDEX_FILENAME);
@@ -98,6 +100,7 @@ async function atomicSwapStagingToActive(
   const stagingVectorDir = path.join(stagingDir, VECTOR_DB_DIRNAME);
   const stagingManifestPath = path.join(stagingDir, MANIFEST_FILENAME);
   const stagingStatsPath = path.join(stagingDir, INDEXING_STATS_FILENAME);
+  const stagingRelationshipsPath = path.join(stagingDir, RELATIONSHIPS_FILENAME);
 
   // Step 1: Create .previous directory and move current active there
   await fs.mkdir(previousDir, { recursive: true });
@@ -134,6 +137,7 @@ async function atomicSwapStagingToActive(
   await moveIfExists(activeIntelligencePath, path.join(previousDir, INTELLIGENCE_FILENAME));
   await moveIfExists(activeManifestPath, path.join(previousDir, MANIFEST_FILENAME));
   await moveIfExists(activeStatsPath, path.join(previousDir, INDEXING_STATS_FILENAME));
+  await moveIfExists(activeRelationshipsPath, path.join(previousDir, RELATIONSHIPS_FILENAME));
   await moveDirIfExists(activeVectorDir, path.join(previousDir, VECTOR_DB_DIRNAME));
 
   // Step 2: Move staging artifacts to active location
@@ -143,6 +147,7 @@ async function atomicSwapStagingToActive(
     await moveIfExists(stagingIntelligencePath, activeIntelligencePath);
     await moveIfExists(stagingManifestPath, activeManifestPath);
     await moveIfExists(stagingStatsPath, activeStatsPath);
+    await moveIfExists(stagingRelationshipsPath, activeRelationshipsPath);
     await moveDirIfExists(stagingVectorDir, activeVectorDir);
 
     // Step 3: Clean up .previous and staging directories
@@ -171,6 +176,7 @@ async function atomicSwapStagingToActive(
       await moveIfExists(path.join(previousDir, INTELLIGENCE_FILENAME), activeIntelligencePath);
       await moveIfExists(path.join(previousDir, MANIFEST_FILENAME), activeManifestPath);
       await moveIfExists(path.join(previousDir, INDEXING_STATS_FILENAME), activeStatsPath);
+      await moveIfExists(path.join(previousDir, RELATIONSHIPS_FILENAME), activeRelationshipsPath);
       await moveDirIfExists(path.join(previousDir, VECTOR_DB_DIRNAME), activeVectorDir);
       console.error('Rollback successful');
     } catch (rollbackError) {
@@ -796,6 +802,51 @@ export class CodebaseIndexer {
       };
       await fs.writeFile(intelligencePath, JSON.stringify(intelligence, null, 2));
 
+      // Write relationships sidecar (versioned, for fast lookup)
+      const relationshipsPath = path.join(activeContextDir, RELATIONSHIPS_FILENAME);
+      const graphData = internalFileGraph.toJSON();
+
+      // Build reverse import map (importedBy)
+      const importedBy: Record<string, string[]> = {};
+      if (graphData.imports) {
+        for (const [file, deps] of Object.entries(graphData.imports)) {
+          for (const dep of deps as string[]) {
+            if (!importedBy[dep]) importedBy[dep] = [];
+            importedBy[dep].push(file);
+          }
+        }
+      }
+
+      // Build symbol export map (exportedBy)
+      const exportedBy: Record<string, string[]> = {};
+      if (graphData.exports) {
+        for (const [file, exps] of Object.entries(graphData.exports)) {
+          for (const exp of exps as Array<{ name: string; type: string }>) {
+            if (exp.name && exp.name !== 'default') {
+              if (!exportedBy[exp.name]) exportedBy[exp.name] = [];
+              if (!exportedBy[exp.name].includes(file)) {
+                exportedBy[exp.name].push(file);
+              }
+            }
+          }
+        }
+      }
+
+      const relationships = {
+        header: { buildId, formatVersion: INDEX_FORMAT_VERSION },
+        generatedAt,
+        graph: {
+          imports: graphData.imports || {},
+          importedBy,
+          exports: graphData.exports || {}
+        },
+        symbols: {
+          exportedBy
+        },
+        stats: graphData.stats || internalFileGraph.getStats()
+      };
+      await fs.writeFile(relationshipsPath, JSON.stringify(relationships, null, 2));
+
       // Write manifest (both full and incremental)
       // For full rebuild, write to staging; for incremental, write to active
       const activeManifestPath = path.join(activeContextDir, MANIFEST_FILENAME);
@@ -831,7 +882,8 @@ export class CodebaseIndexer {
               vectorDb: { path: VECTOR_DB_DIRNAME, provider: 'lancedb' },
               intelligence: { path: INTELLIGENCE_FILENAME },
               manifest: { path: MANIFEST_FILENAME },
-              indexingStats: { path: INDEXING_STATS_FILENAME }
+              indexingStats: { path: INDEXING_STATS_FILENAME },
+              relationships: { path: RELATIONSHIPS_FILENAME }
             }
           },
           null,

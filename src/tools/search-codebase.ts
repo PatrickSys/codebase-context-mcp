@@ -16,6 +16,7 @@ import { assessSearchQuality } from '../core/search-quality.js';
 import { IndexCorruptedError } from '../errors/index.js';
 import { readMemoriesFile, withConfidence } from '../memory/store.js';
 import { InternalFileGraph } from '../utils/usage-tracker.js';
+import { RELATIONSHIPS_FILENAME } from '../constants/codebase-context.js';
 
 export const definition: Tool = {
   name: 'search_codebase',
@@ -229,6 +230,30 @@ export async function handle(
     /* graceful degradation — intelligence file may not exist yet */
   }
 
+  // Load relationships sidecar (preferred over intelligence.internalFileGraph)
+  let relationships: any = null;
+  try {
+    const relationshipsPath = path.join(
+      path.dirname(ctx.paths.intelligence),
+      RELATIONSHIPS_FILENAME
+    );
+    const relationshipsContent = await fs.readFile(relationshipsPath, 'utf-8');
+    relationships = JSON.parse(relationshipsContent);
+  } catch {
+    /* graceful degradation — relationships sidecar may not exist yet */
+  }
+
+  // Helper to get imports graph from relationships sidecar (preferred) or intelligence
+  function getImportsGraph(): Record<string, string[]> | null {
+    if (relationships?.graph?.imports) {
+      return relationships.graph.imports as Record<string, string[]>;
+    }
+    if (intelligence?.internalFileGraph?.imports) {
+      return intelligence.internalFileGraph.imports as Record<string, string[]>;
+    }
+    return null;
+  }
+
   function computeIndexConfidence(): 'fresh' | 'aging' | 'stale' {
     let confidence: 'fresh' | 'aging' | 'stale' = 'stale';
     if (intelligence?.generatedAt) {
@@ -246,8 +271,8 @@ export async function handle(
   // Cheap impact breadth estimate from the import graph (used for risk assessment).
   function computeImpactCandidates(resultPaths: string[]): string[] {
     const impactCandidates: string[] = [];
-    if (!intelligence?.internalFileGraph?.imports) return impactCandidates;
-    const allImports = intelligence.internalFileGraph.imports as Record<string, string[]>;
+    const allImports = getImportsGraph();
+    if (!allImports) return impactCandidates;
     for (const [file, deps] of Object.entries(allImports)) {
       if (
         deps.some((dep: string) => resultPaths.some((rp) => dep.endsWith(rp) || rp.endsWith(dep)))
@@ -260,10 +285,11 @@ export async function handle(
     return impactCandidates;
   }
 
-  // Build reverse import map from intelligence graph
+  // Build reverse import map from relationships sidecar (preferred) or intelligence graph
   const reverseImports = new Map<string, string[]>();
-  if (intelligence?.internalFileGraph?.imports) {
-    for (const [file, deps] of Object.entries<string[]>(intelligence.internalFileGraph.imports)) {
+  const importsGraph = getImportsGraph();
+  if (importsGraph) {
+    for (const [file, deps] of Object.entries<string[]>(importsGraph)) {
       for (const dep of deps) {
         if (!reverseImports.has(dep)) reverseImports.set(dep, []);
         reverseImports.get(dep)!.push(file);
@@ -285,8 +311,8 @@ export async function handle(
 
     // imports: files this result depends on (forward lookup)
     const imports: string[] = [];
-    if (intelligence?.internalFileGraph?.imports) {
-      for (const [file, deps] of Object.entries<string[]>(intelligence.internalFileGraph.imports)) {
+    if (importsGraph) {
+      for (const [file, deps] of Object.entries<string[]>(importsGraph)) {
         if (file.endsWith(rPath) || rPath.endsWith(file)) {
           imports.push(...deps);
         }
@@ -296,8 +322,8 @@ export async function handle(
     // testedIn: heuristic — same basename with .spec/.test extension
     const testedIn: string[] = [];
     const baseName = path.basename(rPath).replace(/\.[^.]+$/, '');
-    if (intelligence?.internalFileGraph?.imports) {
-      for (const file of Object.keys(intelligence.internalFileGraph.imports)) {
+    if (importsGraph) {
+      for (const file of Object.keys(importsGraph)) {
         const fileBase = path.basename(file);
         if (
           (fileBase.includes('.spec.') || fileBase.includes('.test.')) &&
@@ -416,9 +442,10 @@ export async function handle(
       // --- Risk level (based on circular deps + impact breadth) ---
       let riskLevel: 'low' | 'medium' | 'high' = 'low';
       let cycleCount = 0;
-      if (intelligence.internalFileGraph) {
+      const graphDataSource = relationships?.graph || intelligence?.internalFileGraph;
+      if (graphDataSource) {
         try {
-          const graph = InternalFileGraph.fromJSON(intelligence.internalFileGraph, ctx.rootPath);
+          const graph = InternalFileGraph.fromJSON(graphDataSource, ctx.rootPath);
           // Use directory prefixes as scope (not full file paths)
           // findCycles(scope) filters files by startsWith, so a full path would only match itself
           const scopes = new Set(

@@ -9,6 +9,7 @@ import {
   INDEX_META_VERSION,
   INTELLIGENCE_FILENAME,
   KEYWORD_INDEX_FILENAME,
+  RELATIONSHIPS_FILENAME,
   VECTOR_DB_DIRNAME
 } from '../constants/codebase-context.js';
 import { IndexCorruptedError } from '../errors/index.js';
@@ -29,6 +30,12 @@ const VectorDbBuildSchema = z.object({
 });
 
 const IntelligenceFileSchema = z
+  .object({
+    header: ArtifactHeaderSchema
+  })
+  .passthrough();
+
+const RelationshipsFileSchema = z
   .object({
     header: ArtifactHeaderSchema
   })
@@ -219,6 +226,36 @@ export async function validateIndexArtifacts(rootDir: string, meta: IndexMeta): 
     } catch (error) {
       if (error instanceof IndexCorruptedError) throw error;
       throw asIndexCorrupted('Intelligence corrupted (rebuild required)', error);
+    }
+  }
+
+  // Optional relationships sidecar: validate if present, but do not require.
+  const relationshipsPath = path.join(contextDir, RELATIONSHIPS_FILENAME);
+  if (await pathExists(relationshipsPath)) {
+    try {
+      const raw = await fs.readFile(relationshipsPath, 'utf-8');
+      const json = JSON.parse(raw);
+      const parsed = RelationshipsFileSchema.safeParse(json);
+      if (!parsed.success) {
+        throw new IndexCorruptedError(
+          `Relationships schema mismatch (rebuild required): ${parsed.error.message}`
+        );
+      }
+
+      const { buildId, formatVersion } = parsed.data.header;
+      if (formatVersion !== meta.formatVersion) {
+        throw new IndexCorruptedError(
+          `Relationships formatVersion mismatch (rebuild required): meta=${meta.formatVersion}, relationships.json=${formatVersion}`
+        );
+      }
+      if (buildId !== meta.buildId) {
+        throw new IndexCorruptedError(
+          `Relationships buildId mismatch (rebuild required): meta=${meta.buildId}, relationships.json=${buildId}`
+        );
+      }
+    } catch (error) {
+      if (error instanceof IndexCorruptedError) throw error;
+      throw asIndexCorrupted('Relationships sidecar corrupted (rebuild required)', error);
     }
   }
 }
