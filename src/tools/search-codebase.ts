@@ -176,9 +176,8 @@ export async function handle(
                 text: JSON.stringify(
                   {
                     status: 'error',
-                    message: `Auto-heal retry failed: ${
-                      retryError instanceof Error ? retryError.message : String(retryError)
-                    }`
+                    message: `Auto-heal retry failed: ${retryError instanceof Error ? retryError.message : String(retryError)
+                      }`
                   },
                   null,
                   2
@@ -313,11 +312,13 @@ export async function handle(
 
   function buildRelationshipHints(result: SearchResult): RelationshipHints {
     const rPath = result.filePath;
+    // Graph keys are relative paths with forward slashes; normalize for comparison
+    const rPathNorm = path.relative(ctx.rootPath, rPath).replace(/\\/g, '/') || rPath.replace(/\\/g, '/');
 
     // importedBy: files that import this result (reverse lookup), collect with counts
     const importedByMap = new Map<string, number>();
     for (const [dep, importers] of reverseImports) {
-      if (dep.endsWith(rPath) || rPath.endsWith(dep)) {
+      if (dep === rPathNorm || dep.endsWith(rPathNorm) || rPathNorm.endsWith(dep)) {
         for (const importer of importers) {
           importedByMap.set(importer, (importedByMap.get(importer) || 0) + 1);
         }
@@ -326,7 +327,7 @@ export async function handle(
 
     // testedIn: heuristic — same basename with .spec/.test extension
     const testedIn: string[] = [];
-    const baseName = path.basename(rPath).replace(/\.[^.]+$/, '');
+    const baseName = path.basename(rPathNorm).replace(/\.[^.]+$/, '');
     if (importsGraph) {
       for (const file of Object.keys(importsGraph)) {
         const fileBase = path.basename(file);
@@ -616,8 +617,8 @@ export async function handle(
       }
 
       // Add patterns (do/avoid, capped at 3 each, with adoption %)
-      const doPatterns = preferredPatternsForOutput.slice(0, 3).map((p) => `${p.pattern} — ${p.frequency || 'N/A'}`);
-      const avoidPatterns = avoidPatternsForOutput.slice(0, 3).map((p) => `${p.pattern} — ${p.frequency || 'N/A'} (declining)`);
+      const doPatterns = preferredPatternsForOutput.slice(0, 3).map((p) => `${p.pattern} — ${p.adoption ? ` ${p.adoption}% adoption` : ''}`);
+      const avoidPatterns = avoidPatternsForOutput.slice(0, 3).map((p) => `${p.pattern} — ${p.adoption ? ` ${p.adoption}% adoption` : ''} (declining)`);
       if (doPatterns.length > 0 || avoidPatterns.length > 0) {
         decisionCard.patterns = {
           ...(doPatterns.length > 0 && { do: doPatterns }),
@@ -688,6 +689,10 @@ export async function handle(
     if (metadata?.functionName) {
       return metadata.functionName;
     }
+    // component chunk fallback (component or pipe name)
+    if (metadata?.componentName) {
+      return metadata.componentName;
+    }
     return null;
   }
 
@@ -712,8 +717,8 @@ export async function handle(
               confidence: searchQuality.confidence,
               ...(searchQuality.status === 'low_confidence' &&
                 searchQuality.nextSteps?.[0] && {
-                  hint: searchQuality.nextSteps[0]
-                })
+                hint: searchQuality.nextSteps[0]
+              })
             },
             ...(preflightPayload && { preflight: preflightPayload }),
             results: results.map((r) => {

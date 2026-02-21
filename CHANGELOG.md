@@ -8,22 +8,10 @@
 - **Scope headers in code snippets**: When requesting snippets (`includeSnippets: true`), each code block now starts with a comment like `// UserService.login()` so agents know where the code lives without extra file reads.
 - **Edit decision card**: When searching with `intent="edit"`, `intent="refactor"`, or `intent="migrate"`, results now include a decision card telling you whether there's enough evidence to proceed safely. The card shows: whether you're ready (`ready: true/false`), what to do next if not (`nextAction`), relevant team patterns to follow, a top example file, how many callers appear in results (`impact.coverage`), and what searches would help close gaps (`whatWouldHelp`).
 - **Caller coverage tracking**: The decision card shows how many of a symbol's callers are in your search results. Low coverage (less than 40% when there are lots of callers) triggers an alert so you know to search more before editing.
-
-### Changed
-
-- **Preflight response shape**: Renamed `reason` to `nextAction` for clarity. Removed internal fields (`evidenceLock`, `riskLevel`, `confidence`) so the output is stable and doesn't change shape unexpectedly.
-
-### Fixed
-
-- Null-pointer crash in GenericAnalyzer when chunk content is undefined.
-- Tree-sitter symbol extraction now treats node offsets as UTF-8 byte ranges and evicts cached parsers on failures/timeouts.
-
-### More improvements (Phases 06–08)
-
-- **Index versioning (Phase 06)**: Index artifacts are versioned via `index-meta.json`. Mixed-version indexes are never served; version mismatches or corruption trigger automatic rebuild.
-- **Crash-safe rebuilds (Phase 06)**: Full rebuilds write to `.staging/` and swap atomically only on success. Failed rebuilds don't corrupt the active index.
-- **Relationship sidecar (Phase 07)**: New `relationships.json` artifact containing file import graph, reverse imports, and symbol export index. Updated incrementally alongside the main index.
-- **References confidence + hints (Phase 08)**: `get_symbol_references` now includes `confidence: "syntactic"` and `isComplete: boolean` to help agents assess result completeness. `search_codebase` results now include a structured `hints` object (capped callers/consumers/tests ranked by frequency) drawn from the relationships sidecar. `get_component_usage` removed from MCP surface (11→10 tools).
+- **Index versioning**: Index artifacts are versioned via `index-meta.json`. Mixed-version indexes are never served; version mismatches or corruption trigger automatic rebuild.
+- **Crash-safe rebuilds**: Full rebuilds write to `.staging/` and swap atomically only on success. Failed rebuilds don't corrupt the active index.
+- **Relationship sidecar**: New `relationships.json` artifact containing file import graph, reverse imports, and symbol export index. Updated incrementally alongside the main index.
+- **References confidence + hints**: `get_symbol_references` now includes `confidence: "syntactic"` and `isComplete: boolean` to help agents assess result completeness. `search_codebase` results now include a structured `hints` object (capped callers/consumers/tests ranked by frequency) drawn from the relationships sidecar. **`get_component_usage` removed from MCP surface (11→10 tools).** If you previously used `get_component_usage`, use `get_symbol_references` for symbol usage evidence (usageCount, top snippets, callers/consumers).
 - Tree-sitter-backed symbol extraction is now used by the Generic analyzer when available (with safe fallbacks).
 - Expanded language/extension detection to improve indexing coverage (e.g. `.pyi`, `.php`, `.kt`/`.kts`, `.cc`/`.cxx`, `.cs`, `.swift`, `.scala`, `.toml`, `.xml`).
 - New tool: `get_symbol_references` for concrete symbol usage evidence (usageCount + top snippets).
@@ -31,6 +19,15 @@
 - Shared eval scoring/reporting module (`src/eval/*`) used by both the CLI runner and the test suite.
 - Second frozen eval fixture plus an in-repo controlled TypeScript codebase for fully-offline eval runs.
 - Regression tests covering Tree-sitter Unicode slicing, parser cleanup/reset behavior, and large/generated file skipping.
+
+### Changed
+
+- **Preflight response shape**: Renamed `reason` to `nextAction` for clarity. Removed internal fields (`evidenceLock`, `riskLevel`, `confidence`) so the output is stable and doesn't change shape unexpectedly.
+ 
+### Fixed
+
+- Null-pointer crash in GenericAnalyzer when chunk content is undefined.
+- Tree-sitter symbol extraction now treats node offsets as UTF-8 byte ranges and evicts cached parsers on failures/timeouts.
 
 ## [1.6.2] - 2026-02-17
 

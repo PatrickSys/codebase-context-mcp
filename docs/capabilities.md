@@ -4,7 +4,7 @@ Technical reference for what `codebase-context` ships today. For the user-facing
 
 ## Tool Surface
 
-10 MCP tools + 1 optional resource (`codebase://context`).
+10 MCP tools + 1 optional resource (`codebase://context`). **Migration:** `get_component_usage` was removed; use `get_symbol_references` for symbol usage evidence.
 
 ### Core Tools
 
@@ -12,7 +12,7 @@ Technical reference for what `codebase-context` ships today. For the user-facing
 | ----------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `search_codebase`       | `query`, optional `intent`, `limit`, `filters`, `includeSnippets` | Ranked results (`file`, `summary`, `score`, `type`, `trend`, `patternWarning`, `relationships`, `hints`) + `searchQuality` + decision card (`ready`, `nextAction`, `patterns`, `bestExample`, `impact`, `whatWouldHelp`) when `intent="edit"`. Hints capped at 3 per category. |
 | `get_team_patterns`     | optional `category`                                               | Pattern frequencies, trends, golden files, conflicts                                                                                                                                 |
-| `get_symbol_references` | `symbol`, optional `limit`                                        | Concrete symbol usage evidence: `usageCount` + top usage snippets + `confidence` ("syntactic") + `isComplete` boolean                                                                |
+| `get_symbol_references` | `symbol`, optional `limit`                                        | Concrete symbol usage evidence: `usageCount` + top usage snippets + `confidence` + `isComplete`. `confidence: "syntactic"` means static/source-based only (no runtime or dynamic dispatch). Replaces the removed `get_component_usage`. |
 | `remember`              | `type`, `category`, `memory`, `reason`                            | Persists to `.codebase-context/memory.json`                                                                                                                                          |
 | `get_memory`            | optional `category`, `type`, `query`, `limit`                     | Memories with confidence decay scoring                                                                                                                                               |
 
@@ -121,12 +121,12 @@ Returned as `preflight` when search `intent` is `edit`, `refactor`, or `migrate`
 ## Analyzers
 
 - **Angular**: signals, standalone components, control flow syntax, lifecycle hooks, DI patterns, component metadata
-- **Generic**: 30+ languages — TypeScript, JavaScript, Python, Java, Kotlin, C/C++, C#, Go, Rust, PHP, Ruby, Swift, Scala, Shell, config/markup formats
+- **Generic**: 30+ have indexing/retrieval coverage including PHP, Ruby, Swift, Scala, Shell, config/markup., 10 languages have full symbol extraction (Tree-sitter: TypeScript, JavaScript, Python, Java, Kotlin, C, C++, C#, Go, Rust). 
 
 Notes:
 
 - Language detection covers common extensions including `.pyi`, `.kt`/`.kts`, `.cc`/`.cxx`, and config formats like `.toml`/`.xml`.
-- When Tree-sitter grammars are present, the Generic analyzer can derive symbol components from Tree-sitter extraction (with fallbacks).
+- When Tree-sitter grammars are present, the Generic analyzer uses AST-aligned chunking and scope-aware prefixes for symbol-aware snippets (with fallbacks).
 
 ## Evaluation Harness
 

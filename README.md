@@ -119,12 +119,21 @@ This is where it all comes together. One call returns:
 - **Code results** with `file` (path + line range), `summary`, `score`
 - **Type** per result: compact `componentType:layer` (e.g., `service:data`) — helps agents orient
 - **Pattern signals** per result: `trend` (Rising/Declining — Stable is omitted) and `patternWarning` when using legacy code
-- **Relationships** per result: `importedByCount` and `hasTests` (condensed) + **hints** (capped ranked callers, consumers, tests)
+- **Relationships** per result: `importedByCount` and `hasTests` (condensed) + **hints** (capped ranked callers, consumers, tests) — so you see suggested next reads and know what you haven't looked at yet
 - **Related memories**: up to 3 team decisions, gotchas, and failures matched to the query
 - **Search quality**: `ok` or `low_confidence` with confidence score and `hint` when low
 - **Preflight**: `ready` (boolean) with decision card when `intent="edit"|"refactor"|"migrate"`. Shows `nextAction` (if not ready), `warnings`, `patterns` (do/avoid), `bestExample`, `impact` (caller coverage), and `whatWouldHelp` (next steps). If search quality is low, `ready` is always `false`.
 
-Snippets are opt-in (`includeSnippets: true`). Default output is lean — if the agent wants code, it calls `read_file`.
+Snippets are optional (`includeSnippets: true`). When enabled, snippets that have symbol metadata (e.g. from the Generic analyzer's AST chunking or Angular component chunks) start with a scope header so you know where the code lives (e.g. `// AuthService.getToken()` or `// SpotifyApiService`). Example:
+
+```ts
+// AuthService.getToken()
+getToken(): string {
+  return this.token;
+}
+```
+
+Default output is lean — if the agent wants code, it calls `read_file`.
 
 ```json
 {
@@ -189,7 +198,7 @@ Record a decision once. It surfaces automatically in search results and prefligh
 | ------------------------------ | ------------------------------------------------------------------------------------------- |
 | `search_codebase`              | Hybrid search + decision card. Pass `intent="edit"` to get `ready`, `nextAction`, patterns, caller coverage, and `whatWouldHelp`. |
 | `get_team_patterns`            | Pattern frequencies, golden files, conflict detection                                      |
-| `get_symbol_references`        | Find concrete references to a symbol (usageCount + top snippets + confidence + completeness) |
+| `get_symbol_references`        | Find concrete references to a symbol (usageCount + top snippets). `confidence: "syntactic"` = static/source-based only; no runtime or dynamic dispatch. |
 | `remember`                     | Record a convention, decision, gotcha, or failure                                          |
 | `get_memory`                   | Query team memory with confidence decay scoring                                            |
 | `get_codebase_metadata`        | Project structure, frameworks, dependencies                                                |
@@ -200,7 +209,7 @@ Record a decision once. It surfaces automatically in search results and prefligh
 
 ## Evaluation Harness (`npm run eval`)
 
-Reproducible evaluation with frozen fixtures so ranking/chunking changes are measured honestly and regressions get caught.
+Reproducible evaluation with frozen fixtures so ranking/chunking changes are measured honestly and regressions get caught. **For contributors and CI:** run before releases or after changing search/ranking/chunking to guard against regressions.
 
 - Two codebases: `npm run eval -- <codebaseA> <codebaseB>`
 - Defaults: fixture A = `tests/fixtures/eval-angular-spotify.json`, fixture B = `tests/fixtures/eval-controlled.json`
@@ -214,11 +223,13 @@ npm run eval -- tests/fixtures/codebases/eval-controlled tests/fixtures/codebase
 ```
 
 - Flags: `--help`, `--fixture-a`, `--fixture-b`, `--skip-reindex`, `--no-rerank`, `--no-redact`
+- To save a report for later comparison, redirect stdout (e.g. `pnpm run eval -- <path-to-angular-spotify> --skip-reindex > internal-docs/tests/eval-runs/angular-spotify-YYYY-MM-DD.txt`).
 
 ## How the Search Works
 
 The retrieval pipeline is designed around one goal: give the agent the right context, not just any file that matches.
 
+- **Definition-first ranking** - for exact-name lookups (e.g. a symbol name), the file that *defines* the symbol ranks above files that only use it.
 - **Intent classification** - knows whether "AuthService" is a name lookup or "how does auth work" is conceptual. Adjusts keyword/semantic weights accordingly.
 - **Hybrid fusion (RRF)** - combines keyword and semantic search using Reciprocal Rank Fusion instead of brittle score averaging.
 - **Query expansion** - conceptual queries automatically expand with domain-relevant terms (auth → login, token, session, guard).
@@ -229,13 +240,15 @@ The retrieval pipeline is designed around one goal: give the agent the right con
 - **Version gating** - index artifacts are versioned; mismatches trigger automatic rebuild so mixed-version data is never served.
 - **Auto-heal** - if the index corrupts, search triggers a full re-index automatically.
 
+**Index reliability:** Rebuilds write to a staging directory and swap atomically only on success, so a failed rebuild never corrupts the active index. Version mismatches or corruption trigger an automatic full re-index (no user action required).
+
 ## Language Support
 
-Over **30+ languages** are supported for indexing + retrieval: TypeScript/JavaScript, Python (incl `.pyi`), PHP, Ruby, Java, Kotlin (`.kt`/`.kts`), Go, Rust, C/C++ (incl `.cc`/`.cxx`), C#, Swift, Scala, Shell, plus common config/markup formats (JSON/YAML/TOML/XML, etc.).
+**10 languages** have full symbol extraction (Tree-sitter): TypeScript, JavaScript, Python, Java, Kotlin, C, C++, C#, Go, Rust. **30+ languages** have indexing and retrieval coverage (keyword + semantic), including PHP, Ruby, Swift, Scala, Shell, and config/markup (JSON/YAML/TOML/XML, etc.).
 
 Enrichment is framework-specific: right now only **Angular** has a dedicated analyzer for rich conventions/context (signals, standalone components, control flow, DI patterns).
 
-For non-Angular projects, the **Generic** analyzer still provides broad coverage, and will use Tree-sitter symbol extraction when a grammar is available (otherwise it falls back to safe parsing).
+For non-Angular projects, the **Generic** analyzer uses **AST-aligned chunking** when a Tree-sitter grammar is available: symbol-bounded chunks with **scope-aware prefixes** (e.g. `// ClassName.methodName`) so snippets show where code lives. Without a grammar it falls back to safe line-based chunking.
 
 Structured filters available: `framework`, `language`, `componentType`, `layer` (presentation, business, data, state, core, shared).
 
