@@ -2,30 +2,23 @@
 
 ## [Unreleased]
 
-## [Unshipped - Phase 09] - High-Signal Search + Decision Card
-
-Cleaned up the edit decision card and sharpened search ranking for exact-name queries.
-
 ### Added
 
-- **Definition-first ranking (SEARCH-01)**: For exact-name queries (PascalCase/camelCase), the file that *defines* a symbol now ranks above files that merely use it. Symbol-level dedup ensures multiple methods from the same class don't clog the top slots.
-- **Smart snippets with scope headers (SEARCH-02)**: When `includeSnippets: true`, code chunks from symbol-aware analysis include a scope comment header (`// ClassName.methodName`) before the snippet, giving structural context without extra disk reads.
-- **Clean decision card (PREF-01-04)**: The preflight response for `intent="edit"|"refactor"|"migrate"` is now a decision card: `ready`, `nextAction` (if not ready), `warnings`, `patterns` (do/avoid capped at 3), `bestExample` (top golden file), `impact` (caller coverage + top files), and `whatWouldHelp`. Internal fields like `evidenceLock`, `riskLevel`, `confidence` are no longer exposed.
-- **Impact coverage gating (PREF-02)**: When result files have known callers (from import graph), the card shows caller coverage: "X/Y callers in results". Low coverage (< 40% with > 3 total callers) triggers an epistemic stress alert.
-- **whatWouldHelp recommendations (PREF-03)**: When `ready=false`, concrete next steps appear: search more specifically, call `get_team_patterns`, search for uncovered callers, or check memories. Each is actionable in 1-2 sentences.
+- **Definition-first ranking**: Exact-name searches now show the file that *defines* a symbol before files that use it. For example, searching `parseConfig` shows the function definition first, then callers.
+- **Scope headers in code snippets**: When requesting snippets (`includeSnippets: true`), each code block now starts with a comment like `// UserService.login()` so agents know where the code lives without extra file reads.
+- **Edit decision card**: When searching with `intent="edit"`, `intent="refactor"`, or `intent="migrate"`, results now include a decision card telling you whether there's enough evidence to proceed safely. The card shows: whether you're ready (`ready: true/false`), what to do next if not (`nextAction`), relevant team patterns to follow, a top example file, how many callers appear in results (`impact.coverage`), and what searches would help close gaps (`whatWouldHelp`).
+- **Caller coverage tracking**: The decision card shows how many of a symbol's callers are in your search results. Low coverage (less than 40% when there are lots of callers) triggers an alert so you know to search more before editing.
 
 ### Changed
 
-- **Preflight shape**: `{ ready, reason?, ... }` → `{ ready, nextAction?, warnings?, patterns?, bestExample?, impact?, whatWouldHelp? }`. `reason` renamed to `nextAction` for clarity. No breaking changes to `ready` (stays top-level).
+- **Preflight response shape**: Renamed `reason` to `nextAction` for clarity. Removed internal fields (`evidenceLock`, `riskLevel`, `confidence`) so the output is stable and doesn't change shape unexpectedly.
 
 ### Fixed
 
-- Agents no longer parse unstable internal fields. Preflight output is stable by design.
-- Snippets now include scope context, reducing ambiguity for symbol-heavy edits.
+- Null-pointer crash in GenericAnalyzer when chunk content is undefined.
+- Tree-sitter symbol extraction now treats node offsets as UTF-8 byte ranges and evicts cached parsers on failures/timeouts.
 
-## [Unreleased]
-
-### Added
+### More improvements (Phases 06–08)
 
 - **Index versioning (Phase 06)**: Index artifacts are versioned via `index-meta.json`. Mixed-version indexes are never served; version mismatches or corruption trigger automatic rebuild.
 - **Crash-safe rebuilds (Phase 06)**: Full rebuilds write to `.staging/` and swap atomically only on success. Failed rebuilds don't corrupt the active index.
@@ -38,10 +31,6 @@ Cleaned up the edit decision card and sharpened search ranking for exact-name qu
 - Shared eval scoring/reporting module (`src/eval/*`) used by both the CLI runner and the test suite.
 - Second frozen eval fixture plus an in-repo controlled TypeScript codebase for fully-offline eval runs.
 - Regression tests covering Tree-sitter Unicode slicing, parser cleanup/reset behavior, and large/generated file skipping.
-
-### Fixed
-
-- Tree-sitter symbol extraction now treats node offsets as UTF-8 byte ranges and evicts cached parsers on failures/timeouts.
 
 ## [1.6.2] - 2026-02-17
 

@@ -16,7 +16,7 @@ Here's what codebase-context does:
 
 **Remembers across sessions** - Decisions, failures, workarounds that look wrong but exist for a reason - the battle scars that aren't in the comments. Recorded once, surfaced automatically so the agent doesn't "clean up" something you spent a week getting right. Conventional git commits (`refactor:`, `migrate:`, `fix:`) auto-extract into memory with zero effort. Stale memories decay and get flagged instead of blindly trusted.
 
-**Checks before editing** - A preflight card with risk level, patterns to use and avoid, failure warnings, and a `readyToEdit` evidence check. Catches the "confidently wrong" problem: when code, team memories, and patterns contradict each other, it tells the agent to ask instead of guess. If evidence is thin or contradictory, it says so.
+**Checks before editing** - Before editing something, you get a decision card showing whether there's enough evidence to proceed. If a symbol has four callers and only two appear in your search results, the card shows that coverage gap. If coverage is low, `whatWouldHelp` lists the specific searches to run before you touch anything. When code, team memories, and patterns contradict each other, it tells you to look deeper instead of guessing.
 
 One tool call returns all of it. Local-first - your code never leaves your machine.
 
