@@ -2,6 +2,14 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { promises as fs } from 'fs';
 import os from 'os';
 import path from 'path';
+import {
+  CODEBASE_CONTEXT_DIRNAME,
+  INDEX_FORMAT_VERSION,
+  INDEX_META_FILENAME,
+  INDEX_META_VERSION,
+  KEYWORD_INDEX_FILENAME,
+  VECTOR_DB_DIRNAME
+} from '../src/constants/codebase-context.js';
 
 const searchMocks = vi.hoisted(() => ({
   search: vi.fn()
@@ -82,6 +90,41 @@ describe('search_codebase auto-heal', () => {
     tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'codebase-context-auto-heal-'));
     process.env.CODEBASE_ROOT = tempRoot;
     process.argv[2] = tempRoot;
+
+    // Seed a minimal valid index so Phase 06 validation gate passes.
+    const ctxDir = path.join(tempRoot, CODEBASE_CONTEXT_DIRNAME);
+    await fs.mkdir(path.join(ctxDir, VECTOR_DB_DIRNAME), { recursive: true });
+    const buildId = 'test-build-auto-heal';
+    const generatedAt = new Date().toISOString();
+    await fs.writeFile(
+      path.join(ctxDir, VECTOR_DB_DIRNAME, 'index-build.json'),
+      JSON.stringify({ buildId, formatVersion: INDEX_FORMAT_VERSION }),
+      'utf-8'
+    );
+    await fs.writeFile(
+      path.join(ctxDir, KEYWORD_INDEX_FILENAME),
+      JSON.stringify({ header: { buildId, formatVersion: INDEX_FORMAT_VERSION }, chunks: [] }),
+      'utf-8'
+    );
+    await fs.writeFile(
+      path.join(ctxDir, INDEX_META_FILENAME),
+      JSON.stringify(
+        {
+          metaVersion: INDEX_META_VERSION,
+          formatVersion: INDEX_FORMAT_VERSION,
+          buildId,
+          generatedAt,
+          toolVersion: 'test',
+          artifacts: {
+            keywordIndex: { path: KEYWORD_INDEX_FILENAME },
+            vectorDb: { path: VECTOR_DB_DIRNAME, provider: 'lancedb' }
+          }
+        },
+        null,
+        2
+      ),
+      'utf-8'
+    );
   });
 
   afterEach(async () => {
@@ -100,13 +143,13 @@ describe('search_codebase auto-heal', () => {
     }
   });
 
-  it(
-    'triggers indexing and retries when IndexCorruptedError is thrown',
-    async () => {
+  it('triggers indexing and retries when IndexCorruptedError is thrown', async () => {
     const { IndexCorruptedError } = await import('../src/errors/index.js');
 
     searchMocks.search
-      .mockRejectedValueOnce(new IndexCorruptedError('LanceDB index corrupted: missing vector column'))
+      .mockRejectedValueOnce(
+        new IndexCorruptedError('LanceDB index corrupted: missing vector column')
+      )
       .mockResolvedValueOnce([
         {
           summary: 'Test summary',
@@ -140,9 +183,7 @@ describe('search_codebase auto-heal', () => {
     expect(payload.results).toHaveLength(1);
     expect(searchMocks.search).toHaveBeenCalledTimes(2);
     expect(indexerMocks.index).toHaveBeenCalledTimes(1);
-    },
-    15000
-  );
+  }, 15000);
 
   it('returns invalid_params when search_codebase query is missing', async () => {
     const { server } = await import('../src/index.js');
@@ -207,4 +248,3 @@ describe('search_codebase auto-heal', () => {
     expect(payload.results[0].relevantSections.length).toBeLessThanOrEqual(2);
   });
 });
-

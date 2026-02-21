@@ -2,6 +2,15 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { promises as fs } from 'fs';
 import os from 'os';
 import path from 'path';
+import {
+  CODEBASE_CONTEXT_DIRNAME,
+  INDEX_FORMAT_VERSION,
+  INDEX_META_FILENAME,
+  INDEX_META_VERSION,
+  INTELLIGENCE_FILENAME,
+  KEYWORD_INDEX_FILENAME,
+  VECTOR_DB_DIRNAME
+} from '../src/constants/codebase-context.js';
 
 const searchMocks = vi.hoisted(() => ({
   search: vi.fn()
@@ -35,13 +44,52 @@ describe('search_codebase preflight', () => {
     process.env.CODEBASE_ROOT = tempRoot;
     process.argv[2] = tempRoot;
 
-    // Seed intelligence so preflight can render without indexing.
-    const ctxDir = path.join(tempRoot, '.codebase-context');
+    // Seed a minimal valid index + intelligence so preflight can render without indexing.
+    const ctxDir = path.join(tempRoot, CODEBASE_CONTEXT_DIRNAME);
     await fs.mkdir(ctxDir, { recursive: true });
+
+    const buildId = 'test-build-edit-preflight';
+    const generatedAt = new Date().toISOString();
+
+    await fs.mkdir(path.join(ctxDir, VECTOR_DB_DIRNAME), { recursive: true });
     await fs.writeFile(
-      path.join(ctxDir, 'intelligence.json'),
+      path.join(ctxDir, VECTOR_DB_DIRNAME, 'index-build.json'),
+      JSON.stringify({ buildId, formatVersion: INDEX_FORMAT_VERSION }),
+      'utf-8'
+    );
+
+    await fs.writeFile(
+      path.join(ctxDir, KEYWORD_INDEX_FILENAME),
+      JSON.stringify({ header: { buildId, formatVersion: INDEX_FORMAT_VERSION }, chunks: [] }),
+      'utf-8'
+    );
+
+    await fs.writeFile(
+      path.join(ctxDir, INDEX_META_FILENAME),
       JSON.stringify(
         {
+          metaVersion: INDEX_META_VERSION,
+          formatVersion: INDEX_FORMAT_VERSION,
+          buildId,
+          generatedAt,
+          toolVersion: 'test',
+          artifacts: {
+            keywordIndex: { path: KEYWORD_INDEX_FILENAME },
+            vectorDb: { path: VECTOR_DB_DIRNAME, provider: 'lancedb' },
+            intelligence: { path: INTELLIGENCE_FILENAME }
+          }
+        },
+        null,
+        2
+      ),
+      'utf-8'
+    );
+
+    await fs.writeFile(
+      path.join(ctxDir, INTELLIGENCE_FILENAME),
+      JSON.stringify(
+        {
+          header: { buildId, formatVersion: INDEX_FORMAT_VERSION },
           generatedAt: new Date().toISOString(),
           internalFileGraph: {
             imports: {
@@ -147,4 +195,3 @@ describe('search_codebase preflight', () => {
     expect(typeof payload.preflight.ready).toBe('boolean');
   });
 });
-

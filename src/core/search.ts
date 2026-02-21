@@ -14,6 +14,7 @@ import { IndexCorruptedError } from '../errors/index.js';
 import { isTestingRelatedQuery } from '../preflight/query-scope.js';
 import { assessSearchQuality } from './search-quality.js';
 import { rerank } from './reranker.js';
+import { type IndexMeta, readIndexMeta, validateIndexArtifacts } from './index-meta.js';
 import {
   CODEBASE_CONTEXT_DIRNAME,
   INTELLIGENCE_FILENAME,
@@ -112,6 +113,8 @@ export class CodebaseSearcher {
   private rootPath: string;
   private storagePath: string;
 
+  private indexMeta: IndexMeta | null = null;
+
   private fuseIndex: Fuse<CodeChunk> | null = null;
   private chunks: CodeChunk[] = [];
 
@@ -138,6 +141,10 @@ export class CodebaseSearcher {
     if (this.initialized) return;
 
     try {
+      // Fail closed on version mismatch/corruption before serving any results.
+      this.indexMeta = await readIndexMeta(this.rootPath);
+      await validateIndexArtifacts(this.rootPath, this.indexMeta);
+
       await this.loadKeywordIndex();
       await this.loadPatternIntelligence();
 
@@ -160,7 +167,20 @@ export class CodebaseSearcher {
     try {
       const indexPath = path.join(this.rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
       const content = await fs.readFile(indexPath, 'utf-8');
-      this.chunks = JSON.parse(content);
+      const parsed = JSON.parse(content) as any;
+
+      if (Array.isArray(parsed)) {
+        throw new IndexCorruptedError(
+          'Legacy keyword index format detected (missing header). Rebuild required.'
+        );
+      }
+
+      const chunks = parsed && Array.isArray(parsed.chunks) ? parsed.chunks : null;
+      if (!chunks) {
+        throw new IndexCorruptedError('Keyword index corrupted: expected { header, chunks }');
+      }
+
+      this.chunks = chunks;
 
       this.fuseIndex = new Fuse(this.chunks, {
         keys: [
@@ -178,9 +198,12 @@ export class CodebaseSearcher {
         ignoreLocation: true
       });
     } catch (error) {
-      console.warn('Keyword index load failed:', error);
-      this.chunks = [];
-      this.fuseIndex = null;
+      if (error instanceof IndexCorruptedError) {
+        throw error;
+      }
+      throw new IndexCorruptedError(
+        `Keyword index load failed (rebuild required): ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 

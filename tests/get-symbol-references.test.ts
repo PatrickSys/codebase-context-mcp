@@ -4,6 +4,9 @@ import os from 'os';
 import path from 'path';
 import {
   CODEBASE_CONTEXT_DIRNAME,
+  INDEX_FORMAT_VERSION,
+  INDEX_META_FILENAME,
+  INDEX_META_VERSION,
   KEYWORD_INDEX_FILENAME
 } from '../src/constants/codebase-context.js';
 
@@ -53,6 +56,16 @@ describe('get_symbol_references MCP tool', () => {
     const contextDir = path.join(tempRoot, CODEBASE_CONTEXT_DIRNAME);
     await fs.mkdir(contextDir, { recursive: true });
 
+    const buildId = 'test-build-symbol-refs';
+    const generatedAt = new Date().toISOString();
+
+    await fs.mkdir(path.join(contextDir, 'index'), { recursive: true });
+    await fs.writeFile(
+      path.join(contextDir, 'index', 'index-build.json'),
+      JSON.stringify({ buildId, formatVersion: INDEX_FORMAT_VERSION }),
+      'utf-8'
+    );
+
     const chunks = [
       {
         content: 'export function alpha() {\n  return beta(alpha);\n}',
@@ -68,7 +81,27 @@ describe('get_symbol_references MCP tool', () => {
 
     await fs.writeFile(
       path.join(contextDir, KEYWORD_INDEX_FILENAME),
-      JSON.stringify(chunks),
+      JSON.stringify({ header: { buildId, formatVersion: INDEX_FORMAT_VERSION }, chunks }),
+      'utf-8'
+    );
+
+    await fs.writeFile(
+      path.join(contextDir, INDEX_META_FILENAME),
+      JSON.stringify(
+        {
+          metaVersion: INDEX_META_VERSION,
+          formatVersion: INDEX_FORMAT_VERSION,
+          buildId,
+          generatedAt,
+          toolVersion: 'test',
+          artifacts: {
+            keywordIndex: { path: KEYWORD_INDEX_FILENAME },
+            vectorDb: { path: 'index', provider: 'lancedb' }
+          }
+        },
+        null,
+        2
+      ),
       'utf-8'
     );
 
@@ -90,6 +123,7 @@ describe('get_symbol_references MCP tool', () => {
 
     const payload = JSON.parse(response.content[0].text);
     expect(payload.status).toBe('success');
+    expect(payload.index).toBeTruthy();
     expect(payload.usageCount).toBeGreaterThan(0);
     expect(payload.usages.length).toBeLessThanOrEqual(2);
 

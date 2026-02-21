@@ -1,6 +1,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import { CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME } from '../constants/codebase-context.js';
+import { IndexCorruptedError } from '../errors/index.js';
 
 interface IndexedChunk {
   content?: unknown;
@@ -78,18 +79,27 @@ export async function findSymbolReferences(
   try {
     const content = await fs.readFile(indexPath, 'utf-8');
     chunksRaw = JSON.parse(content);
-  } catch {
-    return {
-      status: 'error',
-      message: 'Run indexing first'
-    };
+  } catch (error) {
+    throw new IndexCorruptedError(
+      `Keyword index missing or unreadable (rebuild required): ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
   }
 
-  if (!Array.isArray(chunksRaw)) {
-    return {
-      status: 'error',
-      message: 'Run indexing first'
-    };
+  if (Array.isArray(chunksRaw)) {
+    throw new IndexCorruptedError(
+      'Legacy keyword index format detected (missing header). Rebuild required.'
+    );
+  }
+
+  const chunks =
+    chunksRaw && typeof chunksRaw === 'object' && Array.isArray((chunksRaw as any).chunks)
+      ? ((chunksRaw as any).chunks as unknown[])
+      : null;
+
+  if (!chunks) {
+    throw new IndexCorruptedError('Keyword index corrupted: expected { header, chunks }');
   }
 
   const usages: SymbolUsage[] = [];
@@ -98,7 +108,7 @@ export async function findSymbolReferences(
   const escapedSymbol = escapeRegex(normalizedSymbol);
   const matcher = new RegExp(`\\b${escapedSymbol}\\b`, 'g');
 
-  for (const chunkRaw of chunksRaw) {
+  for (const chunkRaw of chunks) {
     const chunk = chunkRaw as IndexedChunk;
     if (typeof chunk.content !== 'string') {
       continue;

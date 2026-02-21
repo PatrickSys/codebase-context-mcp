@@ -62,6 +62,7 @@ import {
 import { CONTEXT_RESOURCE_URI, isContextResourceUri } from './resources/uri.js';
 import { assessSearchQuality } from './core/search-quality.js';
 import { findSymbolReferences } from './core/symbol-references.js';
+import { readIndexMeta, validateIndexArtifacts } from './core/index-meta.js';
 
 analyzerRegistry.register(new AngularAnalyzer());
 analyzerRegistry.register(new GenericAnalyzer());
@@ -100,6 +101,92 @@ const LEGACY_PATHS = {
   keywordIndex: path.join(ROOT_PATH, '.codebase-index.json'),
   vectorDb: path.join(ROOT_PATH, '.codebase-index')
 };
+
+export const INDEX_CONSUMING_TOOL_NAMES = [
+  'search_codebase',
+  'get_symbol_references',
+  'get_component_usage',
+  'detect_circular_dependencies',
+  'get_team_patterns',
+  'get_codebase_metadata'
+] as const;
+
+export const INDEX_CONSUMING_RESOURCE_NAMES = ['Codebase Intelligence'] as const;
+
+type IndexStatus = 'ready' | 'rebuild-required' | 'indexing' | 'unknown';
+type IndexConfidence = 'high' | 'low';
+type IndexAction = 'served' | 'rebuild-started' | 'rebuilt-and-served' | 'rebuild-failed';
+
+export type IndexSignal = {
+  status: IndexStatus;
+  confidence: IndexConfidence;
+  action: IndexAction;
+  reason?: string;
+};
+
+async function requireValidIndex(rootPath: string): Promise<IndexSignal> {
+  const meta = await readIndexMeta(rootPath);
+  await validateIndexArtifacts(rootPath, meta);
+
+  // Optional artifact presence informs confidence.
+  const hasIntelligence = await fileExists(PATHS.intelligence);
+
+  return {
+    status: 'ready',
+    confidence: hasIntelligence ? 'high' : 'low',
+    action: 'served',
+    ...(hasIntelligence ? {} : { reason: 'Optional intelligence artifact missing' })
+  };
+}
+
+async function ensureValidIndexOrAutoHeal(): Promise<IndexSignal> {
+  if (indexState.status === 'indexing') {
+    return {
+      status: 'indexing',
+      confidence: 'low',
+      action: 'served',
+      reason: 'Indexing in progress'
+    };
+  }
+
+  try {
+    return await requireValidIndex(ROOT_PATH);
+  } catch (error) {
+    if (error instanceof IndexCorruptedError) {
+      const reason = error.message;
+      console.error(`[Index] ${reason}`);
+      console.error('[Auto-Heal] Triggering full re-index...');
+
+      await performIndexing();
+
+      if (indexState.status === 'ready') {
+        try {
+          let validated = await requireValidIndex(ROOT_PATH);
+          validated = { ...validated, action: 'rebuilt-and-served', reason };
+          return validated;
+        } catch (revalidateError) {
+          const msg =
+            revalidateError instanceof Error ? revalidateError.message : String(revalidateError);
+          return {
+            status: 'rebuild-required',
+            confidence: 'low',
+            action: 'rebuild-failed',
+            reason: `Auto-heal completed but index did not validate: ${msg}`
+          };
+        }
+      }
+
+      return {
+        status: 'rebuild-required',
+        confidence: 'low',
+        action: 'rebuild-failed',
+        reason: `Auto-heal failed: ${indexState.error || reason}`
+      };
+    }
+
+    throw error;
+  }
+}
 
 /**
  * Check if file/directory exists
@@ -480,12 +567,36 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => {
 async function generateCodebaseContext(): Promise<string> {
   const intelligencePath = PATHS.intelligence;
 
+  const index = await ensureValidIndexOrAutoHeal();
+  if (index.status === 'indexing') {
+    return (
+      '# Codebase Intelligence\n\n' +
+      'Index is still being built. Retry in a moment.\n\n' +
+      `Index: ${index.status} (${index.confidence}, ${index.action})` +
+      (index.reason ? `\nReason: ${index.reason}` : '')
+    );
+  }
+  if (index.action === 'rebuild-failed') {
+    return (
+      '# Codebase Intelligence\n\n' +
+      'Index rebuild required before intelligence can be served.\n\n' +
+      `Index: ${index.status} (${index.confidence}, ${index.action})` +
+      (index.reason ? `\nReason: ${index.reason}` : '')
+    );
+  }
+
   try {
     const content = await fs.readFile(intelligencePath, 'utf-8');
     const intelligence = JSON.parse(content);
 
     const lines: string[] = [];
     lines.push('# Codebase Intelligence');
+    lines.push('');
+    lines.push(
+      `Index: ${index.status} (${index.confidence}, ${index.action})${
+        index.reason ? ` — ${index.reason}` : ''
+      }`
+    );
     lines.push('');
     lines.push('WARNING: This is what YOUR codebase actually uses, not generic recommendations.');
     lines.push('These are FACTS from analyzing your code, not best practices from the internet.');
@@ -775,6 +886,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         if (indexState.status === 'indexing') {
+          const index: IndexSignal = {
+            status: 'indexing',
+            confidence: 'low',
+            action: 'served',
+            reason: 'Indexing in progress'
+          };
           return {
             content: [
               {
@@ -782,6 +899,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 text: JSON.stringify(
                   {
                     status: 'indexing',
+                    index,
                     message: 'Index is still being built. Retry in a moment.',
                     progress: indexState.indexer?.getProgress()
                   },
@@ -794,6 +912,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         if (indexState.status === 'error') {
+          const index: IndexSignal = {
+            status: 'unknown',
+            confidence: 'low',
+            action: 'served',
+            reason: `Indexing failed: ${indexState.error}`
+          };
           return {
             content: [
               {
@@ -801,7 +925,29 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 text: JSON.stringify(
                   {
                     status: 'error',
+                    index,
                     message: `Indexing failed: ${indexState.error}`
+                  },
+                  null,
+                  2
+                )
+              }
+            ]
+          };
+        }
+
+        // Gate on version/meta validity before reading any index-derived artifacts.
+        let index = await ensureValidIndexOrAutoHeal();
+        if (index.action === 'rebuild-failed') {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    status: 'error',
+                    index,
+                    message: index.reason || 'Index rebuild required'
                   },
                   null,
                   2
@@ -824,12 +970,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           });
         } catch (error) {
           if (error instanceof IndexCorruptedError) {
+            const reason = error.message;
             console.error('[Auto-Heal] Index corrupted. Triggering full re-index...');
 
             await performIndexing();
 
             if (indexState.status === 'ready') {
               console.error('[Auto-Heal] Success. Retrying search...');
+              index = {
+                ...index,
+                status: 'ready',
+                confidence: 'high',
+                action: 'rebuilt-and-served',
+                reason
+              };
               const freshSearcher = new CodebaseSearcher(ROOT_PATH);
               try {
                 results = await freshSearcher.search(queryStr, limit || 5, filters, {
@@ -843,9 +997,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                       text: JSON.stringify(
                         {
                           status: 'error',
-                          message: `Auto-heal retry failed: ${
-                            retryError instanceof Error ? retryError.message : String(retryError)
-                          }`
+                          index: {
+                            status: 'rebuild-required',
+                            confidence: 'low',
+                            action: 'rebuild-failed',
+                            reason: `Auto-heal retry failed: ${
+                              retryError instanceof Error ? retryError.message : String(retryError)
+                            }`
+                          },
+                          message: 'Auto-heal retry failed'
                         },
                         null,
                         2
@@ -862,8 +1022,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     text: JSON.stringify(
                       {
                         status: 'error',
-                        message: `Auto-heal failed: Indexing ended with status '${indexState.status}'`,
-                        error: indexState.error
+                        index: {
+                          status: 'rebuild-required',
+                          confidence: 'low',
+                          action: 'rebuild-failed',
+                          reason: `Auto-heal failed: Indexing ended with status '${indexState.status}'${
+                            indexState.error ? ` (${indexState.error})` : ''
+                          }`
+                        },
+                        message: 'Auto-heal failed'
                       },
                       null,
                       2
@@ -1241,6 +1408,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               text: JSON.stringify(
                 {
                   status: 'success',
+                  index,
                   searchQuality: {
                     status: searchQuality.status,
                     confidence: searchQuality.confidence,
@@ -1364,22 +1532,41 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const indexer = new CodebaseIndexer({ rootPath: ROOT_PATH });
         const metadata = await indexer.detectMetadata();
 
+        // Only the optional teamPatterns portion is index-derived.
+        let index: IndexSignal;
+        try {
+          index = await requireValidIndex(ROOT_PATH);
+        } catch (error) {
+          if (error instanceof IndexCorruptedError) {
+            index = {
+              status: 'rebuild-required',
+              confidence: 'low',
+              action: 'served',
+              reason: error.message
+            };
+          } else {
+            throw error;
+          }
+        }
+
         // Load team patterns from intelligence file
         let teamPatterns = {};
-        try {
-          const intelligencePath = PATHS.intelligence;
-          const intelligenceContent = await fs.readFile(intelligencePath, 'utf-8');
-          const intelligence = JSON.parse(intelligenceContent);
+        if (index.status === 'ready' && (await fileExists(PATHS.intelligence))) {
+          try {
+            const intelligencePath = PATHS.intelligence;
+            const intelligenceContent = await fs.readFile(intelligencePath, 'utf-8');
+            const intelligence = JSON.parse(intelligenceContent);
 
-          if (intelligence.patterns) {
-            teamPatterns = {
-              dependencyInjection: intelligence.patterns.dependencyInjection,
-              stateManagement: intelligence.patterns.stateManagement,
-              componentInputs: intelligence.patterns.componentInputs
-            };
+            if (intelligence.patterns) {
+              teamPatterns = {
+                dependencyInjection: intelligence.patterns.dependencyInjection,
+                stateManagement: intelligence.patterns.stateManagement,
+                componentInputs: intelligence.patterns.componentInputs
+              };
+            }
+          } catch (_error) {
+            // Optional intelligence artifact missing/corrupt: omit teamPatterns
           }
-        } catch (_error) {
-          // No intelligence file or parsing error
         }
 
         return {
@@ -1389,6 +1576,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               text: JSON.stringify(
                 {
                   status: 'success',
+                  index,
                   metadata: {
                     name: metadata.name,
                     framework: metadata.framework,
@@ -1568,12 +1756,50 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'get_team_patterns': {
         const { category } = args as { category?: string };
 
+        const index = await ensureValidIndexOrAutoHeal();
+        if (index.status === 'indexing') {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    status: 'indexing',
+                    index,
+                    message: 'Index is still being built. Retry in a moment.'
+                  },
+                  null,
+                  2
+                )
+              }
+            ]
+          };
+        }
+        if (index.action === 'rebuild-failed') {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    status: 'error',
+                    index,
+                    message: index.reason || 'Index rebuild required'
+                  },
+                  null,
+                  2
+                )
+              }
+            ]
+          };
+        }
+
         try {
           const intelligencePath = PATHS.intelligence;
           const content = await fs.readFile(intelligencePath, 'utf-8');
           const intelligence = JSON.parse(content);
 
-          const result: any = { status: 'success' };
+          const result: any = { status: 'success', index };
 
           if (category === 'all' || !category) {
             result.patterns = intelligence.patterns || {};
@@ -1671,6 +1897,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 text: JSON.stringify(
                   {
                     status: 'error',
+                    index,
                     message: 'Failed to load team patterns',
                     error: error instanceof Error ? error.message : String(error)
                   },
@@ -1708,7 +1935,75 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           };
         }
 
-        const result = await findSymbolReferences(ROOT_PATH, normalizedSymbol, normalizedLimit);
+        const index = await ensureValidIndexOrAutoHeal();
+        if (index.status === 'indexing') {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    status: 'indexing',
+                    index,
+                    message: 'Index is still being built. Retry in a moment.'
+                  },
+                  null,
+                  2
+                )
+              }
+            ]
+          };
+        }
+        if (index.action === 'rebuild-failed') {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    status: 'error',
+                    index,
+                    message: index.reason || 'Index rebuild required'
+                  },
+                  null,
+                  2
+                )
+              }
+            ]
+          };
+        }
+
+        let result;
+        try {
+          result = await findSymbolReferences(ROOT_PATH, normalizedSymbol, normalizedLimit);
+        } catch (error) {
+          if (error instanceof IndexCorruptedError) {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(
+                    {
+                      status: 'error',
+                      index: {
+                        ...index,
+                        status: 'rebuild-required',
+                        confidence: 'low',
+                        action: 'rebuild-failed',
+                        reason: error.message
+                      },
+                      symbol: normalizedSymbol,
+                      message: error.message
+                    },
+                    null,
+                    2
+                  )
+                }
+              ]
+            };
+          }
+          throw error;
+        }
 
         if (result.status === 'error') {
           return {
@@ -1718,6 +2013,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 text: JSON.stringify(
                   {
                     status: 'error',
+                    index,
                     symbol: normalizedSymbol,
                     message: result.message
                   },
@@ -1736,6 +2032,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               text: JSON.stringify(
                 {
                   status: 'success',
+                  index,
                   symbol: result.symbol,
                   usageCount: result.usageCount,
                   usages: result.usages
@@ -1750,6 +2047,44 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'get_component_usage': {
         const { name: componentName } = args as { name: string };
+
+        const index = await ensureValidIndexOrAutoHeal();
+        if (index.status === 'indexing') {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    status: 'indexing',
+                    index,
+                    message: 'Index is still being built. Retry in a moment.'
+                  },
+                  null,
+                  2
+                )
+              }
+            ]
+          };
+        }
+        if (index.action === 'rebuild-failed') {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    status: 'error',
+                    index,
+                    message: index.reason || 'Index rebuild required'
+                  },
+                  null,
+                  2
+                )
+              }
+            ]
+          };
+        }
 
         try {
           const intelligencePath = PATHS.intelligence;
@@ -1780,6 +2115,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   text: JSON.stringify(
                     {
                       status: 'success',
+                      index,
                       component: componentName,
                       usageCount: matchedUsage.usageCount,
                       usedIn: matchedUsage.usedIn
@@ -1800,6 +2136,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   text: JSON.stringify(
                     {
                       status: 'not_found',
+                      index,
                       component: componentName,
                       message: `No usages found for '${componentName}'.`,
                       suggestions: topUsed.slice(0, 10)
@@ -1819,6 +2156,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 text: JSON.stringify(
                   {
                     status: 'error',
+                    index,
                     message: 'Failed to get component usage. Run indexing first.',
                     error: error instanceof Error ? error.message : String(error)
                   },
@@ -1834,6 +2172,44 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'detect_circular_dependencies': {
         const { scope } = args as { scope?: string };
 
+        const index = await ensureValidIndexOrAutoHeal();
+        if (index.status === 'indexing') {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    status: 'indexing',
+                    index,
+                    message: 'Index is still being built. Retry in a moment.'
+                  },
+                  null,
+                  2
+                )
+              }
+            ]
+          };
+        }
+        if (index.action === 'rebuild-failed') {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    status: 'error',
+                    index,
+                    message: index.reason || 'Index rebuild required'
+                  },
+                  null,
+                  2
+                )
+              }
+            ]
+          };
+        }
+
         try {
           const intelligencePath = PATHS.intelligence;
           const content = await fs.readFile(intelligencePath, 'utf-8');
@@ -1847,6 +2223,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   text: JSON.stringify(
                     {
                       status: 'error',
+                      index,
                       message:
                         'Internal file graph not found. Please run refresh_index to rebuild the index with cycle detection support.'
                     },
@@ -1871,6 +2248,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   text: JSON.stringify(
                     {
                       status: 'success',
+                      index,
                       message: scope
                         ? `No circular dependencies detected in scope: ${scope}`
                         : 'No circular dependencies detected in the codebase.',
@@ -1892,6 +2270,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 text: JSON.stringify(
                   {
                     status: 'warning',
+                    index,
                     message: `Found ${cycles.length} circular dependency cycle(s).`,
                     scope,
                     cycles: cycles.map((c) => ({
@@ -1918,6 +2297,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 text: JSON.stringify(
                   {
                     status: 'error',
+                    index,
                     message: 'Failed to detect circular dependencies. Run indexing first.',
                     error: error instanceof Error ? error.message : String(error)
                   },

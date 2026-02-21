@@ -873,7 +873,12 @@ export class CodebaseIndexer {
         INTELLIGENCE_FILENAME
       );
       const intelligenceContent = await fs.readFile(intelligencePath, 'utf-8');
-      const intelligence = JSON.parse(intelligenceContent);
+      const intelligence = JSON.parse(intelligenceContent) as any;
+
+      // Phase 06: ignore legacy intelligence files that lack a versioned header.
+      if (!intelligence || typeof intelligence !== 'object' || !intelligence.header) {
+        return metadata;
+      }
 
       metadata.customMetadata = {
         ...metadata.customMetadata,

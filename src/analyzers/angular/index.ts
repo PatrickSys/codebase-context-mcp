@@ -885,11 +885,17 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
     try {
       const indexPath = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
       const indexContent = await fs.readFile(indexPath, 'utf-8');
-      const chunks = JSON.parse(indexContent);
+      const parsed = JSON.parse(indexContent) as any;
 
-      console.error(`Loading statistics from ${indexPath}: ${chunks.length} chunks`);
+      // Legacy index.json is an array — do not consume it (missing version/meta headers).
+      if (Array.isArray(parsed)) {
+        return metadata;
+      }
 
+      const chunks = parsed && Array.isArray(parsed.chunks) ? parsed.chunks : null;
       if (Array.isArray(chunks) && chunks.length > 0) {
+        console.error(`Loading statistics from ${indexPath}: ${chunks.length} chunks`);
+
         metadata.statistics.totalFiles = new Set(chunks.map((c: any) => c.filePath)).size;
         metadata.statistics.totalLines = chunks.reduce(
           (sum: number, c: any) => sum + (c.endLine - c.startLine + 1),
