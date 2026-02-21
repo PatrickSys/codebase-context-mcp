@@ -122,14 +122,30 @@ This is where it all comes together. One call returns:
 - **Relationships** per result: `importedByCount` and `hasTests` (condensed) + **hints** (capped ranked callers, consumers, tests)
 - **Related memories**: up to 3 team decisions, gotchas, and failures matched to the query
 - **Search quality**: `ok` or `low_confidence` with confidence score and `hint` when low
-- **Preflight**: `ready` (boolean) + `reason` when evidence is thin. Pass `intent="edit"` to get the full preflight card. If search quality is low, `ready` is always `false`.
+- **Preflight**: `ready` (boolean) with decision card when `intent="edit"|"refactor"|"migrate"`. Shows `nextAction` (if not ready), `warnings`, `patterns` (do/avoid), `bestExample`, `impact` (caller coverage), and `whatWouldHelp` (next steps). If search quality is low, `ready` is always `false`.
 
 Snippets are opt-in (`includeSnippets: true`). Default output is lean — if the agent wants code, it calls `read_file`.
 
 ```json
 {
   "searchQuality": { "status": "ok", "confidence": 0.72 },
-  "preflight": { "ready": true },
+  "preflight": {
+    "ready": false,
+    "nextAction": "2 of 5 callers aren't in results — search for src/app.module.ts",
+    "patterns": {
+      "do": ["HttpInterceptorFn — 97%", "standalone components — 84%"],
+      "avoid": ["constructor injection — 3% (declining)"]
+    },
+    "bestExample": "src/auth/auth.interceptor.ts",
+    "impact": {
+      "coverage": "3/5 callers in results",
+      "files": ["src/app.module.ts", "src/boot.ts"]
+    },
+    "whatWouldHelp": [
+      "Search for src/app.module.ts to cover the main caller",
+      "Call get_team_patterns for auth/ injection patterns"
+    ]
+  },
   "results": [
     {
       "file": "src/auth/auth.interceptor.ts:1-20",
@@ -171,7 +187,7 @@ Record a decision once. It surfaces automatically in search results and prefligh
 
 | Tool                           | What it does                                                                                |
 | ------------------------------ | ------------------------------------------------------------------------------------------- |
-| `search_codebase`              | Hybrid search with enrichment + preflight + ranked relationship hints. Pass `intent="edit"` for edit readiness check. |
+| `search_codebase`              | Hybrid search + decision card. Pass `intent="edit"` to get `ready`, `nextAction`, patterns, caller coverage, and `whatWouldHelp`. |
 | `get_team_patterns`            | Pattern frequencies, golden files, conflict detection                                      |
 | `get_symbol_references`        | Find concrete references to a symbol (usageCount + top snippets + confidence + completeness) |
 | `remember`                     | Record a convention, decision, gotcha, or failure                                          |

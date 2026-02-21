@@ -10,7 +10,7 @@ Technical reference for what `codebase-context` ships today. For the user-facing
 
 | Tool                    | Input                                                             | Output                                                                                                                                                                                                                  |
 | ----------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `search_codebase`       | `query`, optional `intent`, `limit`, `filters`, `includeSnippets` | Ranked results (`file`, `summary`, `score`, `type`, `trend`, `patternWarning`, `relationships`, `hints`) + `searchQuality` (with `hint` when low confidence) + `preflight` ({ready, reason}). Hints capped at 3 per category. |
+| `search_codebase`       | `query`, optional `intent`, `limit`, `filters`, `includeSnippets` | Ranked results (`file`, `summary`, `score`, `type`, `trend`, `patternWarning`, `relationships`, `hints`) + `searchQuality` + decision card (`ready`, `nextAction`, `patterns`, `bestExample`, `impact`, `whatWouldHelp`) when `intent="edit"`. Hints capped at 3 per category. |
 | `get_team_patterns`     | optional `category`                                               | Pattern frequencies, trends, golden files, conflicts                                                                                                                                 |
 | `get_symbol_references` | `symbol`, optional `limit`                                        | Concrete symbol usage evidence: `usageCount` + top usage snippets + `confidence` ("syntactic") + `isComplete` boolean                                                                |
 | `remember`              | `type`, `category`, `memory`, `reason`                            | Persists to `.codebase-context/memory.json`                                                                                                                                          |
@@ -34,11 +34,13 @@ Ordered by execution:
 2. **Query expansion** — bounded domain term expansion for conceptual queries.
 3. **Dual retrieval** — keyword (Fuse.js) + semantic (local embeddings or OpenAI).
 4. **RRF fusion** — Reciprocal Rank Fusion (k=60) across all retrieval channels.
-5. **Structure-aware boosting** — import centrality, composition root boost, path overlap, definition demotion for action queries.
-6. **Contamination control** — test file filtering for non-test queries.
-7. **File deduplication** — best chunk per file.
-8. **Stage-2 reranking** — cross-encoder (`Xenova/ms-marco-MiniLM-L-6-v2`) triggers when the score between the top files are very close. CPU-only, top-10 bounded.
-9. **Result enrichment** — compact type (`componentType:layer`), pattern momentum (`trend` Rising/Declining only, Stable omitted), `patternWarning`, condensed relationships (`importedByCount`/`hasTests`), structured hints (capped callers/consumers/tests ranked by frequency), related memories (capped to 3), search quality assessment with `hint` when low confidence.
+5. **Definition-first boost** — for EXACT_NAME intent, results matching the symbol name get +15% score boost (e.g., defining file ranks above using files).
+6. **Structure-aware boosting** — import centrality, composition root boost, path overlap, definition demotion for action queries.
+7. **Contamination control** — test file filtering for non-test queries.
+8. **File deduplication** — best chunk per file.
+9. **Symbol-level deduplication** — within each `symbolPath` group, keep only the highest-scoring chunk (prevents duplicate methods from same class clogging results).
+10. **Stage-2 reranking** — cross-encoder (`Xenova/ms-marco-MiniLM-L-6-v2`) triggers when the score between the top files are very close. CPU-only, top-10 bounded.
+11. **Result enrichment** — compact type (`componentType:layer`), pattern momentum (`trend` Rising/Declining only, Stable omitted), `patternWarning`, condensed relationships (`importedByCount`/`hasTests`), structured hints (capped callers/consumers/tests ranked by frequency), scope header for symbol-aware snippets (`// ClassName.methodName`), related memories (capped to 3), search quality assessment with `hint` when low confidence.
 
 ### Defaults
 
@@ -47,29 +49,56 @@ Ordered by execution:
 - **Embedding model**: Granite (`ibm-granite/granite-embedding-30m-english`, 8192 token context) via `@huggingface/transformers` v3
 - **Vector DB**: LanceDB with cosine distance
 
-## Preflight (Edit Intent)
+## Decision Card (Edit Intent)
 
-Returned as `preflight` when search `intent` is `edit`, `refactor`, or `migrate`. Also returned for default searches when intelligence is available.
+Returned as `preflight` when search `intent` is `edit`, `refactor`, or `migrate`.
 
-Output: `{ ready: boolean, reason?: string }`
+**Output shape:**
 
-- `ready`: whether evidence is sufficient to proceed with edits
-- `reason`: when `ready` is false, explains why (e.g., "Search quality is low", "Insufficient pattern evidence")
+```typescript
+{
+  ready: boolean;
+  nextAction?: string;        // Only when ready=false; what to search for next
+  warnings?: string[];        // Failure memories (capped at 3)
+  patterns?: {
+    do: string[];             // Top 3 preferred patterns with adoption %
+    avoid: string[];          // Top 3 declining patterns
+  };
+  bestExample?: string;       // Top 1 golden file (path format)
+  impact?: {
+    coverage: string;         // "X/Y callers in results"
+    files: string[];          // Top 3 impact candidates (files importing results)
+  };
+  whatWouldHelp?: string[];   // Concrete next steps (max 4) when ready=false
+}
+```
+
+**Fields explained:**
+
+- `ready`: boolean, whether evidence is sufficient to proceed
+- `nextAction`: actionable reason why `ready=false` (e.g., "2 of 5 callers missing")
+- `warnings`: failure memories from team (auto-surfaces past mistakes)
+- `patterns.do`: patterns the team is adopting, ranked by adoption %
+- `patterns.avoid`: declining patterns, ranked by % (useful for migrations)
+- `bestExample`: exemplar file for the area under edit
+- `impact.coverage`: shows caller visibility ("3/5 callers in results" means 2 callers weren't searched yet)
+- `impact.files`: which files import the results (helps find blind spots)
+- `whatWouldHelp`: specific next searches, tool calls, or files to check that would close evidence gaps
 
 ### How `ready` is determined
 
 1. **Evidence triangulation** — scores code match (45%), pattern alignment (30%), and memory support (25%). Needs combined score ≥ 40 to pass.
-2. **Epistemic stress check** — if pattern conflicts, stale memories, or thin evidence are detected, `ready` is set to false with an abstain signal.
-3. **Search quality gate** — if `searchQuality.status` is `low_confidence`, `ready` is forced to false regardless of evidence scores. This prevents the "confidently wrong" problem where evidence counts look good but retrieval quality is poor.
+2. **Epistemic stress check** — if pattern conflicts, stale memories, thin evidence, or low caller coverage are detected, `ready` is set to false.
+3. **Search quality gate** — if `searchQuality.status` is `low_confidence`, `ready` is forced to false regardless of evidence scores. This prevents the "confidently wrong" problem.
 
-### Internal analysis (not in output, used to compute `ready`)
+### Internal signals (not in output, feed `ready` computation)
 
-- Risk level from circular deps + impact breadth + failure memories
+- Risk level from circular deps, impact breadth, and failure memories
 - Preferred/avoid patterns from team pattern analysis
-- Golden files by pattern density
-- Impact candidates from import graph
-- Failure warnings from related memories
+- Golden files ranked by pattern density
+- Caller coverage from import graph (X of Y callers appearing in results)
 - Pattern conflicts when two patterns in the same category are both > 20% adoption
+- Confidence decay of related memories
 
 ## Memory System
 

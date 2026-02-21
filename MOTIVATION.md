@@ -49,7 +49,7 @@ Correct the agent once. Record the decision. From then on, it surfaces in search
 
 ### Evidence gating
 
-Before an edit, the agent gets a curated "preflight" check from three sources (code, patterns, memories). If evidence is thin or contradictory, the response tells the AI Agent to look for more evidence with a concrete next step. This is the difference between "confident assumption" and "informed decision."
+Before an edit, the response includes a decision card. `ready: true` means there's enough evidence from the codebase, patterns, and team memory to proceed. `ready: false` comes with `whatWouldHelp` — specific searches to run, specific files to check, or calls to `get_team_patterns` that would close the gap. The card also surfaces caller coverage: if you're editing a function that five files import but only two of them appear in your results, you know which ones you haven't looked at yet (`coverage: "2/5 callers in results"`). This is the difference between "confident assumption" and "informed decision."
 
 ### Guardrails via frozen eval + regressions
 

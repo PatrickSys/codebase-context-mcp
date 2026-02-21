@@ -693,6 +693,21 @@ export class CodebaseSearcher {
       })
       .sort((a, b) => b.score - a.score);
 
+    // SEARCH-01: Definition-first boost for EXACT_NAME intent
+    // Boost results where symbolName matches query (case-insensitive)
+    if (intent === 'EXACT_NAME') {
+      const queryNormalized = query.toLowerCase();
+      for (const result of scoredResults) {
+        const symbolName = result.metadata?.symbolName;
+        if (symbolName && symbolName.toLowerCase() === queryNormalized) {
+          result.score *= 1.15; // +15% boost for definition
+        }
+      }
+      // Re-sort after boost
+      scoredResults.sort((a, b) => b.score - a.score);
+    }
+
+    // File-level deduplication
     const seenFiles = new Set<string>();
     const deduped: SearchResult[] = [];
     for (const result of scoredResults) {
@@ -702,7 +717,36 @@ export class CodebaseSearcher {
       deduped.push(result);
       if (deduped.length >= limit) break;
     }
-    const finalResults = deduped;
+
+    // SEARCH-01: Symbol-level deduplication
+    // Within each symbol group (symbolPath), keep only the highest-scoring chunk
+    const seenSymbols = new Map<string, SearchResult>();
+    const symbolDeduped: SearchResult[] = [];
+    for (const result of deduped) {
+      const symbolPath = result.metadata?.symbolPath;
+      if (!symbolPath) {
+        // No symbol info, keep as-is
+        symbolDeduped.push(result);
+        continue;
+      }
+
+      const symbolPathKey = Array.isArray(symbolPath) ? symbolPath.join('.') : String(symbolPath);
+      const existing = seenSymbols.get(symbolPathKey);
+      if (!existing || result.score > existing.score) {
+        if (existing) {
+          // Replace lower-scoring version
+          const idx = symbolDeduped.indexOf(existing);
+          if (idx >= 0) {
+            symbolDeduped[idx] = result;
+          }
+        } else {
+          symbolDeduped.push(result);
+        }
+        seenSymbols.set(symbolPathKey, result);
+      }
+    }
+
+    const finalResults = symbolDeduped;
 
     if (
       isNonTestQuery &&

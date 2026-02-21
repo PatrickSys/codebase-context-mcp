@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+## [Unshipped - Phase 09] - High-Signal Search + Decision Card
+
+Cleaned up the edit decision card and sharpened search ranking for exact-name queries.
+
+### Added
+
+- **Definition-first ranking (SEARCH-01)**: For exact-name queries (PascalCase/camelCase), the file that *defines* a symbol now ranks above files that merely use it. Symbol-level dedup ensures multiple methods from the same class don't clog the top slots.
+- **Smart snippets with scope headers (SEARCH-02)**: When `includeSnippets: true`, code chunks from symbol-aware analysis include a scope comment header (`// ClassName.methodName`) before the snippet, giving structural context without extra disk reads.
+- **Clean decision card (PREF-01-04)**: The preflight response for `intent="edit"|"refactor"|"migrate"` is now a decision card: `ready`, `nextAction` (if not ready), `warnings`, `patterns` (do/avoid capped at 3), `bestExample` (top golden file), `impact` (caller coverage + top files), and `whatWouldHelp`. Internal fields like `evidenceLock`, `riskLevel`, `confidence` are no longer exposed.
+- **Impact coverage gating (PREF-02)**: When result files have known callers (from import graph), the card shows caller coverage: "X/Y callers in results". Low coverage (< 40% with > 3 total callers) triggers an epistemic stress alert.
+- **whatWouldHelp recommendations (PREF-03)**: When `ready=false`, concrete next steps appear: search more specifically, call `get_team_patterns`, search for uncovered callers, or check memories. Each is actionable in 1-2 sentences.
+
+### Changed
+
+- **Preflight shape**: `{ ready, reason?, ... }` → `{ ready, nextAction?, warnings?, patterns?, bestExample?, impact?, whatWouldHelp? }`. `reason` renamed to `nextAction` for clarity. No breaking changes to `ready` (stays top-level).
+
+### Fixed
+
+- Agents no longer parse unstable internal fields. Preflight output is stable by design.
+- Snippets now include scope context, reducing ambiguity for symbol-heavy edits.
+
+## [Unreleased]
+
 ### Added
 
 - **Index versioning (Phase 06)**: Index artifacts are versioned via `index-meta.json`. Mixed-version indexes are never served; version mismatches or corruption trigger automatic rebuild.
