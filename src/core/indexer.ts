@@ -365,7 +365,7 @@ export class CodebaseIndexer {
 
         console.error(
           `Incremental diff: ${diff.added.length} added, ${diff.changed.length} changed, ` +
-          `${diff.deleted.length} deleted, ${diff.unchanged.length} unchanged`
+            `${diff.deleted.length} deleted, ${diff.unchanged.length} unchanged`
         );
 
         stats.incremental = {
@@ -440,9 +440,9 @@ export class CodebaseIndexer {
       // Build the set of files that need analysis + embedding (incremental: only added/changed)
       const filesToProcess = diff
         ? files.filter((f) => {
-          const rel = path.relative(this.rootPath, f).replace(/\\/g, '/');
-          return diff!.added.includes(rel) || diff!.changed.includes(rel);
-        })
+            const rel = path.relative(this.rootPath, f).replace(/\\/g, '/');
+            return diff!.added.includes(rel) || diff!.changed.includes(rel);
+          })
         : files;
 
       // Phase 2: Analyzing & Parsing
@@ -549,8 +549,14 @@ export class CodebaseIndexer {
             // GENERIC PATTERN FORWARDING
             // Framework analyzers return detectedPatterns in metadata - we just forward them
             // This keeps the indexer framework-agnostic
-            if (result.metadata?.detectedPatterns && Array.isArray(result.metadata.detectedPatterns)) {
-              for (const pattern of result.metadata.detectedPatterns as Array<{ category: string; name: string }>) {
+            if (
+              result.metadata?.detectedPatterns &&
+              Array.isArray(result.metadata.detectedPatterns)
+            ) {
+              for (const pattern of result.metadata.detectedPatterns as Array<{
+                category: string;
+                name: string;
+              }>) {
                 // Try to extract a relevant snippet for the pattern
                 // Ask analyzer registry for snippet pattern (framework-agnostic delegation)
                 const analyzer = analyzerRegistry.findAnalyzer(file);
@@ -569,12 +575,12 @@ export class CodebaseIndexer {
             // Track file for Golden File scoring (framework-agnostic)
             // A golden file = file with patterns in ≥3 distinct categories
             const rawPatterns = result.metadata?.detectedPatterns;
-            const detectedPatterns: Array<{ category: string; name: string }> = Array.isArray(rawPatterns)
+            const detectedPatterns: Array<{ category: string; name: string }> = Array.isArray(
+              rawPatterns
+            )
               ? (rawPatterns as Array<{ category: string; name: string }>)
               : [];
-            const uniqueCategories = new Set(
-              detectedPatterns.map((p) => p.category)
-            );
+            const uniqueCategories = new Set(detectedPatterns.map((p) => p.category));
             const patternScore = uniqueCategories.size;
             if (patternScore >= 3) {
               const patternFlags: Record<string, boolean> = {};
@@ -638,8 +644,8 @@ export class CodebaseIndexer {
         this.updateProgress('embedding', 50);
         console.error(
           `Creating embeddings for ${chunksToEmbed.length} chunks` +
-          (diff ? ` (${allChunks.length} total, ${chunksToEmbed.length} changed)` : '') +
-          '...'
+            (diff ? ` (${allChunks.length} total, ${chunksToEmbed.length} changed)` : '') +
+            '...'
         );
 
         // Initialize embedding provider
@@ -685,7 +691,8 @@ export class CodebaseIndexer {
 
           if ((i + batchSize) % 100 === 0 || i + batchSize >= chunksToEmbed.length) {
             console.error(
-              `Embedded ${Math.min(i + batchSize, chunksToEmbed.length)}/${chunksToEmbed.length
+              `Embedded ${Math.min(i + batchSize, chunksToEmbed.length)}/${
+                chunksToEmbed.length
               } chunks`
             );
           }
@@ -738,7 +745,7 @@ export class CodebaseIndexer {
           }
           console.error(
             `Incremental store: deleted chunks for ${diff.changed.length + diff.deleted.length} files, ` +
-            `added ${chunksWithEmbeddings.length} new chunks`
+              `added ${chunksWithEmbeddings.length} new chunks`
           );
         } else {
           // Full rebuild: store to staging (no clear - fresh directory)
@@ -911,8 +918,8 @@ export class CodebaseIndexer {
       if (diff) {
         console.error(
           `Incremental indexing complete in ${stats.duration}ms ` +
-          `(${diff.added.length} added, ${diff.changed.length} changed, ` +
-          `${diff.deleted.length} deleted, ${diff.unchanged.length} unchanged)`
+            `(${diff.added.length} added, ${diff.changed.length} changed, ` +
+            `${diff.deleted.length} deleted, ${diff.unchanged.length} unchanged)`
         );
       } else {
         console.error(`Indexing complete in ${stats.duration}ms`);

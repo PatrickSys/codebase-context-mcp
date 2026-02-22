@@ -31,7 +31,10 @@ export async function handle(
 
   try {
     // Try relationships sidecar first (preferred), then intelligence
-    let graphDataSource: { imports?: Record<string, string[]>; exports?: Record<string, FileExport[]> } | null = null;
+    let graphDataSource: {
+      imports?: Record<string, string[]>;
+      exports?: Record<string, FileExport[]>;
+    } | null = null;
     let graphStats: unknown = null;
 
     const relationshipsPath = path.join(

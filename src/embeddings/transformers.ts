@@ -54,8 +54,14 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
 
       // TS2590: pipeline() resolves AllTasks[T] — a union too complex for TSC to represent.
       // Cast to a simpler signature; the actual return type IS FeatureExtractionPipelineType.
-      type PipelineFn = (task: 'feature-extraction', model: string, opts: Record<string, unknown>) => Promise<FeatureExtractionPipelineType>;
-      this.pipeline = await (pipeline as PipelineFn)('feature-extraction', this.modelName, { dtype: 'q8' });
+      type PipelineFn = (
+        task: 'feature-extraction',
+        model: string,
+        opts: Record<string, unknown>
+      ) => Promise<FeatureExtractionPipelineType>;
+      this.pipeline = await (pipeline as PipelineFn)('feature-extraction', this.modelName, {
+        dtype: 'q8'
+      });
 
       this.ready = true;
       console.error(`Model loaded successfully: ${this.modelName}`);

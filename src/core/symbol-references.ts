@@ -95,7 +95,10 @@ export async function findSymbolReferences(
   }
 
   const chunks =
-    chunksRaw !== null && typeof chunksRaw === 'object' && 'chunks' in chunksRaw && Array.isArray(chunksRaw.chunks)
+    chunksRaw !== null &&
+    typeof chunksRaw === 'object' &&
+    'chunks' in chunksRaw &&
+    Array.isArray(chunksRaw.chunks)
       ? (chunksRaw.chunks as unknown[])
       : null;
 

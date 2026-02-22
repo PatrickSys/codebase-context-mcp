@@ -230,7 +230,6 @@ export class CodebaseSearcher {
       // Extract pattern indicators from intelligence data
       if (intelligence.patterns) {
         for (const [_category, patternData] of Object.entries(intelligence.patterns)) {
-
           // Track primary pattern
           if (patternData.primary?.trend === 'Rising') {
             risingPatterns.add(patternData.primary.name.toLowerCase());

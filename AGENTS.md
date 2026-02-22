@@ -22,7 +22,8 @@ These are non-negotiable. Every PR, feature, and design decision must respect th
 - **Never stage/commit `.planning/**`\*\* (or any other local workflow artifacts) unless the user explicitly asks in that message.
 - **Never use `gsd-tools ... commit` wrappers** in this repo. Use plain `git add <exact files>` and `git commit -m "..."`.
 - **Before every commit:** run `git status --short` and confirm staged files match intent; abort if any `.planning/**` is staged.
-- **Avoid using `any` Type AT ALL COSTS.
+- \*\*Avoid using `any` Type AT ALL COSTS.
+
 ## Evaluation Integrity (NON-NEGOTIABLE)
 
 These rules prevent metric gaming, overfitting, and false quality claims. Violation of these rules means the feature CANNOT ship.
@@ -158,6 +159,3 @@ These came from behavioral observation across multiple sessions. They're here so
 See `internal-docs/AGENTS.md` for internal-only guidelines and context.
 
 ---
-
-**Current focus:** See `internal-docs/ISSUES.md` for active release blockers.
-For full project history and context handover, see `internal-docs/ARCHIVE/WALKTHROUGH-v1.6.1.md`.

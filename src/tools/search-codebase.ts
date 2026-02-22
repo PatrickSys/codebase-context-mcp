@@ -4,7 +4,13 @@ import path from 'path';
 import type { ToolContext, ToolResponse, DecisionCard } from './types.js';
 import { CodebaseSearcher } from '../core/search.js';
 import type { SearchIntentProfile } from '../core/search.js';
-import type { SearchResult, IntelligenceData, PatternsData, IntelligenceGoldenFile, ChunkMetadata } from '../types/index.js';
+import type {
+  SearchResult,
+  IntelligenceData,
+  PatternsData,
+  IntelligenceGoldenFile,
+  ChunkMetadata
+} from '../types/index.js';
 import { buildEvidenceLock } from '../preflight/evidence-lock.js';
 import type { EvidenceLock } from '../preflight/evidence-lock.js';
 import { shouldIncludePatternConflictCategory } from '../preflight/query-scope.js';
@@ -410,7 +416,9 @@ export async function handle(
   const searchQuality = assessSearchQuality(queryStr, results);
 
   // Always-on edit preflight (lite): do not require intent and keep payload small.
-  let editPreflight: { mode: string; riskLevel: string; confidence: string; evidenceLock: EvidenceLock } | undefined = undefined;
+  let editPreflight:
+    | { mode: string; riskLevel: string; confidence: string; evidenceLock: EvidenceLock }
+    | undefined = undefined;
   if (intelligence && (!intent || intent === 'explore')) {
     try {
       const resultPaths = results.map((r) => r.filePath);
@@ -468,8 +476,21 @@ export async function handle(
     } else {
       try {
         // --- Avoid / Prefer patterns ---
-        const avoidPatternsList: Array<{ pattern: string; category: string; adoption: string; trend: string; guidance?: string }> = [];
-        const preferredPatternsList: Array<{ pattern: string; category: string; adoption: string; trend: string; guidance?: string; example?: string }> = [];
+        const avoidPatternsList: Array<{
+          pattern: string;
+          category: string;
+          adoption: string;
+          trend: string;
+          guidance?: string;
+        }> = [];
+        const preferredPatternsList: Array<{
+          pattern: string;
+          category: string;
+          adoption: string;
+          trend: string;
+          guidance?: string;
+          example?: string;
+        }> = [];
         const patterns: PatternsData = intelligence.patterns || {};
         for (const [category, data] of Object.entries(patterns)) {
           // Primary pattern = preferred if Rising or Stable
@@ -555,10 +576,12 @@ export async function handle(
         }
 
         // --- Golden files (exemplar code) ---
-        const goldenFiles = (intelligence.goldenFiles ?? []).slice(0, 3).map((g: IntelligenceGoldenFile) => ({
-          file: g.file,
-          score: g.score
-        }));
+        const goldenFiles = (intelligence.goldenFiles ?? [])
+          .slice(0, 3)
+          .map((g: IntelligenceGoldenFile) => ({
+            file: g.file,
+            score: g.score
+          }));
 
         // --- Confidence (index freshness) ---
         // TODO: Review this confidence calculation
@@ -714,7 +737,10 @@ export async function handle(
     return null;
   }
 
-  function enrichSnippetWithScope(snippet: string | undefined, metadata: ChunkMetadata): string | undefined {
+  function enrichSnippetWithScope(
+    snippet: string | undefined,
+    metadata: ChunkMetadata
+  ): string | undefined {
     if (!snippet) return undefined;
     const scopeHeader = buildScopeHeader(metadata);
     if (scopeHeader) {

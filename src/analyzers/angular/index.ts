@@ -172,7 +172,9 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
               const specifier = s as TSESTree.ImportSpecifier;
               return specifier.imported.name || specifier.local.name;
             }),
-            isDefault: node.specifiers.some((s: TSESTree.ImportClause) => s.type === 'ImportDefaultSpecifier'),
+            isDefault: node.specifiers.some(
+              (s: TSESTree.ImportClause) => s.type === 'ImportDefaultSpecifier'
+            ),
             isDynamic: false,
             line: node.loc?.start.line
           });
@@ -566,7 +568,8 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
             for (const param of member.value.params) {
               const typedParam = param as TSESTree.Identifier;
               if (typedParam.typeAnnotation?.typeAnnotation?.type === 'TSTypeReference') {
-                const typeRef = typedParam.typeAnnotation.typeAnnotation as TSESTree.TSTypeReference;
+                const typeRef = typedParam.typeAnnotation
+                  .typeAnnotation as TSESTree.TSTypeReference;
                 if (typeRef.typeName.type === 'Identifier') {
                   services.push(typeRef.typeName.name);
                 }
@@ -601,14 +604,20 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
             if (hasInput && member.key && 'name' in member.key) {
               inputs.push({
                 name: member.key.name,
-                type: (member.typeAnnotation?.typeAnnotation?.type as string | undefined) || 'unknown',
+                type:
+                  (member.typeAnnotation?.typeAnnotation?.type as string | undefined) || 'unknown',
                 style: 'decorator'
               });
             }
           }
 
           // Check for signal-based input() (Angular v17.1+)
-          if (member.value && member.key && 'name' in member.key && member.value.type === 'CallExpression') {
+          if (
+            member.value &&
+            member.key &&
+            'name' in member.key &&
+            member.value.type === 'CallExpression'
+          ) {
             const callee = member.value.callee;
             let valueStr: string | null = null;
             let isRequired = false;
@@ -668,7 +677,12 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
           }
 
           // Check for signal-based output() (Angular v17.1+)
-          if (member.value && member.key && 'name' in member.key && member.value.type === 'CallExpression') {
+          if (
+            member.value &&
+            member.key &&
+            'name' in member.key &&
+            member.value.type === 'CallExpression'
+          ) {
             const callee = member.value.callee;
             const valueStr = callee.type === 'Identifier' ? callee.name : null;
 
@@ -949,9 +963,8 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
       }
 
       const parsedObj = parsed as { chunks?: unknown };
-      const chunks = parsedObj && Array.isArray(parsedObj.chunks)
-        ? (parsedObj.chunks as IndexChunk[])
-        : null;
+      const chunks =
+        parsedObj && Array.isArray(parsedObj.chunks) ? (parsedObj.chunks as IndexChunk[]) : null;
       if (Array.isArray(chunks) && chunks.length > 0) {
         console.error(`Loading statistics from ${indexPath}: ${chunks.length} chunks`);
 
@@ -1046,7 +1059,9 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
 
       case 'module': {
         const imports = Array.isArray(metadata?.imports) ? metadata.imports.length : 0;
-        const declarations = Array.isArray(metadata?.declarations) ? metadata.declarations.length : 0;
+        const declarations = Array.isArray(metadata?.declarations)
+          ? metadata.declarations.length
+          : 0;
         return `Angular module '${className}' with ${declarations} declarations and ${imports} imports.`;
       }
 

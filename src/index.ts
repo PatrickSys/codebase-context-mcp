@@ -18,7 +18,13 @@ import {
   Resource
 } from '@modelcontextprotocol/sdk/types.js';
 import { CodebaseIndexer } from './core/indexer.js';
-import type { IndexingStats, IntelligenceData, PatternsData, PatternEntry, PatternCandidate } from './types/index.js';
+import type {
+  IndexingStats,
+  IntelligenceData,
+  PatternsData,
+  PatternEntry,
+  PatternCandidate
+} from './types/index.js';
 import { analyzerRegistry } from './core/analyzer-registry.js';
 import { AngularAnalyzer } from './analyzers/angular/index.js';
 import { GenericAnalyzer } from './analyzers/generic/index.js';

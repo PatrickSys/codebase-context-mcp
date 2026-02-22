@@ -248,7 +248,11 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
         workspaceType !== 'single' ? await scanWorkspacePackageJsons(rootPath) : [];
 
       const pkgPath = path.join(rootPath, 'package.json');
-      let packageJson: { name?: string; dependencies?: Record<string, string>; devDependencies?: Record<string, string> } = {};
+      let packageJson: {
+        name?: string;
+        dependencies?: Record<string, string>;
+        devDependencies?: Record<string, string>;
+      } = {};
       try {
         packageJson = JSON.parse(await fs.readFile(pkgPath, 'utf-8'));
         projectName = packageJson.name || projectName;
@@ -360,7 +364,9 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
               const specifier = s as TSESTree.ImportSpecifier;
               return specifier.imported.name || specifier.local.name;
             }),
-            isDefault: node.specifiers.some((s: TSESTree.ImportClause) => s.type === 'ImportDefaultSpecifier'),
+            isDefault: node.specifiers.some(
+              (s: TSESTree.ImportClause) => s.type === 'ImportDefaultSpecifier'
+            ),
             isDynamic: false,
             line: node.loc?.start.line
           });

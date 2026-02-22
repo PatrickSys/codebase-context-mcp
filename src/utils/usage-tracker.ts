@@ -3,7 +3,12 @@
  * Tracks what libraries are used and detects common coding patterns
  */
 
-import type { PatternTrend, PatternCandidateBase, IntelligenceGoldenFile, UsageLocation } from '../types/index.js';
+import type {
+  PatternTrend,
+  PatternCandidateBase,
+  IntelligenceGoldenFile,
+  UsageLocation
+} from '../types/index.js';
 
 export type { PatternTrend };
 

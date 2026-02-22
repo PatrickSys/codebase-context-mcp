@@ -19,7 +19,11 @@ const RERANK_TOP_K = 10;
 const AMBIGUITY_THRESHOLD = 0.08;
 
 interface CrossEncoderTokenizer {
-  (query: string, passage: string, options: { padding: boolean; truncation: boolean; max_length: number }): unknown;
+  (
+    query: string,
+    passage: string,
+    options: { padding: boolean; truncation: boolean; max_length: number }
+  ): unknown;
 }
 
 interface CrossEncoderModel {
