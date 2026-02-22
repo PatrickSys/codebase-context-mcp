@@ -128,6 +128,11 @@ If an agent has to call the tool twice to understand the response, the tool fail
 - `src/core/` is framework-agnostic. No hardcoded framework strings (Angular, React, Vue, etc.).
 - CLI code belongs in `src/cli.ts`. Never in `src/index.ts`.
 - Framework analyzers self-register their own patterns (e.g., Angular computed+effect pairing belongs in the Angular analyzer, not protocol layer).
+- **Types and interfaces must be framework-agnostic in core and shared utilities.**
+  Framework-specific field names (Angular-only, React-only, etc.) belong exclusively in their
+  respective analyzer files under `src/analyzers/`. Never add named framework-specific fields
+  to interfaces in `src/types/`, `src/utils/`, or `src/core/`.
+  Use `Record<string, T>` for open-ended data that frameworks extend at runtime.
 
 ### Release Checklist
 

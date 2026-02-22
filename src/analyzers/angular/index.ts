@@ -39,6 +39,14 @@ interface AngularOutput {
   style: 'decorator' | 'signal';
 }
 
+interface IndexChunk {
+  filePath?: string;
+  startLine?: number;
+  endLine?: number;
+  componentType?: string;
+  layer?: string;
+}
+
 export class AngularAnalyzer implements FrameworkAnalyzer {
   readonly name = 'angular';
   readonly version = '1.0.0';
@@ -600,18 +608,28 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
           }
 
           // Check for signal-based input() (Angular v17.1+)
-          if (member.value && member.key && 'name' in member.key) {
-            const callee = member.value.type === 'CallExpression'
-              ? (member.value.callee as { type: string; name?: string; object?: { name?: string }; property?: { name?: string } })
-              : null;
-            const valueStr = callee?.name ?? callee?.object?.name ?? null;
+          if (member.value && member.key && 'name' in member.key && member.value.type === 'CallExpression') {
+            const callee = member.value.callee;
+            let valueStr: string | null = null;
+            let isRequired = false;
+
+            if (callee.type === 'Identifier') {
+              valueStr = callee.name;
+            } else if (callee.type === 'MemberExpression') {
+              if (callee.object.type === 'Identifier') {
+                valueStr = callee.object.name;
+              }
+              if (callee.property.type === 'Identifier') {
+                isRequired = callee.property.name === 'required';
+              }
+            }
 
             if (valueStr === 'input') {
               inputs.push({
                 name: member.key.name,
                 type: 'InputSignal',
                 style: 'signal',
-                required: callee?.property?.name === 'required'
+                required: isRequired
               });
             }
           }
@@ -650,11 +668,9 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
           }
 
           // Check for signal-based output() (Angular v17.1+)
-          if (member.value && member.key && 'name' in member.key) {
-            const callee = member.value.type === 'CallExpression'
-              ? (member.value.callee as { type: string; name?: string })
-              : null;
-            const valueStr = callee?.name ?? null;
+          if (member.value && member.key && 'name' in member.key && member.value.type === 'CallExpression') {
+            const callee = member.value.callee;
+            const valueStr = callee.type === 'Identifier' ? callee.name : null;
 
             if (valueStr === 'output') {
               outputs.push({
@@ -933,7 +949,9 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
       }
 
       const parsedObj = parsed as { chunks?: unknown };
-      const chunks = parsedObj && Array.isArray(parsedObj.chunks) ? (parsedObj.chunks as Array<{ filePath?: string; startLine?: number; endLine?: number; componentType?: string; layer?: string }>) : null;
+      const chunks = parsedObj && Array.isArray(parsedObj.chunks)
+        ? (parsedObj.chunks as IndexChunk[])
+        : null;
       if (Array.isArray(chunks) && chunks.length > 0) {
         console.error(`Loading statistics from ${indexPath}: ${chunks.length} chunks`);
 
