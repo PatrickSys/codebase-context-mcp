@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Core types for the modular codebase context system
  * These types define the contract that all framework analyzers must implement
@@ -52,7 +51,7 @@ export interface AnalysisResult {
   imports: ImportStatement[];
   exports: ExportStatement[];
   dependencies: Dependency[];
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
   chunks: CodeChunk[];
 }
 
@@ -68,7 +67,7 @@ export interface CodeComponent {
   methods?: Method[];
   lifecycle?: string[];
   dependencies?: string[];
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
 }
 
 export interface ImportStatement {
@@ -183,7 +182,7 @@ export interface ChunkMetadata {
   category?: string;
 
   // Any framework-specific metadata
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 // ============================================================================
@@ -201,7 +200,7 @@ export interface CodebaseMetadata {
   documentation: DocumentationFile[];
   projectStructure: ProjectStructure;
   statistics: CodebaseStatistics;
-  customMetadata: Record<string, any>;
+  customMetadata: Record<string, unknown>;
 }
 
 export interface FrameworkInfo {
@@ -268,7 +267,7 @@ export interface StyleGuide {
   name: string;
   filePath: string;
   content: string;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
   category: string;
   tags: string[];
   rules: StyleRule[];
@@ -298,7 +297,7 @@ export interface DocumentationFile {
   title: string;
   content: string;
   type: 'readme' | 'guide' | 'api' | 'changelog' | 'contributing' | 'other';
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
   sections?: DocumentationSection[];
 }
 
@@ -449,7 +448,7 @@ export interface IndexingStats {
 export interface AnalyzerConfig {
   enabled: boolean;
   priority?: number;
-  options?: Record<string, any>;
+  options?: Record<string, unknown>;
 }
 
 export interface CodebaseConfig {
@@ -505,11 +504,11 @@ export interface CodebaseConfig {
   storage?: {
     provider?: 'lancedb' | 'milvus' | 'chromadb' | 'custom';
     path?: string;
-    connection?: Record<string, any>;
+    connection?: Record<string, unknown>;
   };
 
   // Custom metadata
-  customMetadata?: Record<string, any>;
+  customMetadata?: Record<string, unknown>;
 }
 
 // ============================================================================
@@ -518,8 +517,8 @@ export interface CodebaseConfig {
 
 export interface Decorator {
   name: string;
-  arguments?: any[];
-  properties?: Record<string, any>;
+  arguments?: unknown[];
+  properties?: Record<string, unknown>;
 }
 
 export interface Property {
@@ -591,4 +590,70 @@ export interface Memory {
   date: string;
   /** Source of the memory: 'user' (default) or 'git' (auto-extracted from commits) */
   source?: 'user' | 'git';
+}
+
+// ============================================================================
+// SHARED PRIMITIVES
+// ============================================================================
+
+/** File + line reference — canonical base for all usage location types */
+export interface UsageLocation {
+  file: string;
+  line: number;
+}
+
+// ============================================================================
+// INTELLIGENCE / PATTERN DATA
+// ============================================================================
+
+/** Pattern trend direction — shared between runtime tracker and serialized form */
+export type PatternTrend = 'Rising' | 'Declining' | 'Stable';
+
+/** Common fields for any pattern candidate, at runtime or in intelligence.json */
+export interface PatternCandidateBase {
+  name: string;
+  /** e.g. "72%" */
+  frequency: string;
+  trend?: PatternTrend;
+  guidance?: string;
+  newestFileDate?: string;
+}
+
+/** A single detected pattern variant within a category (serialized form) */
+export interface PatternCandidate extends PatternCandidateBase {
+  canonicalExample?: { file: string; snippet?: string };
+  count?: number;
+}
+
+/** Primary + alternatives for one pattern category */
+export interface PatternEntry {
+  primary?: PatternCandidate;
+  alsoDetected?: PatternCandidate[];
+}
+
+/** intelligence.json patterns map */
+export type PatternsData = Record<string, PatternEntry>;
+
+/** Minimal golden file shape as stored in intelligence.json */
+export interface IntelligenceGoldenFile {
+  file: string;
+  score: number;
+}
+
+/** Typed shape for intelligence.json content */
+export interface IntelligenceData {
+  patterns?: PatternsData;
+  goldenFiles?: IntelligenceGoldenFile[];
+  /** Opaque — consumed via InternalFileGraph.fromJSON */
+  internalFileGraph?: {
+    imports?: Record<string, string[]>;
+    exports?: Record<string, unknown[]>;
+    stats?: unknown;
+  };
+  generatedAt?: string;
+  libraryUsage?: Record<string, { count: number; examples: string[] }>;
+  tsconfigPaths?: Record<string, string[]>;
+  importGraph?: { topUsed?: unknown[] };
+  header?: unknown;
+  [key: string]: unknown;
 }

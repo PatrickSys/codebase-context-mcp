@@ -1,12 +1,12 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { promises as fs } from 'fs';
 import path from 'path';
-import type { ToolContext, ToolResponse } from './types.js';
+import type { ToolContext, ToolResponse, DecisionCard } from './types.js';
 import { CodebaseSearcher } from '../core/search.js';
-import type { SearchResult } from '../types/index.js';
+import type { SearchIntentProfile } from '../core/search.js';
+import type { SearchResult, IntelligenceData, PatternsData, IntelligenceGoldenFile, ChunkMetadata } from '../types/index.js';
 import { buildEvidenceLock } from '../preflight/evidence-lock.js';
+import type { EvidenceLock } from '../preflight/evidence-lock.js';
 import { shouldIncludePatternConflictCategory } from '../preflight/query-scope.js';
 import {
   isComplementaryPatternConflict,
@@ -17,6 +17,13 @@ import { IndexCorruptedError } from '../errors/index.js';
 import { readMemoriesFile, withConfidence } from '../memory/store.js';
 import { InternalFileGraph } from '../utils/usage-tracker.js';
 import { RELATIONSHIPS_FILENAME } from '../constants/codebase-context.js';
+
+interface RelationshipsData {
+  graph?: {
+    imports?: Record<string, string[]>;
+  };
+  stats?: unknown;
+}
 
 export const definition: Tool = {
   name: 'search_codebase',
@@ -84,7 +91,13 @@ export async function handle(
   args: Record<string, unknown>,
   ctx: ToolContext
 ): Promise<ToolResponse> {
-  const { query, limit, filters, intent, includeSnippets } = args as any;
+  const { query, limit, filters, intent, includeSnippets } = args as {
+    query?: unknown;
+    limit?: number;
+    filters?: Record<string, unknown>;
+    intent?: string;
+    includeSnippets?: boolean;
+  };
   const queryStr = typeof query === 'string' ? query.trim() : '';
 
   if (!queryStr) {
@@ -146,9 +159,10 @@ export async function handle(
   }
 
   const searcher = new CodebaseSearcher(ctx.rootPath);
-  let results: any[];
-  const searchProfile =
-    intent && ['explore', 'edit', 'refactor', 'migrate'].includes(intent) ? intent : 'explore';
+  let results: SearchResult[];
+  const searchProfile = (
+    intent && ['explore', 'edit', 'refactor', 'migrate'].includes(intent) ? intent : 'explore'
+  ) as SearchIntentProfile;
 
   try {
     results = await searcher.search(queryStr, limit || 5, filters, {
@@ -222,23 +236,29 @@ export async function handle(
     .sort((a, b) => b.effectiveConfidence - a.effectiveConfidence);
 
   // Load intelligence data for enrichment (all intents, not just preflight)
-  let intelligence: any = null;
+  let intelligence: IntelligenceData | null = null;
   try {
     const intelligenceContent = await fs.readFile(ctx.paths.intelligence, 'utf-8');
-    intelligence = JSON.parse(intelligenceContent);
+    const parsed = JSON.parse(intelligenceContent) as unknown;
+    if (typeof parsed === 'object' && parsed !== null) {
+      intelligence = parsed as IntelligenceData;
+    }
   } catch {
     /* graceful degradation — intelligence file may not exist yet */
   }
 
   // Load relationships sidecar (preferred over intelligence.internalFileGraph)
-  let relationships: any = null;
+  let relationships: RelationshipsData | null = null;
   try {
     const relationshipsPath = path.join(
       path.dirname(ctx.paths.intelligence),
       RELATIONSHIPS_FILENAME
     );
     const relationshipsContent = await fs.readFile(relationshipsPath, 'utf-8');
-    relationships = JSON.parse(relationshipsContent);
+    const parsed = JSON.parse(relationshipsContent) as unknown;
+    if (typeof parsed === 'object' && parsed !== null) {
+      relationships = parsed as RelationshipsData;
+    }
   } catch {
     /* graceful degradation — relationships sidecar may not exist yet */
   }
@@ -387,10 +407,10 @@ export async function handle(
     return output;
   }
 
-  const searchQuality = assessSearchQuality(query, results);
+  const searchQuality = assessSearchQuality(queryStr, results);
 
   // Always-on edit preflight (lite): do not require intent and keep payload small.
-  let editPreflight: any = undefined;
+  let editPreflight: { mode: string; riskLevel: string; confidence: string; evidenceLock: EvidenceLock } | undefined = undefined;
   if (intelligence && (!intent || intent === 'explore')) {
     try {
       const resultPaths = results.map((r) => r.filePath);
@@ -398,8 +418,8 @@ export async function handle(
 
       // Use existing pattern intelligence for evidenceLock scoring, but keep the output payload lite.
       const preferredPatternsForEvidence: Array<{ pattern: string; example?: string }> = [];
-      const patterns = intelligence.patterns || {};
-      for (const [_, data] of Object.entries<any>(patterns)) {
+      const patterns: PatternsData = intelligence.patterns || {};
+      for (const [_, data] of Object.entries(patterns)) {
         if (data.primary) {
           const p = data.primary;
           if (p.trend === 'Rising' || p.trend === 'Stable') {
@@ -437,7 +457,7 @@ export async function handle(
   }
 
   // Compose preflight card for edit/refactor/migrate intents
-  let preflight: any = undefined;
+  let preflight: DecisionCard | undefined = undefined;
   const preflightIntents = ['edit', 'refactor', 'migrate'];
   if (intent && preflightIntents.includes(intent)) {
     if (!intelligence) {
@@ -448,10 +468,10 @@ export async function handle(
     } else {
       try {
         // --- Avoid / Prefer patterns ---
-        const avoidPatternsList: any[] = [];
-        const preferredPatternsList: any[] = [];
-        const patterns = intelligence.patterns || {};
-        for (const [category, data] of Object.entries<any>(patterns)) {
+        const avoidPatternsList: Array<{ pattern: string; category: string; adoption: string; trend: string; guidance?: string }> = [];
+        const preferredPatternsList: Array<{ pattern: string; category: string; adoption: string; trend: string; guidance?: string; example?: string }> = [];
+        const patterns: PatternsData = intelligence.patterns || {};
+        for (const [category, data] of Object.entries(patterns)) {
           // Primary pattern = preferred if Rising or Stable
           if (data.primary) {
             const p = data.primary;
@@ -535,7 +555,7 @@ export async function handle(
         }
 
         // --- Golden files (exemplar code) ---
-        const goldenFiles = (intelligence.goldenFiles || []).slice(0, 3).map((g: any) => ({
+        const goldenFiles = (intelligence.goldenFiles ?? []).slice(0, 3).map((g: IntelligenceGoldenFile) => ({
           file: g.file,
           score: g.score
         }));
@@ -563,10 +583,10 @@ export async function handle(
           primary: { name: string; adoption: string };
           alternative: { name: string; adoption: string };
         }> = [];
-        const hasUnitTestFramework = Boolean((patterns as any).unitTestFramework?.primary);
-        for (const [cat, data] of Object.entries<any>(patterns)) {
-          if (shouldSkipLegacyTestingFrameworkCategory(cat, patterns as any)) continue;
-          if (!shouldIncludePatternConflictCategory(cat, query)) continue;
+        const hasUnitTestFramework = Boolean(patterns.unitTestFramework?.primary);
+        for (const [cat, data] of Object.entries(patterns)) {
+          if (shouldSkipLegacyTestingFrameworkCategory(cat, patterns)) continue;
+          if (!shouldIncludePatternConflictCategory(cat, queryStr)) continue;
           if (!data.primary || !data.alsoDetected?.length) continue;
           const primaryFreq = parseFloat(data.primary.frequency) || 100;
           if (primaryFreq >= 80) continue;
@@ -595,22 +615,6 @@ export async function handle(
         });
 
         // Build clean decision card (PREF-01 to PREF-04)
-        interface DecisionCard {
-          ready: boolean;
-          nextAction?: string;
-          warnings?: string[];
-          patterns?: {
-            do?: string[];
-            avoid?: string[];
-          };
-          bestExample?: string;
-          impact?: {
-            coverage?: string;
-            files?: string[];
-          };
-          whatWouldHelp?: string[];
-        }
-
         const decisionCard: DecisionCard = {
           ready: evidenceLock.readyToEdit
         };
@@ -686,7 +690,7 @@ export async function handle(
   }
 
   // Helper: Build scope header for symbol-aware chunks (SEARCH-02)
-  function buildScopeHeader(metadata: any): string | null {
+  function buildScopeHeader(metadata: ChunkMetadata): string | null {
     // Try symbolPath first (most reliable for AST-based symbols)
     if (metadata?.symbolPath && Array.isArray(metadata.symbolPath)) {
       return metadata.symbolPath.join('.');
@@ -710,7 +714,7 @@ export async function handle(
     return null;
   }
 
-  function enrichSnippetWithScope(snippet: string | undefined, metadata: any): string | undefined {
+  function enrichSnippetWithScope(snippet: string | undefined, metadata: ChunkMetadata): string | undefined {
     if (!snippet) return undefined;
     const scopeHeader = buildScopeHeader(metadata);
     if (scopeHeader) {

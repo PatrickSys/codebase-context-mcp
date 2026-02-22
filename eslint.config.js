@@ -16,7 +16,7 @@ export default tseslint.config(
       // import plugin is handled via recommended usually, but kept simple for now
     },
     rules: {
-      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-unused-vars': ['error', { 'argsIgnorePattern': '^_', 'varsIgnorePattern': '^_', 'caughtErrorsIgnorePattern': '^_' }],
       'no-console': ['warn', { 'allow': ['warn', 'error'] }],
     },

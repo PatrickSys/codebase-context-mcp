@@ -3,9 +3,9 @@
  * Provides basic AST parsing and chunking for languages without specialized analyzers
  */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { promises as fs } from 'fs';
 import path from 'path';
+import type { TSESTree } from '@typescript-eslint/typescript-estree';
 import {
   FrameworkAnalyzer,
   AnalysisResult,
@@ -30,6 +30,7 @@ import {
   aggregateWorkspaceDependencies,
   categorizeDependency
 } from '../../utils/dependency-detection.js';
+import type { WorkspacePackageJson } from '../../utils/workspace-detection.js';
 
 export class GenericAnalyzer implements FrameworkAnalyzer {
   readonly name = 'generic';
@@ -141,7 +142,7 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
       console.warn(`Failed to parse ${filePath}:`, error);
     }
 
-    const metadata: Record<string, any> = {
+    const metadata: Record<string, unknown> = {
       analyzer: this.name,
       fileSize: content.length,
       lineCount: content.split('\n').length,
@@ -239,7 +240,7 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
     let dependencies: Dependency[] = [];
 
     let workspaceType: string = 'single';
-    let workspacePackages: any[] = [];
+    let workspacePackages: WorkspacePackageJson[] = [];
 
     try {
       workspaceType = await detectWorkspaceType(rootPath);
@@ -247,7 +248,7 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
         workspaceType !== 'single' ? await scanWorkspacePackageJsons(rootPath) : [];
 
       const pkgPath = path.join(rootPath, 'package.json');
-      let packageJson: any = {};
+      let packageJson: { name?: string; dependencies?: Record<string, string>; devDependencies?: Record<string, string> } = {};
       try {
         packageJson = JSON.parse(await fs.readFile(pkgPath, 'utf-8'));
         projectName = packageJson.name || projectName;
@@ -273,7 +274,7 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
       name: projectName,
       rootPath,
       languages: [],
-      dependencies: dependencies as any,
+      dependencies,
       architecture: {
         type: 'mixed',
         layers: {
@@ -353,12 +354,13 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
         if (node.type === 'ImportDeclaration' && node.source.value) {
           imports.push({
             source: node.source.value as string,
-            imports: node.specifiers.map((s: any) => {
+            imports: node.specifiers.map((s: TSESTree.ImportClause) => {
               if (s.type === 'ImportDefaultSpecifier') return 'default';
               if (s.type === 'ImportNamespaceSpecifier') return '*';
-              return s.imported?.name || s.local.name;
+              const specifier = s as TSESTree.ImportSpecifier;
+              return specifier.imported.name || specifier.local.name;
             }),
-            isDefault: node.specifiers.some((s: any) => s.type === 'ImportDefaultSpecifier'),
+            isDefault: node.specifiers.some((s: TSESTree.ImportClause) => s.type === 'ImportDefaultSpecifier'),
             isDynamic: false,
             line: node.loc?.start.line
           });
@@ -419,8 +421,9 @@ export class GenericAnalyzer implements FrameworkAnalyzer {
                 }
               }
             } else if ('id' in node.declaration && node.declaration.id) {
+              const declId = node.declaration.id as { name: string };
               exports.push({
-                name: (node.declaration.id as any).name,
+                name: declId.name,
                 isDefault: false,
                 type: 'named'
               });

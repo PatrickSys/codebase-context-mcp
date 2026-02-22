@@ -1,5 +1,6 @@
 // Complementary pattern pairs are registered by analyzers at startup.
 // This keeps the core logic framework-agnostic.
+import type { PatternsData } from '../types/index.js';
 const complementaryPairs: Map<string, Set<string>> = new Map();
 
 /**
@@ -44,7 +45,7 @@ export function isComplementaryPatternCategory(category: string, patternNames: s
 
 export function shouldSkipLegacyTestingFrameworkCategory(
   category: string,
-  patterns: Record<string, any>
+  patterns: PatternsData
 ): boolean {
   return category === 'testingFramework' && Boolean(patterns.unitTestFramework?.primary);
 }

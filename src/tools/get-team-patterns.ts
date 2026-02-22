@@ -6,6 +6,7 @@ import {
   isComplementaryPatternConflict,
   shouldSkipLegacyTestingFrameworkCategory
 } from '../patterns/semantics.js';
+import type { IntelligenceData, PatternsData } from '../types/index.js';
 
 export const definition: Tool = {
   name: 'get_team_patterns',
@@ -33,29 +34,33 @@ export async function handle(
   try {
     const intelligencePath = ctx.paths.intelligence;
     const content = await fs.readFile(intelligencePath, 'utf-8');
-    const intelligence = JSON.parse(content);
+    const intelligence = JSON.parse(content) as unknown;
+    if (typeof intelligence !== 'object' || intelligence === null) {
+      throw new Error('Invalid intelligence.json: expected an object');
+    }
+    const intel = intelligence as IntelligenceData;
 
-    const result: any = { status: 'success' };
+    const result: Record<string, unknown> = { status: 'success' };
 
     if (category === 'all' || !category) {
-      result.patterns = intelligence.patterns || {};
-      result.goldenFiles = intelligence.goldenFiles || [];
-      if (intelligence.tsconfigPaths) {
-        result.tsconfigPaths = intelligence.tsconfigPaths;
+      result.patterns = intel.patterns || {};
+      result.goldenFiles = intel.goldenFiles || [];
+      if (intel.tsconfigPaths) {
+        result.tsconfigPaths = intel.tsconfigPaths;
       }
     } else if (category === 'di') {
-      result.dependencyInjection = intelligence.patterns?.dependencyInjection;
+      result.dependencyInjection = intel.patterns?.dependencyInjection;
     } else if (category === 'state') {
-      result.stateManagement = intelligence.patterns?.stateManagement;
+      result.stateManagement = intel.patterns?.stateManagement;
     } else if (category === 'testing') {
-      result.unitTestFramework = intelligence.patterns?.unitTestFramework;
-      result.e2eFramework = intelligence.patterns?.e2eFramework;
-      result.testingFramework = intelligence.patterns?.testingFramework;
-      result.testMocking = intelligence.patterns?.testMocking;
+      result.unitTestFramework = intel.patterns?.unitTestFramework;
+      result.e2eFramework = intel.patterns?.e2eFramework;
+      result.testingFramework = intel.patterns?.testingFramework;
+      result.testMocking = intel.patterns?.testMocking;
     } else if (category === 'libraries') {
-      result.topUsed = intelligence.importGraph?.topUsed || [];
-      if (intelligence.tsconfigPaths) {
-        result.tsconfigPaths = intelligence.tsconfigPaths;
+      result.topUsed = intel.importGraph?.topUsed || [];
+      if (intel.tsconfigPaths) {
+        result.tsconfigPaths = intel.tsconfigPaths;
       }
     }
 
@@ -83,10 +88,15 @@ export async function handle(
     }
 
     // Detect pattern conflicts: primary < 80% and any alternative > 20%
-    const conflicts: any[] = [];
-    const patternsData = intelligence.patterns || {};
+    const conflicts: Array<{
+      category: string;
+      primary: { name: string; adoption: string; trend: string | undefined };
+      alternative: { name: string; adoption: string; trend: string | undefined };
+      note: string;
+    }> = [];
+    const patternsData: PatternsData = intel.patterns || {};
     const hasUnitTestFramework = Boolean(patternsData.unitTestFramework?.primary);
-    for (const [cat, data] of Object.entries<any>(patternsData)) {
+    for (const [cat, data] of Object.entries(patternsData)) {
       if (shouldSkipLegacyTestingFrameworkCategory(cat, patternsData)) continue;
       if (category && category !== 'all' && cat !== category) continue;
       if (!data.primary || !data.alsoDetected?.length) continue;

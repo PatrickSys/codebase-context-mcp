@@ -2,6 +2,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME } from '../constants/codebase-context.js';
 import { IndexCorruptedError } from '../errors/index.js';
+import type { UsageLocation } from '../types/index.js';
 
 interface IndexedChunk {
   content?: unknown;
@@ -10,9 +11,7 @@ interface IndexedChunk {
   filePath?: unknown;
 }
 
-export interface SymbolUsage {
-  file: string;
-  line: number;
+export interface SymbolUsage extends UsageLocation {
   preview: string;
 }
 
@@ -96,8 +95,8 @@ export async function findSymbolReferences(
   }
 
   const chunks =
-    chunksRaw && typeof chunksRaw === 'object' && Array.isArray((chunksRaw as any).chunks)
-      ? ((chunksRaw as any).chunks as unknown[])
+    chunksRaw !== null && typeof chunksRaw === 'object' && 'chunks' in chunksRaw && Array.isArray(chunksRaw.chunks)
+      ? (chunksRaw.chunks as unknown[])
       : null;
 
   if (!chunks) {

@@ -1,5 +1,8 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { EmbeddingProvider } from './types.js';
+
+interface OpenAIEmbeddingResponse {
+  data: Array<{ embedding: number[] }>;
+}
 
 /**
  * OpenAI Embedding Provider
@@ -55,10 +58,10 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
         throw new Error(`OpenAI API Error ${response.status}: ${error}`);
       }
 
-      const data = (await response.json()) as any;
+      const data = (await response.json()) as OpenAIEmbeddingResponse;
 
       // OpenAI guarantees order matches input
-      return data.data.map((item: any) => item.embedding);
+      return data.data.map((item) => item.embedding);
     } catch (error) {
       console.error('OpenAI Embedding Failed:', error);
       throw error;
