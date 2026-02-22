@@ -4,9 +4,10 @@
  * Detects state management patterns, architectural layers, and Angular-specific patterns
  */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { promises as fs } from 'fs';
 import path from 'path';
+import { parse } from '@typescript-eslint/typescript-estree';
+import type { TSESTree } from '@typescript-eslint/typescript-estree';
 import {
   FrameworkAnalyzer,
   AnalysisResult,
@@ -15,15 +16,36 @@ import {
   CodeComponent,
   ImportStatement,
   ExportStatement,
-  ArchitecturalLayer
+  ArchitecturalLayer,
+  DependencyCategory
 } from '../../types/index.js';
-import { parse } from '@typescript-eslint/typescript-estree';
 import { createChunksFromCode } from '../../utils/chunking.js';
 import {
   CODEBASE_CONTEXT_DIRNAME,
   KEYWORD_INDEX_FILENAME
 } from '../../constants/codebase-context.js';
 import { registerComplementaryPatterns } from '../../patterns/semantics.js';
+
+interface AngularInput {
+  name: string;
+  type: string;
+  style: 'decorator' | 'signal';
+  required?: boolean;
+}
+
+interface AngularOutput {
+  name: string;
+  type: string;
+  style: 'decorator' | 'signal';
+}
+
+interface IndexChunk {
+  filePath?: string;
+  startLine?: number;
+  endLine?: number;
+  componentType?: string;
+  layer?: string;
+}
 
 export class AngularAnalyzer implements FrameworkAnalyzer {
   readonly name = 'angular';
@@ -144,12 +166,15 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
           const source = node.source.value as string;
           imports.push({
             source,
-            imports: node.specifiers.map((s: any) => {
+            imports: node.specifiers.map((s: TSESTree.ImportClause) => {
               if (s.type === 'ImportDefaultSpecifier') return 'default';
               if (s.type === 'ImportNamespaceSpecifier') return '*';
-              return s.imported?.name || s.local.name;
+              const specifier = s as TSESTree.ImportSpecifier;
+              return specifier.imported.name || specifier.local.name;
             }),
-            isDefault: node.specifiers.some((s: any) => s.type === 'ImportDefaultSpecifier'),
+            isDefault: node.specifiers.some(
+              (s: TSESTree.ImportClause) => s.type === 'ImportDefaultSpecifier'
+            ),
             isDynamic: false,
             line: node.loc?.start.line
           });
@@ -352,15 +377,21 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
   }
 
   private async extractAngularComponent(
-    classNode: any,
+    classNode: TSESTree.ClassDeclaration,
     content: string
   ): Promise<CodeComponent | null> {
-    if (!classNode.decorators || classNode.decorators.length === 0) {
+    if (!classNode.id || !classNode.decorators || classNode.decorators.length === 0) {
       return null;
     }
 
     const decorator = classNode.decorators[0];
-    const decoratorName = decorator.expression.callee?.name || decorator.expression.name;
+    const expr = decorator.expression;
+    const decoratorName: string =
+      expr.type === 'CallExpression' && expr.callee.type === 'Identifier'
+        ? expr.callee.name
+        : expr.type === 'Identifier'
+          ? expr.name
+          : '';
 
     let componentType: string | undefined;
     let angularType: string | undefined;
@@ -466,27 +497,28 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
     };
   }
 
-  private extractDecoratorMetadata(decorator: any): Record<string, any> {
-    const metadata: Record<string, any> = {};
+  private extractDecoratorMetadata(decorator: TSESTree.Decorator): Record<string, unknown> {
+    const metadata: Record<string, unknown> = {};
 
     try {
-      if (decorator.expression.arguments && decorator.expression.arguments[0]) {
+      if (decorator.expression.type === 'CallExpression' && decorator.expression.arguments[0]) {
         const arg = decorator.expression.arguments[0];
 
         if (arg.type === 'ObjectExpression') {
           for (const prop of arg.properties) {
-            if (prop.key && prop.value) {
-              const key = prop.key.name || prop.key.value;
+            if (prop.type !== 'Property') continue;
+            const keyNode = prop.key as { name?: string; value?: unknown };
+            const key = keyNode.name ?? String(keyNode.value ?? '');
+            if (!key) continue;
 
-              if (prop.value.type === 'Literal') {
-                metadata[key] = prop.value.value;
-              } else if (prop.value.type === 'ArrayExpression') {
-                metadata[key] = prop.value.elements
-                  .map((el: any) => (el.type === 'Literal' ? el.value : null))
-                  .filter(Boolean);
-              } else if (prop.value.type === 'Identifier') {
-                metadata[key] = prop.value.name;
-              }
+            if (prop.value.type === 'Literal') {
+              metadata[key] = prop.value.value;
+            } else if (prop.value.type === 'ArrayExpression') {
+              metadata[key] = prop.value.elements
+                .map((el) => (el && el.type === 'Literal' ? el.value : null))
+                .filter(Boolean);
+            } else if (prop.value.type === 'Identifier') {
+              metadata[key] = prop.value.name;
             }
           }
         }
@@ -498,7 +530,7 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
     return metadata;
   }
 
-  private extractLifecycleHooks(classNode: any): string[] {
+  private extractLifecycleHooks(classNode: TSESTree.ClassDeclaration): string[] {
     const hooks: string[] = [];
     const lifecycleHooks = [
       'ngOnChanges',
@@ -513,7 +545,7 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
 
     if (classNode.body && classNode.body.body) {
       for (const member of classNode.body.body) {
-        if (member.type === 'MethodDefinition' && member.key) {
+        if (member.type === 'MethodDefinition' && member.key && member.key.type === 'Identifier') {
           const methodName = member.key.name;
           if (lifecycleHooks.includes(methodName)) {
             hooks.push(methodName);
@@ -525,7 +557,7 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
     return hooks;
   }
 
-  private extractInjectedServices(classNode: any): string[] {
+  private extractInjectedServices(classNode: TSESTree.ClassDeclaration): string[] {
     const services: string[] = [];
 
     // Look for constructor parameters
@@ -534,8 +566,13 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
         if (member.type === 'MethodDefinition' && member.kind === 'constructor') {
           if (member.value.params) {
             for (const param of member.value.params) {
-              if (param.typeAnnotation?.typeAnnotation?.typeName) {
-                services.push(param.typeAnnotation.typeAnnotation.typeName.name);
+              const typedParam = param as TSESTree.Identifier;
+              if (typedParam.typeAnnotation?.typeAnnotation?.type === 'TSTypeReference') {
+                const typeRef = typedParam.typeAnnotation
+                  .typeAnnotation as TSESTree.TSTypeReference;
+                if (typeRef.typeName.type === 'Identifier') {
+                  services.push(typeRef.typeName.name);
+                }
               }
             }
           }
@@ -546,40 +583,62 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
     return services;
   }
 
-  private extractInputs(classNode: any): any[] {
-    const inputs: any[] = [];
+  private extractInputs(classNode: TSESTree.ClassDeclaration): AngularInput[] {
+    const inputs: AngularInput[] = [];
 
     if (classNode.body && classNode.body.body) {
       for (const member of classNode.body.body) {
         if (member.type === 'PropertyDefinition') {
           // Check for decorator-based @Input()
           if (member.decorators) {
-            const hasInput = member.decorators.some(
-              (d: any) => d.expression?.callee?.name === 'Input' || d.expression?.name === 'Input'
-            );
+            const hasInput = member.decorators.some((d: TSESTree.Decorator) => {
+              const expr = d.expression;
+              return (
+                (expr.type === 'CallExpression' &&
+                  expr.callee.type === 'Identifier' &&
+                  expr.callee.name === 'Input') ||
+                (expr.type === 'Identifier' && expr.name === 'Input')
+              );
+            });
 
-            if (hasInput && member.key) {
+            if (hasInput && member.key && 'name' in member.key) {
               inputs.push({
                 name: member.key.name,
-                type: member.typeAnnotation?.typeAnnotation?.type || 'any',
+                type:
+                  (member.typeAnnotation?.typeAnnotation?.type as string | undefined) || 'unknown',
                 style: 'decorator'
               });
             }
           }
 
           // Check for signal-based input() (Angular v17.1+)
-          if (member.value && member.key) {
-            const valueStr =
-              member.value.type === 'CallExpression'
-                ? member.value.callee?.name || member.value.callee?.object?.name
-                : null;
+          if (
+            member.value &&
+            member.key &&
+            'name' in member.key &&
+            member.value.type === 'CallExpression'
+          ) {
+            const callee = member.value.callee;
+            let valueStr: string | null = null;
+            let isRequired = false;
+
+            if (callee.type === 'Identifier') {
+              valueStr = callee.name;
+            } else if (callee.type === 'MemberExpression') {
+              if (callee.object.type === 'Identifier') {
+                valueStr = callee.object.name;
+              }
+              if (callee.property.type === 'Identifier') {
+                isRequired = callee.property.name === 'required';
+              }
+            }
 
             if (valueStr === 'input') {
               inputs.push({
                 name: member.key.name,
                 type: 'InputSignal',
                 style: 'signal',
-                required: member.value.callee?.property?.name === 'required'
+                required: isRequired
               });
             }
           }
@@ -590,19 +649,25 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
     return inputs;
   }
 
-  private extractOutputs(classNode: any): any[] {
-    const outputs: any[] = [];
+  private extractOutputs(classNode: TSESTree.ClassDeclaration): AngularOutput[] {
+    const outputs: AngularOutput[] = [];
 
     if (classNode.body && classNode.body.body) {
       for (const member of classNode.body.body) {
         if (member.type === 'PropertyDefinition') {
           // Check for decorator-based @Output()
           if (member.decorators) {
-            const hasOutput = member.decorators.some(
-              (d: any) => d.expression?.callee?.name === 'Output' || d.expression?.name === 'Output'
-            );
+            const hasOutput = member.decorators.some((d: TSESTree.Decorator) => {
+              const expr = d.expression;
+              return (
+                (expr.type === 'CallExpression' &&
+                  expr.callee.type === 'Identifier' &&
+                  expr.callee.name === 'Output') ||
+                (expr.type === 'Identifier' && expr.name === 'Output')
+              );
+            });
 
-            if (hasOutput && member.key) {
+            if (hasOutput && member.key && 'name' in member.key) {
               outputs.push({
                 name: member.key.name,
                 type: 'EventEmitter',
@@ -612,9 +677,14 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
           }
 
           // Check for signal-based output() (Angular v17.1+)
-          if (member.value && member.key) {
-            const valueStr =
-              member.value.type === 'CallExpression' ? member.value.callee?.name : null;
+          if (
+            member.value &&
+            member.key &&
+            'name' in member.key &&
+            member.value.type === 'CallExpression'
+          ) {
+            const callee = member.value.callee;
+            const valueStr = callee.type === 'Identifier' ? callee.name : null;
 
             if (valueStr === 'output') {
               outputs.push({
@@ -755,7 +825,7 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
     return 'unknown';
   }
 
-  private categorizeDependency(name: string): any {
+  private categorizeDependency(name: string): DependencyCategory {
     if (name.startsWith('@angular/')) {
       return 'framework';
     }
@@ -885,20 +955,22 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
     try {
       const indexPath = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
       const indexContent = await fs.readFile(indexPath, 'utf-8');
-      const parsed = JSON.parse(indexContent) as any;
+      const parsed = JSON.parse(indexContent) as unknown;
 
       // Legacy index.json is an array — do not consume it (missing version/meta headers).
       if (Array.isArray(parsed)) {
         return metadata;
       }
 
-      const chunks = parsed && Array.isArray(parsed.chunks) ? parsed.chunks : null;
+      const parsedObj = parsed as { chunks?: unknown };
+      const chunks =
+        parsedObj && Array.isArray(parsedObj.chunks) ? (parsedObj.chunks as IndexChunk[]) : null;
       if (Array.isArray(chunks) && chunks.length > 0) {
         console.error(`Loading statistics from ${indexPath}: ${chunks.length} chunks`);
 
-        metadata.statistics.totalFiles = new Set(chunks.map((c: any) => c.filePath)).size;
+        metadata.statistics.totalFiles = new Set(chunks.map((c) => c.filePath)).size;
         metadata.statistics.totalLines = chunks.reduce(
-          (sum: number, c: any) => sum + (c.endLine - c.startLine + 1),
+          (sum, c) => sum + ((c.endLine ?? 0) - (c.startLine ?? 0) + 1),
           0
         );
 
@@ -954,8 +1026,8 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
     switch (componentType) {
       case 'component': {
         const selector = metadata?.selector || 'unknown';
-        const inputs = metadata?.inputs?.length || 0;
-        const outputs = metadata?.outputs?.length || 0;
+        const inputs = Array.isArray(metadata?.inputs) ? metadata.inputs.length : 0;
+        const outputs = Array.isArray(metadata?.outputs) ? metadata.outputs.length : 0;
         const lifecycle = this.extractLifecycleMethods(content);
         return `Angular component '${className}' (selector: ${selector})${
           lifecycle ? ` with ${lifecycle}` : ''
@@ -986,8 +1058,10 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
       }
 
       case 'module': {
-        const imports = metadata?.imports?.length || 0;
-        const declarations = metadata?.declarations?.length || 0;
+        const imports = Array.isArray(metadata?.imports) ? metadata.imports.length : 0;
+        const declarations = Array.isArray(metadata?.declarations)
+          ? metadata.declarations.length
+          : 0;
         return `Angular module '${className}' with ${declarations} declarations and ${imports} imports.`;
       }
 

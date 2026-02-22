@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { EmbeddingProvider, DEFAULT_MODEL } from './types.js';
+import type { FeatureExtractionPipelineType } from '@huggingface/transformers';
 
 interface ModelConfig {
   dimensions: number;
@@ -28,7 +28,7 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
   readonly modelName: string;
   readonly dimensions: number;
 
-  private pipeline: any = null;
+  private pipeline: FeatureExtractionPipelineType | null = null;
   private ready = false;
   private initPromise: Promise<void> | null = null;
 
@@ -52,7 +52,14 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
 
       const { pipeline } = await import('@huggingface/transformers');
 
-      this.pipeline = await pipeline('feature-extraction', this.modelName, {
+      // TS2590: pipeline() resolves AllTasks[T] — a union too complex for TSC to represent.
+      // Cast to a simpler signature; the actual return type IS FeatureExtractionPipelineType.
+      type PipelineFn = (
+        task: 'feature-extraction',
+        model: string,
+        opts: Record<string, unknown>
+      ) => Promise<FeatureExtractionPipelineType>;
+      this.pipeline = await (pipeline as PipelineFn)('feature-extraction', this.modelName, {
         dtype: 'q8'
       });
 
@@ -68,6 +75,8 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
     if (!this.ready) {
       await this.initialize();
     }
+
+    if (!this.pipeline) throw new Error('Pipeline not initialized');
 
     try {
       const output = await this.pipeline(text, {
@@ -86,6 +95,8 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
     if (!this.ready) {
       await this.initialize();
     }
+
+    if (!this.pipeline) throw new Error('Pipeline not initialized');
 
     const embeddings: number[][] = [];
     const batchSize = computeSafeBatchSize(this.modelName);

@@ -1,6 +1,22 @@
 import type { CodebaseIndexer } from '../core/indexer.js';
 import type { IndexingStats } from '../types/index.js';
 
+export interface DecisionCard {
+  ready: boolean;
+  nextAction?: string;
+  warnings?: string[];
+  patterns?: {
+    do?: string[];
+    avoid?: string[];
+  };
+  bestExample?: string;
+  impact?: {
+    coverage?: string;
+    files?: string[];
+  };
+  whatWouldHelp?: string[];
+}
+
 export interface ToolPaths {
   baseDir: string;
   memory: string;

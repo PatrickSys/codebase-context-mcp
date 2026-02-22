@@ -3,6 +3,15 @@
  * Tracks what libraries are used and detects common coding patterns
  */
 
+import type {
+  PatternTrend,
+  PatternCandidateBase,
+  IntelligenceGoldenFile,
+  UsageLocation
+} from '../types/index.js';
+
+export type { PatternTrend };
+
 export interface LibraryUsageStats {
   [libraryPath: string]: {
     count: number;
@@ -10,37 +19,23 @@ export interface LibraryUsageStats {
   };
 }
 
-export type PatternTrend = 'Rising' | 'Declining' | 'Stable';
+/** Runtime pattern candidate — extends the base with fields only needed during indexing */
+type RuntimePatternPrimary = PatternCandidateBase & {
+  count: number;
+  examples: string[];
+  canonicalExample?: { file: string; snippet: string };
+};
 
 export interface PatternUsageStats {
   [patternName: string]: {
-    primary: {
-      name: string;
-      count: number;
-      frequency: string;
-      examples: string[];
-      canonicalExample?: { file: string; snippet: string };
-      newestFileDate?: string;
-      trend?: PatternTrend;
-      /** Actionable guidance: "USE: X" or "CAUTION: Y" */
-      guidance?: string;
-    };
-    alsoDetected?: Array<{
-      name: string;
-      count: number;
-      frequency: string;
-      newestFileDate?: string;
-      trend?: PatternTrend;
-      /** Actionable guidance for alternative patterns */
-      guidance?: string;
-    }>;
+    primary: RuntimePatternPrimary;
+    /** Actionable guidance for alternative patterns */
+    alsoDetected?: Array<PatternCandidateBase & { count: number }>;
   };
 }
 
-export interface ImportUsage {
-  file: string;
-  line: number;
-}
+/** File + line reference for tracked imports */
+export type ImportUsage = UsageLocation;
 
 export interface ComponentUsageInfo {
   definedIn?: string;
@@ -189,17 +184,11 @@ interface TestFrameworkConfig {
   priority: number;
 }
 
-export interface GoldenFile {
-  file: string;
-  score: number;
-  patterns: {
-    inject: boolean;
-    signals: boolean;
-    computed: boolean;
-    effect: boolean;
-    standalone: boolean;
-    signalInputs: boolean;
-  };
+/** Runtime golden file — extends the serialized shape with generic pattern detection flags.
+ *  Keys are "category:name" strings (e.g. "dependencyInjection:inject() function").
+ *  Framework-specific field names never appear here — they stay in their analyzer. */
+export interface GoldenFile extends IntelligenceGoldenFile {
+  patterns: Record<string, boolean>;
 }
 
 const DEFAULT_TEST_FRAMEWORK_CONFIGS: TestFrameworkConfig[] = [
@@ -321,7 +310,7 @@ export class PatternDetector {
   /**
    * Track a file as a potential "Golden File" - a file that demonstrates multiple modern patterns
    */
-  trackGoldenFile(file: string, score: number, patterns: GoldenFile['patterns']): void {
+  trackGoldenFile(file: string, score: number, patterns: Record<string, boolean>): void {
     // Check if already tracked
     const existing = this.goldenFiles.find((gf) => gf.file === file);
     if (existing) {

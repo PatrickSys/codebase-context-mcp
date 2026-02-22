@@ -1,7 +1,5 @@
 #!/usr/bin/env node
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 /**
  * MCP Server for Codebase Context
  * Provides codebase indexing and semantic search capabilities
@@ -20,7 +18,13 @@ import {
   Resource
 } from '@modelcontextprotocol/sdk/types.js';
 import { CodebaseIndexer } from './core/indexer.js';
-import type { IndexingStats } from './types/index.js';
+import type {
+  IndexingStats,
+  IntelligenceData,
+  PatternsData,
+  PatternEntry,
+  PatternCandidate
+} from './types/index.js';
 import { analyzerRegistry } from './core/analyzer-registry.js';
 import { AngularAnalyzer } from './analyzers/angular/index.js';
 import { GenericAnalyzer } from './analyzers/generic/index.js';
@@ -303,7 +307,7 @@ async function generateCodebaseContext(): Promise<string> {
 
   try {
     const content = await fs.readFile(intelligencePath, 'utf-8');
-    const intelligence = JSON.parse(content);
+    const intelligence = JSON.parse(content) as IntelligenceData;
 
     const lines: string[] = [];
     lines.push('# Codebase Intelligence');
@@ -320,7 +324,7 @@ async function generateCodebaseContext(): Promise<string> {
 
     // Library usage - sorted by count
     const libraryEntries = Object.entries(intelligence.libraryUsage || {})
-      .map(([lib, data]: [string, any]) => ({
+      .map(([lib, data]) => ({
         lib,
         count: data.count
       }))
@@ -349,7 +353,7 @@ async function generateCodebaseContext(): Promise<string> {
 
     // Pattern consensus
     if (intelligence.patterns && Object.keys(intelligence.patterns).length > 0) {
-      const patterns = intelligence.patterns as Record<string, any>;
+      const patterns: PatternsData = intelligence.patterns;
       lines.push("## YOUR Codebase's Actual Patterns (Not Generic Best Practices)");
       lines.push('');
       lines.push('These patterns were detected by analyzing your actual code.');
@@ -361,16 +365,16 @@ async function generateCodebaseContext(): Promise<string> {
           continue;
         }
 
-        const patternData: any = data;
-        const primary = patternData.primary;
-        const alternatives = patternData.alsoDetected ?? [];
+        const patternData: PatternEntry = data;
+        const primary: PatternCandidate | undefined = patternData.primary;
+        const alternatives: PatternCandidate[] = patternData.alsoDetected ?? [];
 
         if (!primary) continue;
 
         if (
           isComplementaryPatternCategory(
             category,
-            [primary.name, ...alternatives.map((alt: any) => alt.name)].filter(Boolean)
+            [primary.name, ...alternatives.map((alt) => alt.name)].filter(Boolean)
           )
         ) {
           const secondary = alternatives[0];

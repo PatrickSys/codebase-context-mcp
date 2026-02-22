@@ -2,11 +2,10 @@
  * Hybrid search combining semantic vector search with keyword matching
  */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import Fuse from 'fuse.js';
 import path from 'path';
 import { promises as fs } from 'fs';
-import { CodeChunk, SearchResult, SearchFilters } from '../types/index.js';
+import { CodeChunk, SearchResult, SearchFilters, IntelligenceData } from '../types/index.js';
 import { EmbeddingProvider, getEmbeddingProvider } from '../embeddings/index.js';
 import { VectorStorageProvider, getStorageProvider } from '../storage/index.js';
 import { analyzerRegistry } from './analyzer-registry.js';
@@ -167,7 +166,7 @@ export class CodebaseSearcher {
     try {
       const indexPath = path.join(this.rootPath, CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME);
       const content = await fs.readFile(indexPath, 'utf-8');
-      const parsed = JSON.parse(content) as any;
+      const parsed = JSON.parse(content) as unknown;
 
       if (Array.isArray(parsed)) {
         throw new IndexCorruptedError(
@@ -175,7 +174,11 @@ export class CodebaseSearcher {
         );
       }
 
-      const chunks = parsed && Array.isArray(parsed.chunks) ? parsed.chunks : null;
+      const parsedObj = parsed as { chunks?: unknown };
+      const chunks =
+        parsedObj && typeof parsedObj === 'object' && Array.isArray(parsedObj.chunks)
+          ? (parsedObj.chunks as CodeChunk[])
+          : null;
       if (!chunks) {
         throw new IndexCorruptedError('Keyword index corrupted: expected { header, chunks }');
       }
@@ -218,7 +221,7 @@ export class CodebaseSearcher {
         INTELLIGENCE_FILENAME
       );
       const content = await fs.readFile(intelligencePath, 'utf-8');
-      const intelligence = JSON.parse(content);
+      const intelligence = JSON.parse(content) as IntelligenceData;
 
       const decliningPatterns = new Set<string>();
       const risingPatterns = new Set<string>();
@@ -226,9 +229,7 @@ export class CodebaseSearcher {
 
       // Extract pattern indicators from intelligence data
       if (intelligence.patterns) {
-        for (const [_category, data] of Object.entries(intelligence.patterns)) {
-          const patternData = data as any;
-
+        for (const [_category, patternData] of Object.entries(intelligence.patterns)) {
           // Track primary pattern
           if (patternData.primary?.trend === 'Rising') {
             risingPatterns.add(patternData.primary.name.toLowerCase());

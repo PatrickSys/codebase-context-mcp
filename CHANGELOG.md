@@ -39,6 +39,16 @@
 ### Added
 
 - **Definition-first ranking**: Exact-name searches now show the file that *defines* a symbol before files that use it. For example, searching `parseConfig` shows the function definition first, then callers.
+
+### Refactored
+
+- **Eliminated all `any` types**: 68 occurrences across 15 files now use proper TypeScript types. Replaced unsafe `Record<string, any>` with `Record<string, unknown>` and narrowed types using proper type guards. Promoted `@typescript-eslint/no-explicit-any` from `warn` to `error` to enforce strict typing.
+- **Consolidated duplicate type definitions**: Single source of truth for shared types:
+  - `PatternTrend` canonical location in `types/index.ts` (imported by `usage-tracker.ts`)
+  - New `PatternCandidateBase` for shared pattern fields; `PatternCandidate extends PatternCandidateBase`; runtime adds optional internal fields
+  - New `UsageLocation` base for both `ImportUsage` and `SymbolUsage` (extends with `preview` field)
+  - `GoldenFile extends IntelligenceGoldenFile` to eliminate field duplication (`file`, `score`)
+  - Introduced `RuntimePatternPrimary` and `DecisionCard` types for tool-specific outputs
 - **Scope headers in code snippets**: When requesting snippets (`includeSnippets: true`), each code block now starts with a comment like `// UserService.login()` so agents know where the code lives without extra file reads.
 - **Edit decision card**: When searching with `intent="edit"`, `intent="refactor"`, or `intent="migrate"`, results now include a decision card telling you whether there's enough evidence to proceed safely. The card shows: whether you're ready (`ready: true/false`), what to do next if not (`nextAction`), relevant team patterns to follow, a top example file, how many callers appear in results (`impact.coverage`), and what searches would help close gaps (`whatWouldHelp`).
 - **Caller coverage tracking**: The decision card shows how many of a symbol's callers are in your search results. Low coverage (less than 40% when there are lots of callers) triggers an alert so you know to search more before editing.

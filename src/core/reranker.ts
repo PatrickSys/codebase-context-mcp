@@ -8,8 +8,6 @@
  * Default model: Xenova/ms-marco-MiniLM-L-6-v2 (~22M params, ~80MB, CPU-safe).
  */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import type { SearchResult } from '../types/index.js';
 
 const DEFAULT_RERANKER_MODEL = 'Xenova/ms-marco-MiniLM-L-6-v2';
@@ -20,8 +18,20 @@ const RERANK_TOP_K = 10;
 /** Trigger reranking when the score gap between #1 and #3 is below this threshold */
 const AMBIGUITY_THRESHOLD = 0.08;
 
-let cachedTokenizer: any = null;
-let cachedModel: any = null;
+interface CrossEncoderTokenizer {
+  (
+    query: string,
+    passage: string,
+    options: { padding: boolean; truncation: boolean; max_length: number }
+  ): unknown;
+}
+
+interface CrossEncoderModel {
+  (inputs: unknown): Promise<{ logits: { data: ArrayLike<number> } }>;
+}
+
+let cachedTokenizer: CrossEncoderTokenizer | null = null;
+let cachedModel: CrossEncoderModel | null = null;
 let initPromise: Promise<void> | null = null;
 
 async function ensureModelLoaded(): Promise<void> {
@@ -83,6 +93,10 @@ function buildPassage(result: SearchResult): string {
  * Returns a relevance score (higher = more relevant).
  */
 async function scorePair(query: string, passage: string): Promise<number> {
+  if (!cachedTokenizer || !cachedModel) {
+    throw new Error('[reranker] Model not loaded — call ensureModelLoaded() first');
+  }
+
   const inputs = cachedTokenizer(query, passage, {
     padding: true,
     truncation: true,

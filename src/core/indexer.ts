@@ -3,7 +3,6 @@
  * Scans files, delegates to analyzers, creates embeddings, stores in vector DB
  */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -15,7 +14,10 @@ import {
   IndexingProgress,
   IndexingStats,
   IndexingPhase,
-  CodebaseConfig
+  CodebaseConfig,
+  Dependency,
+  ArchitecturalLayer,
+  IntelligenceData
 } from '../types/index.js';
 import { analyzerRegistry } from './analyzer-registry.js';
 import { isCodeFile, isBinaryFile } from '../utils/language-detection.js';
@@ -408,11 +410,12 @@ export class CodebaseIndexer {
 
             try {
               const existingIndexPath = path.join(contextDir, KEYWORD_INDEX_FILENAME);
-              const existing = JSON.parse(await fs.readFile(existingIndexPath, 'utf-8')) as any;
+              const existing = JSON.parse(await fs.readFile(existingIndexPath, 'utf-8')) as unknown;
+              const existingObj = existing as { chunks?: unknown };
               const existingChunks: unknown = Array.isArray(existing)
                 ? existing
-                : existing && Array.isArray(existing.chunks)
-                  ? existing.chunks
+                : existingObj && Array.isArray(existingObj.chunks)
+                  ? existingObj.chunks
                   : null;
               if (Array.isArray(existingChunks)) {
                 stats.totalChunks = existingChunks.length;
@@ -546,8 +549,14 @@ export class CodebaseIndexer {
             // GENERIC PATTERN FORWARDING
             // Framework analyzers return detectedPatterns in metadata - we just forward them
             // This keeps the indexer framework-agnostic
-            if (result.metadata?.detectedPatterns) {
-              for (const pattern of result.metadata.detectedPatterns) {
+            if (
+              result.metadata?.detectedPatterns &&
+              Array.isArray(result.metadata.detectedPatterns)
+            ) {
+              for (const pattern of result.metadata.detectedPatterns as Array<{
+                category: string;
+                name: string;
+              }>) {
                 // Try to extract a relevant snippet for the pattern
                 // Ask analyzer registry for snippet pattern (framework-agnostic delegation)
                 const analyzer = analyzerRegistry.findAnalyzer(file);
@@ -565,17 +574,20 @@ export class CodebaseIndexer {
 
             // Track file for Golden File scoring (framework-agnostic)
             // A golden file = file with patterns in ≥3 distinct categories
-            const detectedPatterns = result.metadata?.detectedPatterns || [];
-            const uniqueCategories = new Set(
-              detectedPatterns.map((p: { category: string }) => p.category)
-            );
+            const rawPatterns = result.metadata?.detectedPatterns;
+            const detectedPatterns: Array<{ category: string; name: string }> = Array.isArray(
+              rawPatterns
+            )
+              ? (rawPatterns as Array<{ category: string; name: string }>)
+              : [];
+            const uniqueCategories = new Set(detectedPatterns.map((p) => p.category));
             const patternScore = uniqueCategories.size;
             if (patternScore >= 3) {
               const patternFlags: Record<string, boolean> = {};
               for (const p of detectedPatterns) {
                 patternFlags[`${p.category}:${p.name}`] = true;
               }
-              patternDetector.trackGoldenFile(relPath, patternScore, patternFlags as any); // TODO: fix type;
+              patternDetector.trackGoldenFile(relPath, patternScore, patternFlags);
             }
 
             // Update component statistics
@@ -1076,7 +1088,7 @@ export class CodebaseIndexer {
         INTELLIGENCE_FILENAME
       );
       const intelligenceContent = await fs.readFile(intelligencePath, 'utf-8');
-      const intelligence = JSON.parse(intelligenceContent) as any;
+      const intelligence = JSON.parse(intelligenceContent) as IntelligenceData;
 
       // Phase 06: ignore legacy intelligence files that lack a versioned header.
       if (!intelligence || typeof intelligence !== 'object' || !intelligence.header) {
@@ -1128,7 +1140,7 @@ export class CodebaseIndexer {
     };
   }
 
-  private mergeDependencies(base: any[], incoming: any[]): any[] {
+  private mergeDependencies(base: Dependency[], incoming: Dependency[]): Dependency[] {
     const seen = new Set(base.map((d) => d.name));
     const result = [...base];
     for (const dep of incoming) {
@@ -1140,7 +1152,10 @@ export class CodebaseIndexer {
     return result;
   }
 
-  private mergeLayers(base: any, incoming?: any): any {
+  private mergeLayers(
+    base: Record<ArchitecturalLayer, number>,
+    incoming?: Partial<Record<ArchitecturalLayer, number>>
+  ): Record<ArchitecturalLayer, number> {
     if (!incoming) return base;
     return {
       presentation: Math.max(base.presentation || 0, incoming.presentation || 0),
@@ -1155,7 +1170,10 @@ export class CodebaseIndexer {
     };
   }
 
-  private mergeStatistics(base: any, incoming: any): any {
+  private mergeStatistics(
+    base: CodebaseMetadata['statistics'],
+    incoming: CodebaseMetadata['statistics']
+  ): CodebaseMetadata['statistics'] {
     return {
       totalFiles: Math.max(base.totalFiles || 0, incoming.totalFiles || 0),
       totalLines: Math.max(base.totalLines || 0, incoming.totalLines || 0),

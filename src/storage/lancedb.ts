@@ -1,19 +1,38 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * LanceDB Storage Provider
  * Embedded vector database for storing and searching code embeddings
  */
 
 import { promises as fs } from 'fs';
+import type { Connection, Table } from '@lancedb/lancedb';
 import { VectorStorageProvider, CodeChunkWithEmbedding, VectorSearchResult } from './types.js';
 import { CodeChunk, SearchFilters } from '../types/index.js';
 import { IndexCorruptedError } from '../errors/index.js';
 
+interface LanceDBRecord {
+  id: string;
+  content: string;
+  filePath: string;
+  relativePath: string;
+  startLine: number;
+  endLine: number;
+  language: string;
+  framework?: string;
+  componentType?: string;
+  layer?: string;
+  dependencies?: string;
+  imports?: string;
+  exports?: string;
+  tags?: string;
+  metadata?: string;
+  _distance?: number;
+}
+
 export class LanceDBStorageProvider implements VectorStorageProvider {
   readonly name = 'lancedb';
 
-  private db: any = null;
-  private table: any = null;
+  private db: Connection | null = null;
+  private table: Table | null = null;
   private storagePath: string = '';
   private initialized = false;
 
@@ -39,7 +58,7 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
         this.table = await this.db.openTable('code_chunks');
 
         const schema = await this.table.schema();
-        const hasVectorColumn = schema.fields.some((f: any) => f.name === 'vector');
+        const hasVectorColumn = schema.fields.some((f: { name: string }) => f.name === 'vector');
 
         if (!hasVectorColumn) {
           throw new IndexCorruptedError('LanceDB index corrupted: missing vector column');
@@ -68,7 +87,7 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
   }
 
   async store(chunks: CodeChunkWithEmbedding[]): Promise<void> {
-    if (!this.initialized) {
+    if (!this.initialized || !this.db) {
       throw new Error('Storage not initialized');
     }
 
@@ -159,7 +178,7 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
       const results = await query.toArray();
 
       // Convert to VectorSearchResult format
-      return results.map((result: any) => ({
+      return (results as LanceDBRecord[]).map((result) => ({
         chunk: {
           id: result.id,
           content: result.content,
@@ -231,6 +250,7 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
 
     try {
       // Drop table if exists
+      if (!this.db) return;
       const tableNames = await this.db.tableNames();
       if (tableNames.includes('code_chunks')) {
         await this.db.dropTable('code_chunks');

@@ -3,6 +3,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import type { ToolContext, ToolResponse } from './types.js';
 import { InternalFileGraph } from '../utils/usage-tracker.js';
+import type { FileExport } from '../utils/usage-tracker.js';
 import { RELATIONSHIPS_FILENAME } from '../constants/codebase-context.js';
 
 export const definition: Tool = {
@@ -30,8 +31,11 @@ export async function handle(
 
   try {
     // Try relationships sidecar first (preferred), then intelligence
-    let graphDataSource: any = null;
-    let graphStats: any = null;
+    let graphDataSource: {
+      imports?: Record<string, string[]>;
+      exports?: Record<string, FileExport[]>;
+    } | null = null;
+    let graphStats: unknown = null;
 
     const relationshipsPath = path.join(
       path.dirname(ctx.paths.intelligence),

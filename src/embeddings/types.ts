@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export interface EmbeddingProvider {
   readonly name: string;
   readonly modelName: string;
@@ -25,7 +24,7 @@ export interface EmbeddingConfig {
 export const DEFAULT_MODEL = process.env.EMBEDDING_MODEL || 'Xenova/bge-small-en-v1.5';
 
 export const DEFAULT_EMBEDDING_CONFIG: EmbeddingConfig = {
-  provider: (process.env.EMBEDDING_PROVIDER as any) || 'transformers',
+  provider: (process.env.EMBEDDING_PROVIDER as EmbeddingConfig['provider']) || 'transformers',
   model: DEFAULT_MODEL,
   batchSize: 32,
   maxRetries: 3,
