@@ -439,12 +439,18 @@ export async function handle(
   // Compose preflight card for edit/refactor/migrate intents
   let preflight: any = undefined;
   const preflightIntents = ['edit', 'refactor', 'migrate'];
-  if (intent && preflightIntents.includes(intent) && intelligence) {
-    try {
-      // --- Avoid / Prefer patterns ---
-      const avoidPatternsList: any[] = [];
-      const preferredPatternsList: any[] = [];
-      const patterns = intelligence.patterns || {};
+  if (intent && preflightIntents.includes(intent)) {
+    if (!intelligence) {
+      preflight = {
+        ready: false,
+        nextAction: 'Run a full index rebuild to generate pattern intelligence before editing.'
+      };
+    } else {
+      try {
+        // --- Avoid / Prefer patterns ---
+        const avoidPatternsList: any[] = [];
+        const preferredPatternsList: any[] = [];
+        const patterns = intelligence.patterns || {};
       for (const [category, data] of Object.entries<any>(patterns)) {
         // Primary pattern = preferred if Rising or Stable
         if (data.primary) {
@@ -658,8 +664,9 @@ export async function handle(
       }
 
       preflight = decisionCard;
-    } catch {
-      // Preflight construction failed — skip preflight, don't fail the search
+      } catch {
+        // Preflight construction failed — skip preflight, don't fail the search
+      }
     }
   }
 

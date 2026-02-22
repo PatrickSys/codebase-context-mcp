@@ -461,13 +461,11 @@ describe('index-consuming allowlist enforcement', () => {
               ? { query: 'test' }
               : toolName === 'get_symbol_references'
                 ? { symbol: 'alpha' }
-                : toolName === 'get_component_usage'
-                  ? { name: 'x' }
-                  : toolName === 'detect_circular_dependencies'
+                : toolName === 'detect_circular_dependencies'
+                  ? {}
+                  : toolName === 'get_team_patterns'
                     ? {}
-                    : toolName === 'get_team_patterns'
-                      ? {}
-                      : {}
+                    : {}
         }
       });
 
