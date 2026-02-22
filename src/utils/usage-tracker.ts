@@ -179,16 +179,11 @@ interface TestFrameworkConfig {
   priority: number;
 }
 
-/** Runtime golden file — extends the serialized shape with pattern detection flags */
+/** Runtime golden file — extends the serialized shape with generic pattern detection flags.
+ *  Keys are "category:name" strings (e.g. "dependencyInjection:inject() function").
+ *  Framework-specific field names never appear here — they stay in their analyzer. */
 export interface GoldenFile extends IntelligenceGoldenFile {
-  patterns: {
-    inject: boolean;
-    signals: boolean;
-    computed: boolean;
-    effect: boolean;
-    standalone: boolean;
-    signalInputs: boolean;
-  };
+  patterns: Record<string, boolean>;
 }
 
 const DEFAULT_TEST_FRAMEWORK_CONFIGS: TestFrameworkConfig[] = [
@@ -310,7 +305,7 @@ export class PatternDetector {
   /**
    * Track a file as a potential "Golden File" - a file that demonstrates multiple modern patterns
    */
-  trackGoldenFile(file: string, score: number, patterns: GoldenFile['patterns']): void {
+  trackGoldenFile(file: string, score: number, patterns: Record<string, boolean>): void {
     // Check if already tracked
     const existing = this.goldenFiles.find((gf) => gf.file === file);
     if (existing) {

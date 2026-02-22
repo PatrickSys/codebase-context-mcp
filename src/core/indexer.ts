@@ -28,8 +28,7 @@ import {
   PatternDetector,
   ImportGraph,
   InternalFileGraph,
-  FileExport,
-  GoldenFile
+  FileExport
 } from '../utils/usage-tracker.js';
 import { mergeSmallChunks } from '../utils/chunking.js';
 import { getFileCommitDates } from '../utils/git-dates.js';
@@ -366,7 +365,7 @@ export class CodebaseIndexer {
 
         console.error(
           `Incremental diff: ${diff.added.length} added, ${diff.changed.length} changed, ` +
-            `${diff.deleted.length} deleted, ${diff.unchanged.length} unchanged`
+          `${diff.deleted.length} deleted, ${diff.unchanged.length} unchanged`
         );
 
         stats.incremental = {
@@ -441,9 +440,9 @@ export class CodebaseIndexer {
       // Build the set of files that need analysis + embedding (incremental: only added/changed)
       const filesToProcess = diff
         ? files.filter((f) => {
-            const rel = path.relative(this.rootPath, f).replace(/\\/g, '/');
-            return diff!.added.includes(rel) || diff!.changed.includes(rel);
-          })
+          const rel = path.relative(this.rootPath, f).replace(/\\/g, '/');
+          return diff!.added.includes(rel) || diff!.changed.includes(rel);
+        })
         : files;
 
       // Phase 2: Analyzing & Parsing
@@ -582,7 +581,7 @@ export class CodebaseIndexer {
               for (const p of detectedPatterns) {
                 patternFlags[`${p.category}:${p.name}`] = true;
               }
-              patternDetector.trackGoldenFile(relPath, patternScore, patternFlags as GoldenFile['patterns']);
+              patternDetector.trackGoldenFile(relPath, patternScore, patternFlags);
             }
 
             // Update component statistics
@@ -639,8 +638,8 @@ export class CodebaseIndexer {
         this.updateProgress('embedding', 50);
         console.error(
           `Creating embeddings for ${chunksToEmbed.length} chunks` +
-            (diff ? ` (${allChunks.length} total, ${chunksToEmbed.length} changed)` : '') +
-            '...'
+          (diff ? ` (${allChunks.length} total, ${chunksToEmbed.length} changed)` : '') +
+          '...'
         );
 
         // Initialize embedding provider
@@ -686,8 +685,7 @@ export class CodebaseIndexer {
 
           if ((i + batchSize) % 100 === 0 || i + batchSize >= chunksToEmbed.length) {
             console.error(
-              `Embedded ${Math.min(i + batchSize, chunksToEmbed.length)}/${
-                chunksToEmbed.length
+              `Embedded ${Math.min(i + batchSize, chunksToEmbed.length)}/${chunksToEmbed.length
               } chunks`
             );
           }
@@ -740,7 +738,7 @@ export class CodebaseIndexer {
           }
           console.error(
             `Incremental store: deleted chunks for ${diff.changed.length + diff.deleted.length} files, ` +
-              `added ${chunksWithEmbeddings.length} new chunks`
+            `added ${chunksWithEmbeddings.length} new chunks`
           );
         } else {
           // Full rebuild: store to staging (no clear - fresh directory)
@@ -913,8 +911,8 @@ export class CodebaseIndexer {
       if (diff) {
         console.error(
           `Incremental indexing complete in ${stats.duration}ms ` +
-            `(${diff.added.length} added, ${diff.changed.length} changed, ` +
-            `${diff.deleted.length} deleted, ${diff.unchanged.length} unchanged)`
+          `(${diff.added.length} added, ${diff.changed.length} changed, ` +
+          `${diff.deleted.length} deleted, ${diff.unchanged.length} unchanged)`
         );
       } else {
         console.error(`Indexing complete in ${stats.duration}ms`);
