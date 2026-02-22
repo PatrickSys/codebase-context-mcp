@@ -439,227 +439,234 @@ export async function handle(
   // Compose preflight card for edit/refactor/migrate intents
   let preflight: any = undefined;
   const preflightIntents = ['edit', 'refactor', 'migrate'];
-  if (intent && preflightIntents.includes(intent) && intelligence) {
-    try {
-      // --- Avoid / Prefer patterns ---
-      const avoidPatternsList: any[] = [];
-      const preferredPatternsList: any[] = [];
-      const patterns = intelligence.patterns || {};
-      for (const [category, data] of Object.entries<any>(patterns)) {
-        // Primary pattern = preferred if Rising or Stable
-        if (data.primary) {
-          const p = data.primary;
-          if (p.trend === 'Rising' || p.trend === 'Stable') {
-            preferredPatternsList.push({
-              pattern: p.name,
-              category,
-              adoption: p.frequency,
-              trend: p.trend,
-              guidance: p.guidance,
-              ...(p.canonicalExample && { example: p.canonicalExample.file })
-            });
+  if (intent && preflightIntents.includes(intent)) {
+    if (!intelligence) {
+      preflight = {
+        ready: false,
+        nextAction: 'Run a full index rebuild to generate pattern intelligence before editing.'
+      };
+    } else {
+      try {
+        // --- Avoid / Prefer patterns ---
+        const avoidPatternsList: any[] = [];
+        const preferredPatternsList: any[] = [];
+        const patterns = intelligence.patterns || {};
+        for (const [category, data] of Object.entries<any>(patterns)) {
+          // Primary pattern = preferred if Rising or Stable
+          if (data.primary) {
+            const p = data.primary;
+            if (p.trend === 'Rising' || p.trend === 'Stable') {
+              preferredPatternsList.push({
+                pattern: p.name,
+                category,
+                adoption: p.frequency,
+                trend: p.trend,
+                guidance: p.guidance,
+                ...(p.canonicalExample && { example: p.canonicalExample.file })
+              });
+            }
+          }
+          // Also-detected patterns that are Declining = avoid
+          if (data.alsoDetected) {
+            for (const alt of data.alsoDetected) {
+              if (alt.trend === 'Declining') {
+                avoidPatternsList.push({
+                  pattern: alt.name,
+                  category,
+                  adoption: alt.frequency,
+                  trend: 'Declining',
+                  guidance: alt.guidance
+                });
+              }
+            }
           }
         }
-        // Also-detected patterns that are Declining = avoid
-        if (data.alsoDetected) {
+
+        // --- Impact candidates (files importing the result files) ---
+        const resultPaths = results.map((r) => r.filePath);
+        const impactCandidates = computeImpactCandidates(resultPaths);
+
+        // PREF-02: Compute impact coverage (callers of result files that appear in results)
+        const callerFiles = resultPaths.flatMap((p) => {
+          const importers: string[] = [];
+          for (const [dep, importerList] of reverseImports) {
+            if (dep.endsWith(p) || p.endsWith(dep)) {
+              importers.push(...importerList);
+            }
+          }
+          return importers;
+        });
+        const uniqueCallers = new Set(callerFiles);
+        const callersCovered = Array.from(uniqueCallers).filter((f) =>
+          resultPaths.some((rp) => f.endsWith(rp) || rp.endsWith(f))
+        ).length;
+        const callersTotal = uniqueCallers.size;
+        const impactCoverage =
+          callersTotal > 0 ? { covered: callersCovered, total: callersTotal } : undefined;
+
+        // --- Risk level (based on circular deps + impact breadth) ---
+        //TODO: Review this risk level calculation
+        let _riskLevel: 'low' | 'medium' | 'high' = 'low';
+        let cycleCount = 0;
+        const graphDataSource = relationships?.graph || intelligence?.internalFileGraph;
+        if (graphDataSource) {
+          try {
+            const graph = InternalFileGraph.fromJSON(graphDataSource, ctx.rootPath);
+            // Use directory prefixes as scope (not full file paths)
+            // findCycles(scope) filters files by startsWith, so a full path would only match itself
+            const scopes = new Set(
+              resultPaths.map((rp) => {
+                const lastSlash = rp.lastIndexOf('/');
+                return lastSlash > 0 ? rp.substring(0, lastSlash + 1) : rp;
+              })
+            );
+            for (const scope of scopes) {
+              const cycles = graph.findCycles(scope);
+              cycleCount += cycles.length;
+            }
+          } catch {
+            // Graph reconstruction failed — skip cycle check
+          }
+        }
+        if (cycleCount > 0 || impactCandidates.length > 10) {
+          _riskLevel = 'high';
+        } else if (impactCandidates.length > 3) {
+          _riskLevel = 'medium';
+        }
+
+        // --- Golden files (exemplar code) ---
+        const goldenFiles = (intelligence.goldenFiles || []).slice(0, 3).map((g: any) => ({
+          file: g.file,
+          score: g.score
+        }));
+
+        // --- Confidence (index freshness) ---
+        // TODO: Review this confidence calculation
+        //const confidence = computeIndexConfidence();
+
+        // --- Failure memories (1.5x relevance boost) ---
+        const failureWarnings = relatedMemories
+          .filter((m) => m.type === 'failure' && !m.stale)
+          .map((m) => ({
+            memory: m.memory,
+            reason: m.reason,
+            confidence: m.effectiveConfidence
+          }))
+          .slice(0, 3);
+
+        const preferredPatternsForOutput = preferredPatternsList.slice(0, 5);
+        const avoidPatternsForOutput = avoidPatternsList.slice(0, 5);
+
+        // --- Pattern conflicts (split decisions within categories) ---
+        const patternConflicts: Array<{
+          category: string;
+          primary: { name: string; adoption: string };
+          alternative: { name: string; adoption: string };
+        }> = [];
+        const hasUnitTestFramework = Boolean((patterns as any).unitTestFramework?.primary);
+        for (const [cat, data] of Object.entries<any>(patterns)) {
+          if (shouldSkipLegacyTestingFrameworkCategory(cat, patterns as any)) continue;
+          if (!shouldIncludePatternConflictCategory(cat, query)) continue;
+          if (!data.primary || !data.alsoDetected?.length) continue;
+          const primaryFreq = parseFloat(data.primary.frequency) || 100;
+          if (primaryFreq >= 80) continue;
           for (const alt of data.alsoDetected) {
-            if (alt.trend === 'Declining') {
-              avoidPatternsList.push({
-                pattern: alt.name,
-                category,
-                adoption: alt.frequency,
-                trend: 'Declining',
-                guidance: alt.guidance
+            const altFreq = parseFloat(alt.frequency) || 0;
+            if (altFreq >= 20) {
+              if (isComplementaryPatternConflict(cat, data.primary.name, alt.name)) continue;
+              if (hasUnitTestFramework && cat === 'testingFramework') continue;
+              patternConflicts.push({
+                category: cat,
+                primary: { name: data.primary.name, adoption: data.primary.frequency },
+                alternative: { name: alt.name, adoption: alt.frequency }
               });
             }
           }
         }
-      }
 
-      // --- Impact candidates (files importing the result files) ---
-      const resultPaths = results.map((r) => r.filePath);
-      const impactCandidates = computeImpactCandidates(resultPaths);
+        const evidenceLock = buildEvidenceLock({
+          results,
+          preferredPatterns: preferredPatternsForOutput,
+          relatedMemories,
+          failureWarnings,
+          patternConflicts,
+          searchQualityStatus: searchQuality.status,
+          impactCoverage
+        });
 
-      // PREF-02: Compute impact coverage (callers of result files that appear in results)
-      const callerFiles = resultPaths.flatMap((p) => {
-        const importers: string[] = [];
-        for (const [dep, importerList] of reverseImports) {
-          if (dep.endsWith(p) || p.endsWith(dep)) {
-            importers.push(...importerList);
+        // Build clean decision card (PREF-01 to PREF-04)
+        interface DecisionCard {
+          ready: boolean;
+          nextAction?: string;
+          warnings?: string[];
+          patterns?: {
+            do?: string[];
+            avoid?: string[];
+          };
+          bestExample?: string;
+          impact?: {
+            coverage?: string;
+            files?: string[];
+          };
+          whatWouldHelp?: string[];
+        }
+
+        const decisionCard: DecisionCard = {
+          ready: evidenceLock.readyToEdit
+        };
+
+        // Add nextAction if not ready
+        if (!decisionCard.ready && evidenceLock.nextAction) {
+          decisionCard.nextAction = evidenceLock.nextAction;
+        }
+
+        // Add warnings from failure memories (capped at 3)
+        if (failureWarnings.length > 0) {
+          decisionCard.warnings = failureWarnings.slice(0, 3).map((w) => w.memory);
+        }
+
+        // Add patterns (do/avoid, capped at 3 each, with adoption %)
+        const doPatterns = preferredPatternsForOutput
+          .slice(0, 3)
+          .map((p) => `${p.pattern} — ${p.adoption ? ` ${p.adoption}% adoption` : ''}`);
+        const avoidPatterns = avoidPatternsForOutput
+          .slice(0, 3)
+          .map((p) => `${p.pattern} — ${p.adoption ? ` ${p.adoption}% adoption` : ''} (declining)`);
+        if (doPatterns.length > 0 || avoidPatterns.length > 0) {
+          decisionCard.patterns = {
+            ...(doPatterns.length > 0 && { do: doPatterns }),
+            ...(avoidPatterns.length > 0 && { avoid: avoidPatterns })
+          };
+        }
+
+        // Add bestExample (top 1 golden file)
+        if (goldenFiles.length > 0) {
+          decisionCard.bestExample = `${goldenFiles[0].file}`;
+        }
+
+        // Add impact (coverage + top 3 files)
+        if (impactCoverage || impactCandidates.length > 0) {
+          const impactObj: { coverage?: string; files?: string[] } = {};
+          if (impactCoverage) {
+            impactObj.coverage = `${impactCoverage.covered}/${impactCoverage.total} callers in results`;
+          }
+          if (impactCandidates.length > 0) {
+            impactObj.files = impactCandidates.slice(0, 3);
+          }
+          if (Object.keys(impactObj).length > 0) {
+            decisionCard.impact = impactObj;
           }
         }
-        return importers;
-      });
-      const uniqueCallers = new Set(callerFiles);
-      const callersCovered = Array.from(uniqueCallers).filter((f) =>
-        resultPaths.some((rp) => f.endsWith(rp) || rp.endsWith(f))
-      ).length;
-      const callersTotal = uniqueCallers.size;
-      const impactCoverage =
-        callersTotal > 0 ? { covered: callersCovered, total: callersTotal } : undefined;
 
-      // --- Risk level (based on circular deps + impact breadth) ---
-      //TODO: Review this risk level calculation
-      let _riskLevel: 'low' | 'medium' | 'high' = 'low';
-      let cycleCount = 0;
-      const graphDataSource = relationships?.graph || intelligence?.internalFileGraph;
-      if (graphDataSource) {
-        try {
-          const graph = InternalFileGraph.fromJSON(graphDataSource, ctx.rootPath);
-          // Use directory prefixes as scope (not full file paths)
-          // findCycles(scope) filters files by startsWith, so a full path would only match itself
-          const scopes = new Set(
-            resultPaths.map((rp) => {
-              const lastSlash = rp.lastIndexOf('/');
-              return lastSlash > 0 ? rp.substring(0, lastSlash + 1) : rp;
-            })
-          );
-          for (const scope of scopes) {
-            const cycles = graph.findCycles(scope);
-            cycleCount += cycles.length;
-          }
-        } catch {
-          // Graph reconstruction failed — skip cycle check
+        // Add whatWouldHelp from evidenceLock
+        if (evidenceLock.whatWouldHelp && evidenceLock.whatWouldHelp.length > 0) {
+          decisionCard.whatWouldHelp = evidenceLock.whatWouldHelp;
         }
+
+        preflight = decisionCard;
+      } catch {
+        // Preflight construction failed — skip preflight, don't fail the search
       }
-      if (cycleCount > 0 || impactCandidates.length > 10) {
-        _riskLevel = 'high';
-      } else if (impactCandidates.length > 3) {
-        _riskLevel = 'medium';
-      }
-
-      // --- Golden files (exemplar code) ---
-      const goldenFiles = (intelligence.goldenFiles || []).slice(0, 3).map((g: any) => ({
-        file: g.file,
-        score: g.score
-      }));
-
-      // --- Confidence (index freshness) ---
-      // TODO: Review this confidence calculation
-      //const confidence = computeIndexConfidence();
-
-      // --- Failure memories (1.5x relevance boost) ---
-      const failureWarnings = relatedMemories
-        .filter((m) => m.type === 'failure' && !m.stale)
-        .map((m) => ({
-          memory: m.memory,
-          reason: m.reason,
-          confidence: m.effectiveConfidence
-        }))
-        .slice(0, 3);
-
-      const preferredPatternsForOutput = preferredPatternsList.slice(0, 5);
-      const avoidPatternsForOutput = avoidPatternsList.slice(0, 5);
-
-      // --- Pattern conflicts (split decisions within categories) ---
-      const patternConflicts: Array<{
-        category: string;
-        primary: { name: string; adoption: string };
-        alternative: { name: string; adoption: string };
-      }> = [];
-      const hasUnitTestFramework = Boolean((patterns as any).unitTestFramework?.primary);
-      for (const [cat, data] of Object.entries<any>(patterns)) {
-        if (shouldSkipLegacyTestingFrameworkCategory(cat, patterns as any)) continue;
-        if (!shouldIncludePatternConflictCategory(cat, query)) continue;
-        if (!data.primary || !data.alsoDetected?.length) continue;
-        const primaryFreq = parseFloat(data.primary.frequency) || 100;
-        if (primaryFreq >= 80) continue;
-        for (const alt of data.alsoDetected) {
-          const altFreq = parseFloat(alt.frequency) || 0;
-          if (altFreq >= 20) {
-            if (isComplementaryPatternConflict(cat, data.primary.name, alt.name)) continue;
-            if (hasUnitTestFramework && cat === 'testingFramework') continue;
-            patternConflicts.push({
-              category: cat,
-              primary: { name: data.primary.name, adoption: data.primary.frequency },
-              alternative: { name: alt.name, adoption: alt.frequency }
-            });
-          }
-        }
-      }
-
-      const evidenceLock = buildEvidenceLock({
-        results,
-        preferredPatterns: preferredPatternsForOutput,
-        relatedMemories,
-        failureWarnings,
-        patternConflicts,
-        searchQualityStatus: searchQuality.status,
-        impactCoverage
-      });
-
-      // Build clean decision card (PREF-01 to PREF-04)
-      interface DecisionCard {
-        ready: boolean;
-        nextAction?: string;
-        warnings?: string[];
-        patterns?: {
-          do?: string[];
-          avoid?: string[];
-        };
-        bestExample?: string;
-        impact?: {
-          coverage?: string;
-          files?: string[];
-        };
-        whatWouldHelp?: string[];
-      }
-
-      const decisionCard: DecisionCard = {
-        ready: evidenceLock.readyToEdit
-      };
-
-      // Add nextAction if not ready
-      if (!decisionCard.ready && evidenceLock.nextAction) {
-        decisionCard.nextAction = evidenceLock.nextAction;
-      }
-
-      // Add warnings from failure memories (capped at 3)
-      if (failureWarnings.length > 0) {
-        decisionCard.warnings = failureWarnings.slice(0, 3).map((w) => w.memory);
-      }
-
-      // Add patterns (do/avoid, capped at 3 each, with adoption %)
-      const doPatterns = preferredPatternsForOutput
-        .slice(0, 3)
-        .map((p) => `${p.pattern} — ${p.adoption ? ` ${p.adoption}% adoption` : ''}`);
-      const avoidPatterns = avoidPatternsForOutput
-        .slice(0, 3)
-        .map((p) => `${p.pattern} — ${p.adoption ? ` ${p.adoption}% adoption` : ''} (declining)`);
-      if (doPatterns.length > 0 || avoidPatterns.length > 0) {
-        decisionCard.patterns = {
-          ...(doPatterns.length > 0 && { do: doPatterns }),
-          ...(avoidPatterns.length > 0 && { avoid: avoidPatterns })
-        };
-      }
-
-      // Add bestExample (top 1 golden file)
-      if (goldenFiles.length > 0) {
-        decisionCard.bestExample = `${goldenFiles[0].file}`;
-      }
-
-      // Add impact (coverage + top 3 files)
-      if (impactCoverage || impactCandidates.length > 0) {
-        const impactObj: { coverage?: string; files?: string[] } = {};
-        if (impactCoverage) {
-          impactObj.coverage = `${impactCoverage.covered}/${impactCoverage.total} callers in results`;
-        }
-        if (impactCandidates.length > 0) {
-          impactObj.files = impactCandidates.slice(0, 3);
-        }
-        if (Object.keys(impactObj).length > 0) {
-          decisionCard.impact = impactObj;
-        }
-      }
-
-      // Add whatWouldHelp from evidenceLock
-      if (evidenceLock.whatWouldHelp && evidenceLock.whatWouldHelp.length > 0) {
-        decisionCard.whatWouldHelp = evidenceLock.whatWouldHelp;
-      }
-
-      preflight = decisionCard;
-    } catch {
-      // Preflight construction failed — skip preflight, don't fail the search
     }
   }
 

@@ -84,7 +84,6 @@ const LEGACY_PATHS = {
 export const INDEX_CONSUMING_TOOL_NAMES = [
   'search_codebase',
   'get_symbol_references',
-  'get_component_usage',
   'detect_circular_dependencies',
   'get_team_patterns',
   'get_codebase_metadata'

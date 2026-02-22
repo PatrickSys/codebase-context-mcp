@@ -62,6 +62,7 @@
 
 - Null-pointer crash in GenericAnalyzer when chunk content is undefined.
 - Tree-sitter symbol extraction now treats node offsets as UTF-8 byte ranges and evicts cached parsers on failures/timeouts.
+- **Post-merge integration gaps** (v1.8 audit): Removed orphaned `get_component_usage` source file, deleted phantom allowlist entry, removed dead guidance strings referencing the deleted tool. Added fallback decision card when `intelligence.json` is absent during edit-intent searches, now returns `ready: false` with actionable guidance instead of silently skipping.
 
 ## [1.6.2] - 2026-02-17
 

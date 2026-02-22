@@ -30,7 +30,7 @@ export function assessSearchQuality(
       nextSteps: [
         'Try a narrower query with one concrete symbol, route, or file hint.',
         'Apply search filters (framework/language/componentType/layer).',
-        'Use get_component_usage for dependency or wiring lookups.'
+        'Use get_symbol_references to find where a specific symbol is used across the codebase.'
       ]
     };
   }
@@ -76,7 +76,7 @@ export function assessSearchQuality(
       nextSteps: [
         'Add one or two concrete symbols, routes, or file hints to the query.',
         'Apply filters (framework/language/componentType/layer) to narrow candidates.',
-        'Use get_component_usage when the question is about wiring or usages.'
+        'Use get_symbol_references when the question is about where a symbol or function is used.'
       ]
     })
   };
