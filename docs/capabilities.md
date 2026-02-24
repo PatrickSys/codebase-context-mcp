@@ -1,10 +1,10 @@
 # Capabilities Reference
 
-Technical reference for what `codebase-context` ships today. For the user-facing overview, see [README.md](../README.md).
-
 ## CLI Reference
 
 All 10 MCP tools are exposed as CLI subcommands. Set `CODEBASE_ROOT` or run from the project directory.
+
+`patterns`, `search`, and `refs` render ASCII box art by default. All commands accept `--json` for raw JSON. Errors go to stderr with exit code 1.
 
 | Command | Flags | Maps to |
 |---|---|---|
@@ -20,7 +20,13 @@ All 10 MCP tools are exposed as CLI subcommands. Set `CODEBASE_ROOT` or run from
 | `memory add` | `--type`, `--category`, `--memory`, `--reason` | `remember` |
 | `memory remove <id>` | — | — |
 
-All commands accept `--json` for raw JSON output. Errors go to stderr with exit code 1.
+### Output format
+
+`search --intent edit` wraps the preflight decision card in a titled box, then lists results below as a numbered list with `score | type (layer) | trend` metadata. Type is human-readable (`interceptor (core)` not `interceptor:core`). Trend is plain text (`rising`/`declining`; stable is omitted).
+
+`patterns` renders all categories, golden files, conflicts, and memories inside a single `Team Patterns` box.
+
+`refs` renders a tree graph inside a box: the symbol name as root, each usage as a `├─`/`└─` branch showing `file:line` and a preview snippet.
 
 ```bash
 # Quick examples
@@ -81,6 +87,10 @@ Ordered by execution:
 ## Decision Card (Edit Intent)
 
 Returned as `preflight` when search `intent` is `edit`, `refactor`, or `migrate`.
+
+<!-- Uncomment when docs/assets/preflight-example.png exists:
+![Preflight example](./assets/preflight-example.png)
+-->
 
 **Output shape:**
 

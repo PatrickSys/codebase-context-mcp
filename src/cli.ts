@@ -24,7 +24,20 @@ import {
 import { CodebaseIndexer } from './core/indexer.js';
 import { dispatchTool } from './tools/index.js';
 import type { ToolContext } from './tools/index.js';
-import type { IndexState } from './tools/types.js';
+import type {
+  IndexState,
+  SearchResponse,
+  SearchQuality,
+  SearchResultItem,
+  PatternResponse,
+  PatternCategory,
+  PatternEntry,
+  GoldenFile,
+  PatternConflict,
+  RefsResponse,
+  RefsUsage,
+  DecisionCard
+} from './tools/types.js';
 import { analyzerRegistry } from './core/analyzer-registry.js';
 import { AngularAnalyzer } from './analyzers/angular/index.js';
 import { GenericAnalyzer } from './analyzers/generic/index.js';
@@ -141,13 +154,318 @@ function extractText(result: { content?: Array<{ type: string; text: string }> }
   return result.content?.[0]?.text ?? '';
 }
 
-function formatJson(json: string, useJson: boolean): void {
+function formatJson(
+  json: string,
+  useJson: boolean,
+  command?: string,
+  rootPath?: string,
+  query?: string,
+  intent?: string
+): void {
   if (useJson) {
     console.log(json);
     return;
   }
-  // Pretty-print already-formatted JSON as-is (it's already readable)
-  console.log(json);
+
+  let data: unknown;
+  try {
+    data = JSON.parse(json);
+  } catch {
+    console.log(json);
+    return;
+  }
+
+  switch (command) {
+    case 'patterns':
+      formatPatterns(data as PatternResponse);
+      break;
+    case 'search':
+      formatSearch(data as SearchResponse, rootPath ?? '', query, intent);
+      break;
+    case 'refs':
+      formatRefs(data as RefsResponse, rootPath ?? '');
+      break;
+    default:
+      console.log(JSON.stringify(data, null, 2));
+  }
+}
+
+function shortPath(filePath: string, rootPath: string): string {
+  const normalized = filePath.replace(/\\/g, '/');
+  const normalizedRoot = rootPath.replace(/\\/g, '/');
+  if (normalized.startsWith(normalizedRoot)) {
+    return normalized.slice(normalizedRoot.length).replace(/^\//, '');
+  }
+  // Also strip common Repos/ prefix patterns
+  const reposIdx = normalized.indexOf('/Repos/');
+  if (reposIdx >= 0) {
+    const afterRepos = normalized.slice(reposIdx + 7);
+    const slashIdx = afterRepos.indexOf('/');
+    return slashIdx >= 0 ? afterRepos.slice(slashIdx + 1) : afterRepos;
+  }
+  return path.basename(filePath);
+}
+
+function formatTrend(trend?: string): string {
+  if (trend === 'Rising') return 'rising';
+  if (trend === 'Declining') return 'declining';
+  return '';
+}
+
+function formatType(type?: string): string {
+  if (!type) return '';
+  // "interceptor:core" → "interceptor (core)"
+  const [compType, layer] = type.split(':');
+  return layer ? `${compType} (${layer})` : compType;
+}
+
+function padRight(str: string, len: number): string {
+  return str.length >= len ? str : str + ' '.repeat(len - str.length);
+}
+
+function drawBox(title: string, lines: string[], width: number = 60): string[] {
+  const output: string[] = [];
+  const inner = width - 4; // 2 for "| " + 2 for " |"
+  const dashes = '\u2500';
+  const titlePart = `\u250c\u2500 ${title} `;
+  const remaining = Math.max(0, width - titlePart.length - 1);
+  output.push(titlePart + dashes.repeat(remaining) + '\u2510');
+  for (const line of lines) {
+    const padded = line.length <= inner ? line + ' '.repeat(inner - line.length) : line.slice(0, inner);
+    output.push(`\u2502 ${padded} \u2502`);
+  }
+  output.push('\u2514' + dashes.repeat(width - 2) + '\u2518');
+  return output;
+}
+
+function formatPatterns(data: PatternResponse): void {
+  const { patterns, goldenFiles, memories, conflicts } = data;
+  const lines: string[] = [];
+
+  if (patterns) {
+    for (const [category, catData] of Object.entries(patterns)) {
+      const label = category
+        .replace(/([A-Z])/g, ' $1')
+        .replace(/^./, (s) => s.toUpperCase())
+        .trim();
+      lines.push('');
+      lines.push(label.toUpperCase());
+
+      const primary: PatternEntry = catData.primary;
+      if (primary) {
+        const name = padRight(primary.name ?? '', 28);
+        const freq = padRight(primary.frequency ?? '', 8);
+        const trend = formatTrend(primary.trend);
+        lines.push(`  ${name} ${freq}${trend ? ` ${trend}` : ''}`);
+      }
+
+      const alsoDetected: PatternEntry[] | undefined = catData.alsoDetected;
+      if (alsoDetected) {
+        for (const alt of alsoDetected) {
+          const name = padRight(alt.name ?? '', 28);
+          const freq = padRight(alt.frequency ?? '', 8);
+          const trend = formatTrend(alt.trend);
+          lines.push(`  ${name} ${freq}${trend ? ` ${trend}` : ''}`);
+        }
+      }
+    }
+  }
+
+  if (goldenFiles && goldenFiles.length > 0) {
+    lines.push('');
+    lines.push('GOLDEN FILES');
+    for (const gf of goldenFiles.slice(0, 5)) {
+      const file = padRight(gf.file ?? '', 44);
+      lines.push(`  ${file} ${gf.score} patterns`);
+    }
+  }
+
+  if (conflicts && conflicts.length > 0) {
+    lines.push('');
+    lines.push('CONFLICTS');
+    for (const c of conflicts) {
+      lines.push(`  ${c.category}: ${c.primary?.name} (${c.primary?.adoption}) vs ${c.alternative?.name} (${c.alternative?.adoption})`);
+    }
+  }
+
+  if (memories && memories.length > 0) {
+    lines.push('');
+    lines.push(`MEMORIES (from git)`);
+    for (const m of memories.slice(0, 5)) {
+      lines.push(`  [${m.type}] ${m.memory}`);
+    }
+  }
+
+  lines.push('');
+
+  const boxLines = drawBox('Team Patterns', lines);
+  console.log('');
+  for (const l of boxLines) {
+    console.log(l);
+  }
+  console.log('');
+}
+
+function formatSearch(
+  data: SearchResponse,
+  rootPath: string,
+  query?: string,
+  intent?: string
+): void {
+  const { searchQuality: quality, preflight, results, relatedMemories: memories } = data;
+
+  // Build box lines for preflight section
+  const boxLines: string[] = [];
+
+  if (quality) {
+    const status = quality.status === 'ok' ? 'ok' : 'low confidence';
+    const conf = quality.confidence ?? '';
+    boxLines.push(`Quality: ${status} (${conf})`);
+    if (quality.hint) {
+      boxLines.push(`Hint: ${quality.hint}`);
+    }
+  }
+
+  if (preflight) {
+    const readyLabel = preflight.ready ? 'YES' : 'NO';
+    boxLines.push(`Ready to edit: ${readyLabel}`);
+
+    if (preflight.nextAction) {
+      boxLines.push(`Next: ${preflight.nextAction}`);
+    }
+
+    const patterns = preflight.patterns;
+    if (patterns) {
+      if (patterns.do && patterns.do.length > 0) {
+        boxLines.push('');
+        boxLines.push('Patterns:');
+        for (const p of patterns.do) {
+          boxLines.push(`  \u2713 ${p}`);
+        }
+      }
+      if (patterns.avoid && patterns.avoid.length > 0) {
+        for (const p of patterns.avoid) {
+          boxLines.push(`  \u2717 ${p}`);
+        }
+      }
+    }
+
+    if (preflight.bestExample) {
+      boxLines.push('');
+      boxLines.push(`Best example: ${shortPath(preflight.bestExample, rootPath)}`);
+    }
+
+    const impact = preflight.impact;
+    if (impact?.coverage) {
+      boxLines.push(`Callers: ${impact.coverage}`);
+    }
+
+    const whatWouldHelp = preflight.whatWouldHelp;
+    if (whatWouldHelp && whatWouldHelp.length > 0) {
+      boxLines.push('');
+      for (const h of whatWouldHelp) {
+        boxLines.push(`\u2192 ${h}`);
+      }
+    }
+  }
+
+  // Build box title
+  const titleParts: string[] = [];
+  if (query) titleParts.push(`"${query}"`);
+  if (intent) titleParts.push(`intent: ${intent}`);
+  const boxTitle = titleParts.length > 0 ? `Search: ${titleParts.join(' \u2500\u2500\u2500 ')}` : 'Search';
+
+  // Print box if there is preflight content
+  console.log('');
+  if (boxLines.length > 0) {
+    const boxOut = drawBox(boxTitle, boxLines, 62);
+    for (const l of boxOut) {
+      console.log(l);
+    }
+    console.log('');
+  }
+
+  // Results
+  if (results && results.length > 0) {
+    for (let i = 0; i < results.length; i++) {
+      const r: SearchResultItem = results[i];
+      const file = shortPath(r.file ?? '', rootPath);
+      const score = Number(r.score ?? 0).toFixed(2);
+      const typePart = formatType(r.type);
+      const trendPart = formatTrend(r.trend);
+
+      const metaParts = [`score: ${score}`];
+      if (typePart) metaParts.push(typePart);
+      if (trendPart) metaParts.push(trendPart);
+
+      console.log(`${i + 1}.  ${file}`);
+      console.log(`    ${metaParts.join(' | ')}`);
+
+      const summary = r.summary ?? '';
+      if (summary) {
+        const short = summary.length > 80 ? summary.slice(0, 77) + '...' : summary;
+        console.log(`    ${short}`);
+      }
+
+      const hints = r.hints;
+      if (hints?.callers && hints.callers.length > 0) {
+        const shortCallers = hints.callers.slice(0, 3).map((c) => shortPath(c, rootPath));
+        console.log(`    callers: ${shortCallers.join(', ')}`);
+      }
+      console.log('');
+    }
+  }
+
+  // Related memories
+  if (memories && memories.length > 0) {
+    console.log('Memories:');
+    for (const m of memories) {
+      console.log(`  ${m}`);
+    }
+    console.log('');
+  }
+}
+
+function formatRefs(data: RefsResponse, rootPath: string): void {
+  const { symbol, usageCount: count, confidence, usages } = data;
+
+  const lines: string[] = [];
+  lines.push('');
+  lines.push(String(symbol));
+
+  if (usages && usages.length > 0) {
+    lines.push('\u2502');
+    for (let i = 0; i < usages.length; i++) {
+      const u: RefsUsage = usages[i];
+      const isLast = i === usages.length - 1;
+      const branch = isLast ? '\u2514\u2500' : '\u251c\u2500';
+      const file = shortPath(u.file ?? '', rootPath);
+      lines.push(`${branch} ${file}:${u.line}`);
+
+      const preview = u.preview ?? '';
+      if (preview) {
+        const firstLine = preview.split('\n')[0].trim();
+        if (firstLine) {
+          const indent = isLast ? '   ' : '\u2502  ';
+          lines.push(`${indent} ${firstLine}`);
+        }
+      }
+
+      if (!isLast) {
+        lines.push('\u2502');
+      }
+    }
+  }
+
+  lines.push('');
+
+  const boxTitle = `${symbol} \u2500\u2500\u2500 ${count} references \u2500\u2500\u2500 ${confidence}`;
+  const boxOut = drawBox(boxTitle, lines, 62);
+  console.log('');
+  for (const l of boxOut) {
+    console.log(l);
+  }
+  console.log('');
 }
 
 export async function handleCliCommand(argv: string[]): Promise<void> {
@@ -200,12 +518,12 @@ export async function handleCliCommand(argv: string[]): Promise<void> {
         ...(flags['limit'] ? { limit: Number(flags['limit']) } : {}),
         ...(flags['lang'] || flags['framework'] || flags['layer']
           ? {
-              filters: {
-                ...(flags['lang'] ? { language: flags['lang'] } : {}),
-                ...(flags['framework'] ? { framework: flags['framework'] } : {}),
-                ...(flags['layer'] ? { layer: flags['layer'] } : {})
-              }
+            filters: {
+              ...(flags['lang'] ? { language: flags['lang'] } : {}),
+              ...(flags['framework'] ? { framework: flags['framework'] } : {}),
+              ...(flags['layer'] ? { layer: flags['layer'] } : {})
             }
+          }
           : {})
       };
       break;
@@ -279,7 +597,14 @@ export async function handleCliCommand(argv: string[]): Promise<void> {
       console.error(extractText(result));
       process.exit(1);
     }
-    formatJson(extractText(result), useJson);
+    formatJson(
+      extractText(result),
+      useJson,
+      command,
+      ctx.rootPath,
+      flags['query'] as string | undefined,
+      flags['intent'] as string | undefined
+    );
   } catch (error) {
     console.error('Error:', error instanceof Error ? error.message : String(error));
     process.exit(1);

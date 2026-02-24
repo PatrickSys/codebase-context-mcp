@@ -305,12 +305,12 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
       relativePath.endsWith('pipe.ts')
     ) {
       if (hasExplicitStandalone) {
-        detectedPatterns.push({ category: 'componentStyle', name: 'Standalone' });
+        detectedPatterns.push({ category: 'componentStyle', name: 'Standalone component' });
       } else if (hasExplicitNgModule) {
         detectedPatterns.push({ category: 'componentStyle', name: 'NgModule-based' });
       } else if (usesModernPatterns) {
         // No explicit flag but uses modern patterns → likely v19+ standalone default
-        detectedPatterns.push({ category: 'componentStyle', name: 'Standalone' });
+        detectedPatterns.push({ category: 'componentStyle', name: 'Standalone component' });
       }
       // If no explicit flag and no modern patterns, don't classify (ambiguous)
     }
@@ -1035,9 +1035,10 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
       }
 
       case 'service': {
-        const providedIn = metadata?.providedIn || 'unknown';
+        const providedIn = metadata?.providedIn;
         const methods = this.extractPublicMethods(content);
-        return `Angular service '${className}' (providedIn: ${providedIn})${
+        const scope = providedIn ? ` (${providedIn})` : '';
+        return `Angular service '${className}'${scope}${
           methods ? ` providing ${methods}` : ''
         }.`;
       }
@@ -1165,7 +1166,7 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
       Computed: /\bcomputed\s*[<(]/
     },
     componentStyle: {
-      Standalone: /standalone\s*:\s*true/,
+      'Standalone component': /standalone\s*:\s*true/,
       'NgModule-based': /@(?:Component|Directive|Pipe)\s*\(/
     },
     componentInputs: {

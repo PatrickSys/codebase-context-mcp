@@ -109,7 +109,8 @@ function createComponentChunks(
       exports: [],
       tags,
       metadata: {
-        ...metadata,
+        ...component.metadata, // per-component: providedIn, selector, isStandalone, etc.
+        ...metadata, // file-level: framework, layer (overrides on conflict)
         componentName: component.name,
         componentType: component.componentType,
         complexity,
@@ -246,10 +247,6 @@ function generateTags(component: CodeComponent, metadata?: Record<string, any>):
   }
 
   // Add special tags based on metadata
-  if (metadata?.isStandalone) {
-    tags.push('standalone');
-  }
-
   if (metadata?.hasRoutes) {
     tags.push('routing');
   }

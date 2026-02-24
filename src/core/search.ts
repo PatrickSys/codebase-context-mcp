@@ -253,9 +253,11 @@ export class CodebaseSearcher {
       }
 
       this.patternIntelligence = { decliningPatterns, risingPatterns, patternWarnings };
-      console.error(
-        `[search] Loaded pattern intelligence: ${decliningPatterns.size} declining, ${risingPatterns.size} rising patterns`
-      );
+      if (process.env.CODEBASE_CONTEXT_DEBUG) {
+        console.error(
+          `[search] Loaded pattern intelligence: ${decliningPatterns.size} declining, ${risingPatterns.size} rising patterns`
+        );
+      }
 
       this.importCentrality = new Map<string, number>();
       if (intelligence.internalFileGraph && intelligence.internalFileGraph.imports) {
@@ -277,7 +279,9 @@ export class CodebaseSearcher {
           this.importCentrality.set(file, count / maxImports);
         }
 
-        console.error(`[search] Computed import centrality for ${importCounts.size} files`);
+        if (process.env.CODEBASE_CONTEXT_DEBUG) {
+          console.error(`[search] Computed import centrality for ${importCounts.size} files`);
+        }
       }
     } catch (error) {
       console.warn(

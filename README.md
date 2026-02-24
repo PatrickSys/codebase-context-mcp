@@ -1,6 +1,6 @@
 # codebase-context
 
-## Local-first second brain for AI Agents working on your codebase
+## Local-first second brain for AI agents — patterns, memory, and evidence scoring for any codebase
 
 [![npm version](https://img.shields.io/npm/v/codebase-context)](https://www.npmjs.com/package/codebase-context) [![license](https://img.shields.io/npm/l/codebase-context)](./LICENSE) [![node](https://img.shields.io/node/v/codebase-context)](./package.json)
 
@@ -8,20 +8,27 @@ You're tired of AI agents writing code that 'just works' but fits like a square 
 
 This MCP gives agents _just enough_ context so they match _how_ your team codes, know _why_, and _remember_ every correction.
 
-Here's what codebase-context does:
+Here's what it gives the agent on every search:
 
-**Finds the right context** - Search that doesn't just return code. Each result comes back with analyzed and quantified coding patterns and conventions, related team memories, file relationships, and quality indicators. It knows whether you're looking for a specific file, a concept, or how things wire together - and filters out the noise (test files, configs, old utilities) before the agent sees them. The agent gets curated context, not raw hits.
+**Finds the right context** - Search that doesn't just return code. Each result comes back with analyzed and quantified coding patterns and conventions, related team memories, file relationships, and quality indicators. Filters noise (test files, configs, old utilities) before the agent sees it. Parses code structure with Tree-sitter where available — results include symbol scope and caller relationships, not just file matches.
 
-**Knows your conventions** - Detected from your code and git history, not only from rules you wrote. Seeks team consensus and direction by adoption percentages and trends (rising/declining), golden files. Tells the difference between code that's _common_ and code that's _current_ - what patterns the team is moving toward and what's being left behind.
+**Knows your conventions** - Detected from your code and git history, not only from rules you wrote. Seeks team consensus and direction by adoption percentages and trends (rising/declining), golden files. Tells the difference between code that's _common_ and code that's _current_ - what patterns the team is moving toward and what's being left behind. (Golden files are your best implementations, auto-selected by pattern recency and consistency — not by you.)
 
 **Remembers across sessions** - Decisions, failures, workarounds that look wrong but exist for a reason - the battle scars that aren't in the comments. Recorded once, surfaced automatically so the agent doesn't "clean up" something you spent a week getting right. Conventional git commits (`refactor:`, `migrate:`, `fix:`) auto-extract into memory with zero effort. Stale memories decay and get flagged instead of blindly trusted.
 
 **Checks before editing** - Before editing something, you get a decision card showing whether there's enough evidence to proceed. If a symbol has four callers and only two appear in your search results, the card shows that coverage gap. If coverage is low, `whatWouldHelp` lists the specific searches to run before you touch anything. When code, team memories, and patterns contradict each other, it tells you to look deeper instead of guessing.
 
-One tool call returns all of it. Local-first - your code never leaves your machine.
+<!-- Uncomment when docs/assets/preflight-example.png exists:
+![Preflight example](./docs/assets/preflight-example.png)
+_Decision card showing caller coverage, patterns to follow, and what to search next before editing._
+-->
 
-<!-- TODO: Add demo GIF: search_codebase("How does this app attach the auth token to outgoing API calls?") → AuthInterceptor top result + preflight + agent proceeds or asks -->
+All local. Your code never leaves your machine.
+
+<!-- Add docs/assets/demo.gif for hero visual (see docs/assets/README.md). Caption: One search returns code, patterns, and preflight. Recorded against angular-spotify. -->
 <!-- ![Demo](./docs/assets/demo.gif) -->
+
+_One call: ranked results + conventions + edit-readiness. (Recorded against angular-spotify.)_
 
 ## Quick Start
 
@@ -93,9 +100,11 @@ Open Settings > MCP and add:
 }
 ```
 
-## Codex
+### Codex
 
-Run codex mcp add codebase-context npx -y codebase-context "/path/to/your/project"
+```bash
+codex mcp add codebase-context npx -y codebase-context "/path/to/your/project"
+```
 
 ## What It Actually Does
 
@@ -135,6 +144,17 @@ getToken(): string {
 
 Default output is lean — if the agent wants code, it calls `read_file`.
 
+### What changes for the agent
+
+Without codebase-context: the agent searches, gets matching files, picks an example, and copies whatever pattern it finds — including the old ones.
+
+With codebase-context: the same search returns which patterns are current vs declining in your codebase, which files import the thing being edited, whether there's enough evidence to proceed, and what the team decided last time someone touched this area. The agent can make a different kind of decision.
+
+The pattern data isn't rules you wrote — it's adoption percentages derived from your actual code. If 89% of your codebase uses one approach and 11% uses a legacy approach, the agent sees that signal before writing anything.
+
+<details>
+<summary>Example response shape (one search call)</summary>
+
 ```json
 {
   "searchQuality": { "status": "ok", "confidence": 0.72 },
@@ -146,14 +166,8 @@ Default output is lean — if the agent wants code, it calls `read_file`.
       "avoid": ["constructor injection — 3% (declining)"]
     },
     "bestExample": "src/auth/auth.interceptor.ts",
-    "impact": {
-      "coverage": "3/5 callers in results",
-      "files": ["src/app.module.ts", "src/boot.ts"]
-    },
-    "whatWouldHelp": [
-      "Search for src/app.module.ts to cover the main caller",
-      "Call get_team_patterns for auth/ injection patterns"
-    ]
+    "impact": { "coverage": "3/5 callers in results" },
+    "whatWouldHelp": ["Search for src/app.module.ts to cover the main caller"]
   },
   "results": [
     {
@@ -162,18 +176,14 @@ Default output is lean — if the agent wants code, it calls `read_file`.
       "score": 0.72,
       "type": "service:core",
       "trend": "Rising",
-      "relationships": { "importedByCount": 4, "hasTests": true },
-      "hints": {
-        "callers": ["src/app.module.ts", "src/boot.ts"],
-        "tests": ["src/auth/auth.interceptor.spec.ts"]
-      }
+      "hints": { "callers": ["src/app.module.ts", "src/boot.ts"] }
     }
   ],
   "relatedMemories": ["Always use HttpInterceptorFn (0.97)"]
 }
 ```
 
-Lean enough to fit on one screen. If search quality is low, preflight blocks edits instead of faking confidence.
+</details>
 
 ### Patterns & Conventions (`get_team_patterns`)
 
@@ -194,26 +204,24 @@ Record a decision once. It surfaces automatically in search results and prefligh
 
 ### All Tools
 
-| Tool                           | What it does                                                                                |
-| ------------------------------ | ------------------------------------------------------------------------------------------- |
-| `search_codebase`              | Hybrid search + decision card. Pass `intent="edit"` to get `ready`, `nextAction`, patterns, caller coverage, and `whatWouldHelp`. |
-| `get_team_patterns`            | Pattern frequencies, golden files, conflict detection                                      |
+| Tool                           | What it does                                                                                                                                            |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `search_codebase`              | Hybrid search + decision card. Pass `intent="edit"` to get `ready`, `nextAction`, patterns, caller coverage, and `whatWouldHelp`.                       |
+| `get_team_patterns`            | Pattern frequencies, golden files, conflict detection                                                                                                   |
 | `get_symbol_references`        | Find concrete references to a symbol (usageCount + top snippets). `confidence: "syntactic"` = static/source-based only; no runtime or dynamic dispatch. |
-| `remember`                     | Record a convention, decision, gotcha, or failure                                          |
-| `get_memory`                   | Query team memory with confidence decay scoring                                            |
-| `get_codebase_metadata`        | Project structure, frameworks, dependencies                                                |
-| `get_style_guide`              | Style guide rules for the current project                                                  |
-| `detect_circular_dependencies` | Import cycles between files                                                                |
-| `refresh_index`                | Re-index (full or incremental) + extract git memories                                      |
-| `get_indexing_status`          | Progress and stats for the current index                                                   |
+| `remember`                     | Record a convention, decision, gotcha, or failure                                                                                                       |
+| `get_memory`                   | Query team memory with confidence decay scoring                                                                                                         |
+| `get_codebase_metadata`        | Project structure, frameworks, dependencies                                                                                                             |
+| `get_style_guide`              | Style guide rules for the current project                                                                                                               |
+| `detect_circular_dependencies` | Import cycles between files                                                                                                                             |
+| `refresh_index`                | Re-index (full or incremental) + extract git memories                                                                                                   |
+| `get_indexing_status`          | Progress and stats for the current index                                                                                                                |
 
 ## Evaluation Harness (`npm run eval`)
 
-Reproducible evaluation with frozen fixtures so ranking/chunking changes are measured honestly and regressions get caught. **For contributors and CI:** run before releases or after changing search/ranking/chunking to guard against regressions.
+Reproducible evaluation against frozen fixtures. Run it yourself to measure retrieval quality on real code, not on our claims.
 
-- Two codebases: `npm run eval -- <codebaseA> <codebaseB>`
-- Defaults: fixture A = `tests/fixtures/eval-angular-spotify.json`, fixture B = `tests/fixtures/eval-controlled.json`
-- Offline smoke (no network):
+Offline smoke test (no network required):
 
 ```bash
 npm run eval -- tests/fixtures/codebases/eval-controlled tests/fixtures/codebases/eval-controlled \
@@ -222,14 +230,14 @@ npm run eval -- tests/fixtures/codebases/eval-controlled tests/fixtures/codebase
   --skip-reindex --no-rerank
 ```
 
-- Flags: `--help`, `--fixture-a`, `--fixture-b`, `--skip-reindex`, `--no-rerank`, `--no-redact`
-- To save a report for later comparison, redirect stdout (e.g. `pnpm run eval -- <path-to-angular-spotify> --skip-reindex > internal-docs/tests/eval-runs/angular-spotify-YYYY-MM-DD.txt`).
+Reported metrics: Top-1 accuracy, Top-3 recall, spec contamination rate. The angular-spotify fixture is a real public TypeScript codebase — run it to verify search quality on idiomatic code, not just our internal benchmarks.
 
 ## How the Search Works
 
 The retrieval pipeline is designed around one goal: give the agent the right context, not just any file that matches.
+**Semantic, not just keyword.** Query "skip to next song" finds the player API that implements next-track logic even when the word "skip" never appears in the file. Grep would return nothing; codebase-context uses hybrid (keyword + semantic) search so natural-language questions map to the right code. See [eval fixture design](tests/fixtures/README.md#semantic-queries-not-keyword-matching) for how we test this.
 
-- **Definition-first ranking** - for exact-name lookups (e.g. a symbol name), the file that *defines* the symbol ranks above files that only use it.
+- **Definition-first ranking** - for exact-name lookups (e.g. a symbol name), the file that _defines_ the symbol ranks above files that only use it.
 - **Intent classification** - knows whether "AuthService" is a name lookup or "how does auth work" is conceptual. Adjusts keyword/semantic weights accordingly.
 - **Hybrid fusion (RRF)** - combines keyword and semantic search using Reciprocal Rank Fusion instead of brittle score averaging.
 - **Query expansion** - conceptual queries automatically expand with domain-relevant terms (auth → login, token, session, guard).
@@ -264,7 +272,9 @@ Structured filters available: `framework`, `language`, `componentType`, `layer` 
 ## Performance
 
 - **First indexing**: 2-5 minutes for ~30k files (embedding computation).
-- **Subsequent queries**: milliseconds from cache.
+- **Search latency**:
+  - **MCP server (Cursor, Claude, etc.)**: First query in a session pays a one-time cost to load the embedding model and optional reranker (~1–2 s). Subsequent queries are **sub-second** (tens to low hundreds of ms) because the process stays alive and models stay in memory.
+  - **CLI one-shot** (`npx codebase-context search --query "..."`): Each invocation starts a new NodeJS process and loads models from scratch, so **every** query takes ~2 s. Use the CLI for scripting; for interactive use, the MCP server is fast after the first call.
 - **Incremental updates**: `refresh_index` with `incrementalOnly: true` processes only changed files (SHA-256 manifest diffing).
 
 ## File Structure
@@ -292,6 +302,71 @@ Structured filters available: `framework`, `language`, `componentType`, `layer` 
 All MCP tools are available as CLI commands — no AI agent required. Useful for scripting, debugging, and CI workflows.
 
 Set `CODEBASE_ROOT` to your project root, or run from the project directory.
+
+`patterns`, `search`, and `refs` render structured ASCII art by default. Pass `--json` for raw JSON.
+
+```
+$ npx codebase-context patterns 2>/dev/null
+
+┌─ Team Patterns ────────────────────────────────────────────┐
+│                                                            │
+│ DEPENDENCY INJECTION                                       │
+│   Constructor injection         84%      declining         │
+│   inject() function             16%      rising            │
+│                                                            │
+│ COMPONENT STYLE                                            │
+│   Standalone component          100%                       │
+│                                                            │
+│ GOLDEN FILES                                               │
+│   src/lib/card.component.ts     4 patterns                 │
+│   src/lib/playlist.component.ts 3 patterns                 │
+│                                                            │
+│ CONFLICTS                                                  │
+│   dependencyInjection: Constructor (84%) vs inject() (16%) │
+│                                                            │
+└────────────────────────────────────────────────────────────┘
+```
+
+```
+$ npx codebase-context search --query "how does auth work" --intent edit 2>/dev/null
+
+┌─ Search: "how does auth work" ─── intent: edit ────────────┐
+│ Quality: ok (0.85)                                         │
+│ Ready to edit: YES                                         │
+│                                                            │
+│ Patterns:                                                  │
+│   ✓ HttpInterceptorFn — 97%                                │
+│   ✓ Standalone component — 84%                             │
+│   ✗ Constructor injection — 3% (declining)                 │
+│                                                            │
+│ Best example: src/auth/auth.interceptor.ts                 │
+│ Callers: 3/5 callers in results                            │
+└────────────────────────────────────────────────────────────┘
+
+1.  src/auth/auth.interceptor.ts:1-42
+    score: 1.41 | interceptor (core) | rising
+    Angular HTTP interceptor 'AuthInterceptor'
+    callers: src/app.config.ts, src/boot.ts
+```
+
+```
+$ npx codebase-context refs --symbol "AuthStore" 2>/dev/null
+
+┌─ AuthStore ─── 10 references ─── syntactic ────────────────┐
+│                                                            │
+│ AuthStore                                                  │
+│ │                                                          │
+│ ├─ src/auth/auth.interceptor.ts:15                        │
+│ │  import { AuthStore } from '../store/auth.store'        │
+│ │                                                          │
+│ ├─ src/auth/auth.guard.ts:8                               │
+│ │  constructor(private auth: AuthStore)                   │
+│ │                                                          │
+│ └─ src/profile/profile.component.ts:31                    │
+│    this.authStore.getProfile()                             │
+│                                                            │
+└────────────────────────────────────────────────────────────┘
+```
 
 ```bash
 # Search the indexed codebase
@@ -349,6 +424,7 @@ Add this to `.cursorrules`, `CLAUDE.md`, or `AGENTS.md`:
 
 ## Links
 
+- [Capabilities](./docs/capabilities.md) - Technical reference
 - [Motivation](./MOTIVATION.md) - Research and design rationale
 - [Changelog](./CHANGELOG.md) - Version history
 - [Contributing](./CONTRIBUTING.md) - How to add analyzers

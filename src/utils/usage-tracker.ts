@@ -362,13 +362,13 @@ export class PatternDetector {
     if (!isAlternative && percentage >= 80) {
       // If primary is declining, downgrade to PREFER
       if (trend === 'Declining')
-        return `PREFER: ${patternName} – ${percentage}% adoption, declining`;
-      return `USE: ${patternName} – ${percentage}% adoption${trendLabel}`;
+        return `PREFER: ${patternName} – ${percentage} adoption, declining`;
+      return `USE: ${patternName} – ${percentage} adoption${trendLabel}`;
     }
 
     // Primary pattern with moderate adoption
     if (!isAlternative && percentage >= 50) {
-      return `PREFER: ${patternName} – ${percentage}% adoption${trendLabel}`;
+      return `PREFER: ${patternName} – ${percentage} adoption${trendLabel}`;
     }
 
     // Alternative pattern that is declining

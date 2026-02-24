@@ -1,78 +1,52 @@
 # Changelog
 
-## [1.7.0](https://github.com/PatrickSys/codebase-context/compare/v1.6.1...v1.7.0) (2026-02-21)
+## [1.7.1] - 2026-02-23
 
-
-### Features
-
-* **02-03:** implement keyword-index symbol reference lookup ([ccfc564](https://github.com/PatrickSys/codebase-context/commit/ccfc5649a3f4e321bbd3770e5945f83213e103a6))
-* **02-03:** register get_symbol_references MCP tool ([6f6bc3a](https://github.com/PatrickSys/codebase-context/commit/6f6bc3ae3bfa9af13c404028c1307d774b69291c))
-* **03-01:** add frozen controlled eval fixture and local codebase ([46736ed](https://github.com/PatrickSys/codebase-context/commit/46736ed4c4681767164682a774e1ddf08ee81768))
-* **03-03:** add multi-codebase eval runner command ([b065042](https://github.com/PatrickSys/codebase-context/commit/b065042f9a689d82485532872009af571d22db44))
-* **03-03:** centralize eval harness scoring logic ([5c5319b](https://github.com/PatrickSys/codebase-context/commit/5c5319b4a3c9caf30f7b31de3ee210bc153ee58c))
-* **04-01:** add curated grammar manifest, sync script, and publish inclusion ([908f39a](https://github.com/PatrickSys/codebase-context/commit/908f39a2c82a9630150262299ec8ae1f25c269ab))
-* **04-01:** update tree-sitter loader to resolve packaged grammars and fail closed ([458520f](https://github.com/PatrickSys/codebase-context/commit/458520ff3d24bd9ff6399b6bedfe1b6776fc6579))
-* **04-02:** add manifest-driven grammar CI test with fail-closed fallback ([2559405](https://github.com/PatrickSys/codebase-context/commit/2559405007e17bad6fffcf6ea61b97475f0da1e6))
-* **05-01:** create AST-aligned chunking engine with symbol tree builder ([f865abc](https://github.com/PatrickSys/codebase-context/commit/f865abc0a3877441b492695c02ddca12fe9b36c6))
-* **05-01:** wire AST-aligned chunker into GenericAnalyzer with 21 unit tests ([68a2d6d](https://github.com/PatrickSys/codebase-context/commit/68a2d6da844a9ffdb6104670c565f338487d2199))
-* **05-02:** add scope-aware prefix generation to AST chunks ([3dbd43e](https://github.com/PatrickSys/codebase-context/commit/3dbd43eec1d6cdf63ec4d5094c870bf2ee6b164d))
-* **06-01:** add index format metadata and headers ([a216c6d](https://github.com/PatrickSys/codebase-context/commit/a216c6dd2c7614b705525bc30ba8fddf918c7cf3))
-* **06-01:** gate index consumers on IndexMeta validation ([6a52c0d](https://github.com/PatrickSys/codebase-context/commit/6a52c0d33d408a7463e036eac8a650c461c86a43))
-* **06-02:** implement staging directory build and atomic swap for full rebuild ([d719801](https://github.com/PatrickSys/codebase-context/commit/d71980128795bdf8e7c7ab16beb350729a85e306))
-* **AST indexing:** Implement relationship index  ([#38](https://github.com/PatrickSys/codebase-context/issues/38)) ([5b05092](https://github.com/PatrickSys/codebase-context/commit/5b05092b4d5a4a08b117fdc06a3292afdcc8764e))
-* expose all 10 MCP tools via CLI + document them ([#42](https://github.com/PatrickSys/codebase-context/issues/42)) ([7581fba](https://github.com/PatrickSys/codebase-context/commit/7581fbac5b4fd5bc52abc56d946bf55962870566))
-* references confidence, remove get_component_usage, ranked search hints ([#39](https://github.com/PatrickSys/codebase-context/issues/39)) ([33616aa](https://github.com/PatrickSys/codebase-context/commit/33616aa48b165d5cfd95c44bc416cb74c4fd5cbf))
-* rework decision-card to make it based on AST parsing ([#41](https://github.com/PatrickSys/codebase-context/issues/41)) ([ac4389d](https://github.com/PatrickSys/codebase-context/commit/ac4389d6cc55b7f8efc310a6e020bcd184a70adc))
-* symbol ranking, smart snippets, and edit decision card ([#40](https://github.com/PatrickSys/codebase-context/issues/40)) ([03964b3](https://github.com/PatrickSys/codebase-context/commit/03964b3f40cc0fa0caf9768747a39fb559daaa8e))
-* use tree-sitter symbols in generic analyzer ([b470709](https://github.com/PatrickSys/codebase-context/commit/b470709aa77f02325ed5a4e2b0710017020565da))
-
-
-### Bug Fixes
-
-* **02-01:** fall back when tree-sitter parse has errors ([8a7cd92](https://github.com/PatrickSys/codebase-context/commit/8a7cd92cab25b045b5108b1cba04773f644eab10))
-* **02-tree-sitter-02:** prevent symbol-aware chunk merging ([fd02625](https://github.com/PatrickSys/codebase-context/commit/fd0262516e262eff0c17646eaca021d6288c6647))
-* **03-02:** add regression guardrails for extraction and large-file safety ([a1c71de](https://github.com/PatrickSys/codebase-context/commit/a1c71de070b434f326dc80e627964c1540eea93f))
-* **03-02:** harden tree-sitter extraction against byte-offset and parser failures ([375a48f](https://github.com/PatrickSys/codebase-context/commit/375a48f231c85d72157aa74ea964db27bf9a983e))
-
-## [Unreleased]
-
-### Added
-
-- **Definition-first ranking**: Exact-name searches now show the file that *defines* a symbol before files that use it. For example, searching `parseConfig` shows the function definition first, then callers.
-
-### Refactored
-
-- **Eliminated all `any` types**: 68 occurrences across 15 files now use proper TypeScript types. Replaced unsafe `Record<string, any>` with `Record<string, unknown>` and narrowed types using proper type guards. Promoted `@typescript-eslint/no-explicit-any` from `warn` to `error` to enforce strict typing.
-- **Consolidated duplicate type definitions**: Single source of truth for shared types:
-  - `PatternTrend` canonical location in `types/index.ts` (imported by `usage-tracker.ts`)
-  - New `PatternCandidateBase` for shared pattern fields; `PatternCandidate extends PatternCandidateBase`; runtime adds optional internal fields
-  - New `UsageLocation` base for both `ImportUsage` and `SymbolUsage` (extends with `preview` field)
-  - `GoldenFile extends IntelligenceGoldenFile` to eliminate field duplication (`file`, `score`)
-  - Introduced `RuntimePatternPrimary` and `DecisionCard` types for tool-specific outputs
-- **Scope headers in code snippets**: When requesting snippets (`includeSnippets: true`), each code block now starts with a comment like `// UserService.login()` so agents know where the code lives without extra file reads.
-- **Edit decision card**: When searching with `intent="edit"`, `intent="refactor"`, or `intent="migrate"`, results now include a decision card telling you whether there's enough evidence to proceed safely. The card shows: whether you're ready (`ready: true/false`), what to do next if not (`nextAction`), relevant team patterns to follow, a top example file, how many callers appear in results (`impact.coverage`), and what searches would help close gaps (`whatWouldHelp`).
-- **Caller coverage tracking**: The decision card shows how many of a symbol's callers are in your search results. Low coverage (less than 40% when there are lots of callers) triggers an alert so you know to search more before editing.
-- **Index versioning**: Index artifacts are versioned via `index-meta.json`. Mixed-version indexes are never served; version mismatches or corruption trigger automatic rebuild.
-- **Crash-safe rebuilds**: Full rebuilds write to `.staging/` and swap atomically only on success. Failed rebuilds don't corrupt the active index.
-- **Relationship sidecar**: New `relationships.json` artifact containing file import graph, reverse imports, and symbol export index. Updated incrementally alongside the main index.
-- **References confidence + hints**: `get_symbol_references` now includes `confidence: "syntactic"` and `isComplete: boolean` to help agents assess result completeness. `search_codebase` results now include a structured `hints` object (capped callers/consumers/tests ranked by frequency) drawn from the relationships sidecar. **`get_component_usage` removed from MCP surface (11→10 tools).** If you previously used `get_component_usage`, use `get_symbol_references` for symbol usage evidence (usageCount, top snippets, callers/consumers).
-- Tree-sitter-backed symbol extraction is now used by the Generic analyzer when available (with safe fallbacks).
-- Expanded language/extension detection to improve indexing coverage (e.g. `.pyi`, `.php`, `.kt`/`.kts`, `.cc`/`.cxx`, `.cs`, `.swift`, `.scala`, `.toml`, `.xml`).
-- New tool: `get_symbol_references` for concrete symbol usage evidence (usageCount + top snippets).
-- Multi-codebase eval runner: `npm run eval -- <codebaseA> <codebaseB>` with per-codebase reports and combined summary.
-- Shared eval scoring/reporting module (`src/eval/*`) used by both the CLI runner and the test suite.
-- Second frozen eval fixture plus an in-repo controlled TypeScript codebase for fully-offline eval runs.
-- Regression tests covering Tree-sitter Unicode slicing, parser cleanup/reset behavior, and large/generated file skipping.
+CLI polish release. The `patterns`, `search`, and `refs` commands now render structured ASCII box art instead of raw JSON dumps. Also fixes a bug where `@Injectable({ providedIn: 'root' })` was silently lost during indexing.
 
 ### Changed
 
-- **Preflight response shape**: Renamed `reason` to `nextAction` for clarity. Removed internal fields (`evidenceLock`, `riskLevel`, `confidence`) so the output is stable and doesn't change shape unexpectedly.
- 
+- **CLI output**: `patterns`, `search`, and `refs` now render ASCII box art by default. Pass `--json` for raw JSON (unchanged). `search` wraps the preflight decision card in a titled box showing quality, ready status, patterns, and best example. `patterns` renders sections (categories, golden files, conflicts, memories) inside a single `Team Patterns` box. `refs` renders a tree graph with `├─`/`└─`/`│` showing each reference location and a preview snippet.
+- **Human-readable labels**: `interceptor:core` → `interceptor (core)` in search results. Trend labels are lowercase plain text (`rising`/`declining`) instead of `↑ Rising`/`↓ Declining`.
+- **`Standalone` → `Standalone component`** pattern name — more descriptive in pattern output and decision cards.
+- **`providedIn` summary**: Angular service summaries now show `Angular service 'AuthStore' (root)` when present, and drop the `(providedIn: unknown)` noise when absent.
+
+### Fixed
+
+- **`providedIn` pipeline bug**: `@Injectable({ providedIn: 'root' })` was extracted correctly by the AST parser but dropped during chunking because `component.metadata` (per-component fields: `providedIn`, `selector`, `isStandalone`) was never spread into the chunk. File-level metadata (`framework`, `layer`) was spread but per-component metadata was not. Fixed by spreading `...component.metadata` before `...metadata` so decorator fields survive the pipeline.
+- **Redundant `standalone` tag** removed from chunk tags — it duplicated the `isStandalone` metadata field with no benefit.
+
+### Added
+
+- **Response type interfaces** (`SearchResponse`, `PatternResponse`, `RefsResponse`, etc.) in `src/tools/types.ts`, replacing all `Record<string, unknown>` casts in the CLI formatters.
+
+## [1.7.0](https://github.com/PatrickSys/codebase-context/compare/v1.6.1...v1.7.0) (2026-02-21)
+
+The Tree-sitter release. Code structure is now parsed, not guessed. Search results know where symbols are defined, who calls them, and whether there's enough evidence to edit safely.
+
+### Added
+
+- **Tree-sitter AST chunking** for 10 languages: TypeScript, JavaScript, Python, Java, Kotlin, C, C++, C#, Go, Rust. Code is split along symbol boundaries instead of arbitrary line counts. Each chunk gets a scope-aware prefix (e.g. `// AuthService.getToken()`) so agents know where code lives without reading the whole file. Languages without a Tree-sitter grammar fall back to safe line-based chunking.
+- **Definition-first ranking**: Exact-name searches show the file that *defines* a symbol before files that merely use it. Searching `parseConfig` shows the function definition first, then callers.
+- **Edit decision card**: Search with `intent="edit"` now returns a decision card — `ready` (boolean), `nextAction` (what to do if not ready), `patterns` (do/avoid with adoption %), `bestExample`, `impact` (caller coverage), and `whatWouldHelp` (specific searches to close evidence gaps). Built on AST-derived caller data, not heuristics.
+- **`get_symbol_references` tool**: Concrete symbol usage evidence — usageCount, top snippets, callers/consumers. Includes `confidence: "syntactic"` so agents know it's static analysis, not runtime tracing.
+- **Relationship sidecar** (`relationships.json`): File import graph, reverse imports, and symbol export index. Search results now include a `hints` object with ranked callers, consumers, and test files drawn from this graph.
+- **Index versioning + crash-safe rebuilds**: Index artifacts carry version metadata. Mismatches trigger automatic full rebuild. Rebuilds write to `.staging/` and swap atomically — a failed rebuild never corrupts the active index.
+- **All 10 MCP tools as CLI commands**: `npx codebase-context search`, `patterns`, `refs`, `cycles`, `memory`, etc. No AI agent required. Useful for scripting, debugging, and CI.
+- **Multi-codebase eval runner**: `npm run eval -- <codebaseA> <codebaseB>` with per-codebase reports. Ships with a frozen controlled fixture for fully-offline runs.
+- **Expanded language coverage**: Added `.pyi`, `.php`, `.kt`/`.kts`, `.cc`/`.cxx`, `.cs`, `.swift`, `.scala`, `.toml`, `.xml` to indexing.
+
+### Changed
+
+- **Preflight response**: `reason` renamed to `nextAction`. Internal fields (`evidenceLock`, `riskLevel`, `confidence`) removed — the output shape is now stable.
+- **`get_component_usage` removed** from MCP surface (11 → 10 tools). Use `get_symbol_references` instead for symbol usage evidence.
+- **Strict typing**: Eliminated all 68 `any` types across 15 files. `@typescript-eslint/no-explicit-any` promoted from `warn` to `error`. Consolidated duplicate type definitions into single sources of truth.
+
 ### Fixed
 
 - Null-pointer crash in GenericAnalyzer when chunk content is undefined.
-- Tree-sitter symbol extraction now treats node offsets as UTF-8 byte ranges and evicts cached parsers on failures/timeouts.
-- **Post-merge integration gaps** (v1.8 audit): Removed orphaned `get_component_usage` source file, deleted phantom allowlist entry, removed dead guidance strings referencing the deleted tool. Added fallback decision card when `intelligence.json` is absent during edit-intent searches, now returns `ready: false` with actionable guidance instead of silently skipping.
+- Tree-sitter symbol extraction now handles UTF-8 byte offsets correctly and evicts cached parsers on failures/timeouts.
+- Post-merge integration gaps: removed orphaned source files and dead guidance strings from the deleted `get_component_usage` tool. Decision card now returns `ready: false` with actionable guidance when `intelligence.json` is absent, instead of silently skipping.
 
 ## [1.6.2] - 2026-02-17
 
