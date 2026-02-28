@@ -381,3 +381,138 @@ export async function extractTreeSitterSymbols(
     return null;
   }
 }
+
+export interface IdentifierOccurrence {
+  line: number;
+  startIndex: number;
+  endIndex: number;
+  nodeType: string;
+}
+
+const IDENTIFIER_NODE_TYPES = [
+  'identifier',
+  'type_identifier',
+  'property_identifier',
+  'field_identifier',
+  'shorthand_property_identifier_pattern',
+  'shorthand_property_identifier',
+  'jsx_identifier',
+  'scoped_identifier'
+] as const;
+
+const NON_CODE_ANCESTOR_TYPE_FRAGMENTS = [
+  'comment',
+  'string',
+  'template_string',
+  'regex',
+  'jsx_text'
+] as const;
+
+function isInsideNonCodeContext(node: Node): boolean {
+  let cursor: Node | null = node;
+  let depth = 0;
+  while (cursor && depth < 40) {
+    const cursorType = cursor.type;
+    for (const fragment of NON_CODE_ANCESTOR_TYPE_FRAGMENTS) {
+      if (cursorType.includes(fragment)) {
+        return true;
+      }
+    }
+    cursor = cursor.parent;
+    depth += 1;
+  }
+  return false;
+}
+
+/**
+ * Find identifier occurrences of `symbol` in `content` using Tree-sitter.
+ * Returns null when Tree-sitter isn't available/supported, so callers can fall back safely.
+ */
+export async function findIdentifierOccurrences(
+  content: string,
+  language: string,
+  symbol: string
+): Promise<IdentifierOccurrence[] | null> {
+  const normalizedSymbol = symbol.trim();
+  if (!normalizedSymbol) {
+    return [];
+  }
+
+  if (!supportsTreeSitter(language) || !content.trim()) {
+    return null;
+  }
+
+  if (Buffer.byteLength(content, 'utf8') > MAX_TREE_SITTER_PARSE_BYTES) {
+    return null;
+  }
+
+  try {
+    const parser = await getParserForLanguage(language);
+    setParseTimeout(parser);
+
+    let tree: ReturnType<Parser['parse']>;
+    try {
+      tree = parser.parse(content);
+    } catch (error) {
+      evictParser(language, parser);
+      throw error;
+    }
+
+    if (!tree) {
+      evictParser(language, parser);
+      return null;
+    }
+
+    try {
+      const hasErrorValue = tree.rootNode.hasError as unknown;
+      const rootHasError =
+        typeof hasErrorValue === 'function'
+          ? Boolean((hasErrorValue as () => unknown)())
+          : Boolean(hasErrorValue);
+
+      if (rootHasError) {
+        return null;
+      }
+
+      const nodes = tree.rootNode.descendantsOfType([...IDENTIFIER_NODE_TYPES]);
+      const occurrences: IdentifierOccurrence[] = [];
+      const seen = new Set<string>();
+
+      for (const node of nodes) {
+        if (!node || !node.isNamed) continue;
+        if (node.text !== normalizedSymbol) continue;
+        if (isInsideNonCodeContext(node)) continue;
+
+        const occ: IdentifierOccurrence = {
+          line: node.startPosition.row + 1,
+          startIndex: node.startIndex,
+          endIndex: node.endIndex,
+          nodeType: node.type
+        };
+        const key = `${occ.line}:${occ.startIndex}:${occ.endIndex}:${occ.nodeType}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        occurrences.push(occ);
+      }
+
+      occurrences.sort((a, b) => {
+        if (a.line !== b.line) return a.line - b.line;
+        return a.startIndex - b.startIndex;
+      });
+
+      return occurrences;
+    } finally {
+      tree.delete();
+    }
+  } catch (error) {
+    evictParser(language);
+
+    if (isTreeSitterDebugEnabled()) {
+      console.error(
+        `[DEBUG] Tree-sitter identifier occurrence scan failed for '${language}':`,
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+    return null;
+  }
+}
