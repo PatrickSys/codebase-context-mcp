@@ -1,7 +1,7 @@
 {
   "name": "codebase-context",
   "version": "1.7.0",
-  "description": "Second brain for AI agents working on your codebase - team coding patterns detection, persistent memory, preflight checks, and hybrid search with evidence scoring. Local-first MCP server",
+  "description": "Second brain for AI agents working on your codebase - team coding patterns detection, persistent memory, edit readiness checks, and hybrid search with evidence scoring. Local-first MCP server",
   "type": "module",
   "main": "./dist/lib.js",
   "types": "./dist/lib.d.ts",
@@ -128,7 +128,7 @@
     "@typescript-eslint/typescript-estree": "^7.0.0",
     "fuse.js": "^7.0.0",
     "glob": "^10.3.10",
-    "hono": "^4.11.10",
+    "hono": "^4.12.2",
     "ignore": "^5.3.1",
     "typescript": "^5.3.3",
     "uuid": "^9.0.1",
@@ -161,7 +161,7 @@
     ],
     "overrides": {
       "@modelcontextprotocol/sdk>ajv": "8.18.0",
-      "minimatch": ">=10.2.1"
+      "minimatch": "10.2.3"
     }
   }
 }

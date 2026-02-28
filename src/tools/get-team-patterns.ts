@@ -49,14 +49,26 @@ export async function handle(
         result.tsconfigPaths = intel.tsconfigPaths;
       }
     } else if (category === 'di') {
-      result.dependencyInjection = intel.patterns?.dependencyInjection;
+      result.patterns = {};
+      if (intel.patterns?.dependencyInjection)
+        (result.patterns as Record<string, unknown>).dependencyInjection =
+          intel.patterns.dependencyInjection;
     } else if (category === 'state') {
-      result.stateManagement = intel.patterns?.stateManagement;
+      result.patterns = {};
+      if (intel.patterns?.stateManagement)
+        (result.patterns as Record<string, unknown>).stateManagement =
+          intel.patterns.stateManagement;
     } else if (category === 'testing') {
-      result.unitTestFramework = intel.patterns?.unitTestFramework;
-      result.e2eFramework = intel.patterns?.e2eFramework;
-      result.testingFramework = intel.patterns?.testingFramework;
-      result.testMocking = intel.patterns?.testMocking;
+      result.patterns = {};
+      for (const k of [
+        'unitTestFramework',
+        'e2eFramework',
+        'testingFramework',
+        'testMocking'
+      ] as const) {
+        if (intel.patterns?.[k])
+          (result.patterns as Record<string, unknown>)[k] = intel.patterns[k];
+      }
     } else if (category === 'libraries') {
       result.topUsed = intel.importGraph?.topUsed || [];
       if (intel.tsconfigPaths) {

@@ -6,7 +6,6 @@
 
 import path from 'path';
 import { promises as fs } from 'fs';
-import type { Memory, MemoryCategory, MemoryType } from './types/index.js';
 import {
   CODEBASE_CONTEXT_DIRNAME,
   MEMORY_FILENAME,
@@ -14,13 +13,6 @@ import {
   KEYWORD_INDEX_FILENAME,
   VECTOR_DB_DIRNAME
 } from './constants/codebase-context.js';
-import {
-  appendMemoryFile,
-  readMemoriesFile,
-  removeMemory,
-  filterMemories,
-  withConfidence
-} from './memory/store.js';
 import { CodebaseIndexer } from './core/indexer.js';
 import { dispatchTool } from './tools/index.js';
 import type { ToolContext } from './tools/index.js';
@@ -28,6 +20,9 @@ import type { IndexState } from './tools/types.js';
 import { analyzerRegistry } from './core/analyzer-registry.js';
 import { AngularAnalyzer } from './analyzers/angular/index.js';
 import { GenericAnalyzer } from './analyzers/generic/index.js';
+import { formatJson } from './cli-formatters.js';
+import { handleMemoryCli } from './cli-memory.js';
+export { handleMemoryCli } from './cli-memory.js';
 
 analyzerRegistry.register(new AngularAnalyzer());
 analyzerRegistry.register(new GenericAnalyzer());
@@ -45,6 +40,25 @@ const _CLI_COMMANDS = [
 ] as const;
 
 type CliCommand = (typeof _CLI_COMMANDS)[number];
+
+const CLI_COMMAND_SET: ReadonlySet<string> = new Set(_CLI_COMMANDS);
+function isCliCommand(value: string): value is CliCommand {
+  return CLI_COMMAND_SET.has(value);
+}
+
+const SEARCH_INTENTS = ['explore', 'edit', 'refactor', 'migrate'] as const;
+type SearchIntent = (typeof SEARCH_INTENTS)[number];
+const SEARCH_INTENT_SET: ReadonlySet<string> = new Set(SEARCH_INTENTS);
+function isSearchIntent(value: string): value is SearchIntent {
+  return SEARCH_INTENT_SET.has(value);
+}
+
+const TEAM_PATTERN_CATEGORIES = ['all', 'di', 'state', 'testing', 'libraries'] as const;
+type TeamPatternCategory = (typeof TEAM_PATTERN_CATEGORIES)[number];
+const TEAM_PATTERN_CATEGORY_SET: ReadonlySet<string> = new Set(TEAM_PATTERN_CATEGORIES);
+function isTeamPatternCategory(value: string): value is TeamPatternCategory {
+  return TEAM_PATTERN_CATEGORY_SET.has(value);
+}
 
 function printUsage(): void {
   console.log('codebase-context <command> [options]');
@@ -81,7 +95,6 @@ async function initToolContext(): Promise<ToolContext> {
     vectorDb: path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, VECTOR_DB_DIRNAME)
   };
 
-  // Check if index exists to determine initial status
   let indexExists = false;
   try {
     await fs.access(paths.keywordIndex);
@@ -94,10 +107,10 @@ async function initToolContext(): Promise<ToolContext> {
     status: indexExists ? 'ready' : 'idle'
   };
 
-  const performIndexing = async (incrementalOnly?: boolean): Promise<void> => {
+  const performIndexing = async (incrementalOnly?: boolean, reason?: string): Promise<void> => {
     indexState.status = 'indexing';
     const mode = incrementalOnly ? 'incremental' : 'full';
-    console.error(`Indexing (${mode}): ${rootPath}`);
+    console.error(`Indexing (${mode})${reason ? ` — ${reason}` : ''}: ${rootPath}`);
 
     try {
       let lastLoggedProgress = { phase: '', percentage: -1 };
@@ -141,31 +154,16 @@ function extractText(result: { content?: Array<{ type: string; text: string }> }
   return result.content?.[0]?.text ?? '';
 }
 
-function formatJson(json: string, useJson: boolean): void {
-  if (useJson) {
-    console.log(json);
-    return;
-  }
-  // Pretty-print already-formatted JSON as-is (it's already readable)
-  console.log(json);
+type FlagValue = string | true;
+type Flags = Record<string, FlagValue>;
+
+function exitWithError(message: string): never {
+  console.error(message);
+  process.exit(1);
 }
 
-export async function handleCliCommand(argv: string[]): Promise<void> {
-  const command = argv[0] as CliCommand | '--help' | undefined;
-
-  if (!command || command === '--help') {
-    printUsage();
-    return;
-  }
-
-  if (command === 'memory') {
-    return handleMemoryCli(argv.slice(1));
-  }
-
-  const useJson = argv.includes('--json');
-
-  // Parse flags into a map
-  const flags: Record<string, string | boolean> = {};
+function parseFlags(argv: string[]): Flags {
+  const flags: Flags = {};
   for (let i = 1; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--json') continue;
@@ -180,88 +178,213 @@ export async function handleCliCommand(argv: string[]): Promise<void> {
       }
     }
   }
+  return flags;
+}
+
+function requireStringFlag(flags: Flags, key: string, usage: string): string {
+  const value = flags[key];
+  if (value === undefined) {
+    exitWithError(`Error: --${key} is required\nUsage: ${usage}`);
+  }
+  if (typeof value !== 'string') {
+    exitWithError(`Error: --${key} requires a value\nUsage: ${usage}`);
+  }
+  return value;
+}
+
+function optionalStringFlag(flags: Flags, key: string, usage: string): string | undefined {
+  const value = flags[key];
+  if (value === true) {
+    exitWithError(`Error: --${key} requires a value\nUsage: ${usage}`);
+  }
+  return typeof value === 'string' ? value : undefined;
+}
+
+function optionalPositiveIntFlag(flags: Flags, key: string, usage: string): number | undefined {
+  const value = flags[key];
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string') {
+    exitWithError(`Error: --${key} requires a value\nUsage: ${usage}`);
+  }
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0) {
+    exitWithError(`Error: --${key} must be a positive number\nUsage: ${usage}`);
+  }
+  return Math.floor(num);
+}
+
+function booleanFlag(flags: Flags, key: string, usage: string): boolean {
+  const value = flags[key];
+  if (value === undefined) return false;
+  if (value === true) return true;
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'true' || normalized === '1' || normalized === 'yes') return true;
+  if (normalized === 'false' || normalized === '0' || normalized === 'no') return false;
+
+  exitWithError(`Error: --${key} must be a boolean (true/false)\nUsage: ${usage}`);
+}
+
+export async function handleCliCommand(argv: string[]): Promise<void> {
+  const rawCommand = argv[0];
+
+  if (!rawCommand || rawCommand === '--help') {
+    printUsage();
+    return;
+  }
+
+  if (!isCliCommand(rawCommand)) {
+    console.error(`Unknown command: ${rawCommand}`);
+    console.error('');
+    printUsage();
+    process.exit(1);
+  }
+
+  const command: CliCommand = rawCommand;
+
+  if (command === 'memory') {
+    return handleMemoryCli(argv.slice(1));
+  }
+
+  const useJson = argv.includes('--json');
+
+  const flags = parseFlags(argv);
 
   const ctx = await initToolContext();
 
-  let toolName: string;
-  let toolArgs: Record<string, unknown> = {};
+  type DispatchSpec =
+    | { toolName: 'search_codebase'; toolArgs: SearchToolArgs }
+    | { toolName: 'get_codebase_metadata'; toolArgs: Record<never, never> }
+    | { toolName: 'get_indexing_status'; toolArgs: Record<never, never> }
+    | { toolName: 'get_style_guide'; toolArgs: StyleGuideToolArgs }
+    | { toolName: 'get_team_patterns'; toolArgs: TeamPatternsToolArgs }
+    | { toolName: 'get_symbol_references'; toolArgs: SymbolReferencesToolArgs }
+    | { toolName: 'detect_circular_dependencies'; toolArgs: DetectCircularDependenciesToolArgs };
+
+  type SearchToolArgs = {
+    query: string;
+    includeSnippets: boolean;
+    intent?: SearchIntent;
+    limit?: number;
+    filters?: { language?: string; framework?: string; layer?: string };
+  };
+
+  type StyleGuideToolArgs = { query?: string; category?: string };
+  type TeamPatternsToolArgs = { category?: TeamPatternCategory };
+  type SymbolReferencesToolArgs = { symbol: string; limit?: number };
+  type DetectCircularDependenciesToolArgs = { scope?: string };
+
+  let dispatch: DispatchSpec;
+  let formatQuery: string | undefined;
+  let formatIntent: string | undefined;
 
   switch (command) {
     case 'search': {
-      if (!flags['query']) {
-        console.error('Error: --query is required');
-        console.error('Usage: codebase-context search --query <text> [--intent <i>] [--limit <n>]');
-        process.exit(1);
+      const usage = 'codebase-context search --query <text> [--intent <i>] [--limit <n>]';
+      const query = requireStringFlag(flags, 'query', usage);
+      const intentValue = optionalStringFlag(flags, 'intent', usage);
+      let intent: SearchIntent | undefined;
+      if (intentValue) {
+        if (!isSearchIntent(intentValue)) {
+          exitWithError(
+            `Error: invalid --intent "${intentValue}". Allowed: ${SEARCH_INTENTS.join(', ')}\nUsage: ${usage}`
+          );
+        }
+        intent = intentValue;
       }
-      toolName = 'search_codebase';
-      toolArgs = {
-        query: flags['query'],
-        ...(flags['intent'] ? { intent: flags['intent'] } : {}),
-        ...(flags['limit'] ? { limit: Number(flags['limit']) } : {}),
-        ...(flags['lang'] || flags['framework'] || flags['layer']
-          ? {
-              filters: {
-                ...(flags['lang'] ? { language: flags['lang'] } : {}),
-                ...(flags['framework'] ? { framework: flags['framework'] } : {}),
-                ...(flags['layer'] ? { layer: flags['layer'] } : {})
-              }
-            }
-          : {})
+      const limit = optionalPositiveIntFlag(flags, 'limit', usage);
+      const lang = optionalStringFlag(flags, 'lang', usage);
+      const framework = optionalStringFlag(flags, 'framework', usage);
+      const layer = optionalStringFlag(flags, 'layer', usage);
+
+      const filters: { language?: string; framework?: string; layer?: string } = {};
+      if (lang) filters.language = lang;
+      if (framework) filters.framework = framework;
+      if (layer) filters.layer = layer;
+
+      const args: SearchToolArgs = {
+        query,
+        includeSnippets: true,
+        ...(intent ? { intent } : {}),
+        ...(limit != null ? { limit } : {}),
+        ...(Object.keys(filters).length > 0 ? { filters } : {})
       };
+      dispatch = { toolName: 'search_codebase', toolArgs: args };
+      formatQuery = query;
+      formatIntent = intentValue;
       break;
     }
     case 'metadata': {
-      toolName = 'get_codebase_metadata';
+      dispatch = { toolName: 'get_codebase_metadata', toolArgs: {} };
       break;
     }
     case 'status': {
-      toolName = 'get_indexing_status';
+      dispatch = { toolName: 'get_indexing_status', toolArgs: {} };
       break;
     }
     case 'reindex': {
-      toolName = 'refresh_index';
-      toolArgs = {
-        ...(flags['incremental'] ? { incrementalOnly: true } : {}),
-        ...(flags['reason'] ? { reason: flags['reason'] } : {})
-      };
-      // For CLI, reindex must be awaited (fire-and-forget won't work in a process that exits)
-      await ctx.performIndexing(Boolean(flags['incremental']));
+      const usage = 'codebase-context reindex [--incremental] [--reason <r>]';
+      const reason = optionalStringFlag(flags, 'reason', usage);
+      const incremental = booleanFlag(flags, 'incremental', usage);
+      await ctx.performIndexing(incremental, reason);
       const statusResult = await dispatchTool('get_indexing_status', {}, ctx);
       formatJson(extractText(statusResult), useJson);
       return;
     }
     case 'style-guide': {
-      toolName = 'get_style_guide';
-      toolArgs = {
-        ...(flags['query'] ? { query: flags['query'] } : {}),
-        ...(flags['category'] ? { category: flags['category'] } : {})
+      const usage = 'codebase-context style-guide [--query <q>] [--category <c>]';
+      const query = optionalStringFlag(flags, 'query', usage);
+      const category = optionalStringFlag(flags, 'category', usage);
+      dispatch = {
+        toolName: 'get_style_guide',
+        toolArgs: {
+          ...(query ? { query } : {}),
+          ...(category ? { category } : {})
+        }
       };
       break;
     }
     case 'patterns': {
-      toolName = 'get_team_patterns';
-      toolArgs = {
-        ...(flags['category'] ? { category: flags['category'] } : {})
+      const usage = 'codebase-context patterns [--category all|di|state|testing|libraries]';
+      const categoryValue = optionalStringFlag(flags, 'category', usage);
+      let category: TeamPatternCategory | undefined;
+      if (categoryValue) {
+        if (!isTeamPatternCategory(categoryValue)) {
+          exitWithError(
+            `Error: invalid --category "${categoryValue}". Allowed: ${TEAM_PATTERN_CATEGORIES.join(', ')}\nUsage: ${usage}`
+          );
+        }
+        category = categoryValue;
+      }
+      dispatch = {
+        toolName: 'get_team_patterns',
+        toolArgs: {
+          ...(category ? { category } : {})
+        }
       };
       break;
     }
     case 'refs': {
-      if (!flags['symbol']) {
-        console.error('Error: --symbol is required');
-        console.error('Usage: codebase-context refs --symbol <name> [--limit <n>]');
-        process.exit(1);
-      }
-      toolName = 'get_symbol_references';
-      toolArgs = {
-        symbol: flags['symbol'],
-        ...(flags['limit'] ? { limit: Number(flags['limit']) } : {})
+      const usage = 'codebase-context refs --symbol <name> [--limit <n>]';
+      const symbol = requireStringFlag(flags, 'symbol', usage);
+      const limit = optionalPositiveIntFlag(flags, 'limit', usage);
+      dispatch = {
+        toolName: 'get_symbol_references',
+        toolArgs: {
+          symbol,
+          ...(limit != null ? { limit } : {})
+        }
       };
       break;
     }
     case 'cycles': {
-      toolName = 'detect_circular_dependencies';
-      toolArgs = {
-        ...(flags['scope'] ? { scope: flags['scope'] } : {})
+      const usage = 'codebase-context cycles [--scope <path>]';
+      const scope = optionalStringFlag(flags, 'scope', usage);
+      dispatch = {
+        toolName: 'detect_circular_dependencies',
+        toolArgs: {
+          ...(scope ? { scope } : {})
+        }
       };
       break;
     }
@@ -274,118 +397,14 @@ export async function handleCliCommand(argv: string[]): Promise<void> {
   }
 
   try {
-    const result = await dispatchTool(toolName, toolArgs, ctx);
+    const result = await dispatchTool(dispatch.toolName, dispatch.toolArgs, ctx);
     if (result.isError) {
       console.error(extractText(result));
       process.exit(1);
     }
-    formatJson(extractText(result), useJson);
+    formatJson(extractText(result), useJson, command, ctx.rootPath, formatQuery, formatIntent);
   } catch (error) {
     console.error('Error:', error instanceof Error ? error.message : String(error));
-    process.exit(1);
-  }
-}
-
-export async function handleMemoryCli(args: string[]): Promise<void> {
-  // Resolve project root: use CODEBASE_ROOT env or cwd (argv[2] is "memory", not a path)
-  const cliRoot = process.env.CODEBASE_ROOT || process.cwd();
-  const memoryPath = path.join(cliRoot, CODEBASE_CONTEXT_DIRNAME, MEMORY_FILENAME);
-  const subcommand = args[0]; // list | add | remove
-
-  if (subcommand === 'list') {
-    const memories = await readMemoriesFile(memoryPath);
-    const opts: { category?: MemoryCategory; type?: MemoryType; query?: string } = {};
-
-    for (let i = 1; i < args.length; i++) {
-      if (args[i] === '--category' && args[i + 1]) opts.category = args[++i] as MemoryCategory;
-      else if (args[i] === '--type' && args[i + 1]) opts.type = args[++i] as MemoryType;
-      else if (args[i] === '--query' && args[i + 1]) opts.query = args[++i];
-      else if (args[i] === '--json') {
-        // handled below
-      }
-    }
-
-    const filtered = filterMemories(memories, opts);
-    const enriched = withConfidence(filtered);
-    const useJson = args.includes('--json');
-
-    if (useJson) {
-      console.log(JSON.stringify(enriched, null, 2));
-    } else {
-      if (enriched.length === 0) {
-        console.log('No memories found.');
-      } else {
-        for (const m of enriched) {
-          const staleTag = m.stale ? ' [STALE]' : '';
-          console.log(`[${m.id}] ${m.type}/${m.category}: ${m.memory}${staleTag}`);
-          console.log(`  Reason: ${m.reason}`);
-          console.log(`  Date: ${m.date} | Confidence: ${m.effectiveConfidence}`);
-          console.log('');
-        }
-        console.log(`${enriched.length} memor${enriched.length === 1 ? 'y' : 'ies'} total.`);
-      }
-    }
-  } else if (subcommand === 'add') {
-    let type: MemoryType = 'decision';
-    let category: MemoryCategory | undefined;
-    let memory: string | undefined;
-    let reason: string | undefined;
-
-    for (let i = 1; i < args.length; i++) {
-      if (args[i] === '--type' && args[i + 1]) type = args[++i] as MemoryType;
-      else if (args[i] === '--category' && args[i + 1]) category = args[++i] as MemoryCategory;
-      else if (args[i] === '--memory' && args[i + 1]) memory = args[++i];
-      else if (args[i] === '--reason' && args[i + 1]) reason = args[++i];
-    }
-
-    if (!category || !memory || !reason) {
-      console.error(
-        'Usage: codebase-context memory add --type <type> --category <category> --memory <text> --reason <text>'
-      );
-      console.error('Required: --category, --memory, --reason');
-      process.exit(1);
-    }
-
-    const crypto = await import('crypto');
-    const hashContent = `${type}:${category}:${memory}:${reason}`;
-    const hash = crypto.createHash('sha256').update(hashContent).digest('hex');
-    const id = hash.substring(0, 12);
-
-    const newMemory: Memory = {
-      id,
-      type,
-      category,
-      memory,
-      reason,
-      date: new Date().toISOString()
-    };
-    const result = await appendMemoryFile(memoryPath, newMemory);
-
-    if (result.status === 'duplicate') {
-      console.log(`Already exists: [${id}] ${memory}`);
-    } else {
-      console.log(`Added: [${id}] ${memory}`);
-    }
-  } else if (subcommand === 'remove') {
-    const id = args[1];
-    if (!id) {
-      console.error('Usage: codebase-context memory remove <id>');
-      process.exit(1);
-    }
-
-    const result = await removeMemory(memoryPath, id);
-    if (result.status === 'not_found') {
-      console.error(`Memory not found: ${id}`);
-      process.exit(1);
-    } else {
-      console.log(`Removed: ${id}`);
-    }
-  } else {
-    console.error('Usage: codebase-context memory <list|add|remove>');
-    console.error('');
-    console.error('  list [--category <cat>] [--type <type>] [--query <text>] [--json]');
-    console.error('  add --type <type> --category <category> --memory <text> --reason <text>');
-    console.error('  remove <id>');
     process.exit(1);
   }
 }
