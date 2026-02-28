@@ -15,6 +15,7 @@ import {
 
 describe('Impact candidates (2-hop)', () => {
   let tempRoot: string | null = null;
+  const token = 'UNIQUETOKEN123';
 
   beforeEach(async () => {
     // Keep test artifacts under CWD (mirrors other indexer tests and avoids OS tmp quirks)
@@ -25,7 +26,7 @@ describe('Impact candidates (2-hop)', () => {
 
     await fs.writeFile(
       path.join(srcDir, 'c.ts'),
-      `export function cFn() { return 'UNIQUE_TOKEN_123'; }\n`
+      `export function cFn() { return '${token}'; }\n`
     );
     await fs.writeFile(path.join(srcDir, 'b.ts'), `import { cFn } from './c';\nexport const b = cFn();\n`);
     await fs.writeFile(path.join(srcDir, 'a.ts'), `import { b } from './b';\nexport const a = b;\n`);
@@ -82,12 +83,24 @@ describe('Impact candidates (2-hop)', () => {
 
     const resp = await dispatchTool(
       'search_codebase',
-      { query: 'UNIQUE_TOKEN_123', intent: 'edit', includeSnippets: false, limit: 1 },
+      { query: token, intent: 'edit', includeSnippets: false, limit: 1 },
       ctx
     );
 
     const text = resp.content?.[0]?.text ?? '';
-    const parsed = JSON.parse(text) as { preflight?: { impact?: { details?: Array<{ file: string; hop: 1 | 2 }> } } };
+    const parsed = JSON.parse(text) as {
+      status?: string;
+      results?: Array<{ file?: string }>;
+      preflight?: { impact?: { details?: Array<{ file: string; hop: 1 | 2 }> } };
+    };
+    const results = parsed.results ?? [];
+    if (!Array.isArray(results) || results.length === 0) {
+      throw new Error(
+        `Expected at least one search result for token, got status=${String(parsed.status)} results=${JSON.stringify(
+          results
+        )}`
+      );
+    }
     const details = parsed.preflight?.impact?.details ?? [];
 
     const hasHop1 = details.some((d) => d.file.endsWith('src/b.ts') && d.hop === 1);
