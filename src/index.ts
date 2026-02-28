@@ -747,7 +747,8 @@ async function main() {
   if (process.env.CODEBASE_CONTEXT_DEBUG) console.error('[DEBUG] Server ready');
 
   // Auto-refresh: watch for file changes and trigger incremental reindex
-  const debounceMs = parseInt(process.env.CODEBASE_CONTEXT_DEBOUNCE_MS ?? '', 10) || 2000;
+  const debounceEnv = Number.parseInt(process.env.CODEBASE_CONTEXT_DEBOUNCE_MS ?? '', 10);
+  const debounceMs = Number.isFinite(debounceEnv) && debounceEnv >= 0 ? debounceEnv : 2000;
   const stopWatcher = startFileWatcher({
     rootPath: ROOT_PATH,
     debounceMs,

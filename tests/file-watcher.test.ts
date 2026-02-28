@@ -77,8 +77,9 @@ describe('FileWatcher', () => {
     // Give chokidar a moment to finish initializing before the first write
     await new Promise((resolve) => setTimeout(resolve, 100));
     await fs.writeFile(path.join(tempDir, 'cancel.ts'), 'export const y = 99;');
-    // Let chokidar detect the event but stop before debounce fires
-    await new Promise((resolve) => setTimeout(resolve, 150));
+    // Let chokidar detect the event (including awaitWriteFinish stabilityThreshold)
+    // but stop before the debounce window expires.
+    await new Promise((resolve) => setTimeout(resolve, 350));
     stop();
     // Wait past where debounce would have fired
     await new Promise((resolve) => setTimeout(resolve, debounceMs + 200));
