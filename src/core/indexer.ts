@@ -322,6 +322,13 @@ export class CodebaseIndexer {
     let stagingDir: string | null = null;
 
     try {
+      // Ensure there is at least a generic fallback analyzer registered when the indexer
+      // is used directly (e.g. in tests or standalone scripts).
+      if (analyzerRegistry.getAll().length === 0) {
+        const { GenericAnalyzer } = await import('../analyzers/generic/index.js');
+        analyzerRegistry.register(new GenericAnalyzer());
+      }
+
       const buildId = randomUUID();
       const generatedAt = new Date().toISOString();
       const toolVersion = await getToolVersion();
