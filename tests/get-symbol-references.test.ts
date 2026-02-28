@@ -10,6 +10,30 @@ import {
   KEYWORD_INDEX_FILENAME
 } from '../src/constants/codebase-context.js';
 
+type ToolCallRequest = {
+  jsonrpc: '2.0';
+  id: number;
+  method: 'tools/call';
+  params: { name: string; arguments: Record<string, unknown> };
+};
+
+type ToolCallResponse = {
+  content: Array<{ type: 'text'; text: string }>;
+  isError?: boolean;
+};
+
+function getToolCallHandler(server: unknown): (request: ToolCallRequest) => Promise<ToolCallResponse> {
+  const handlers = (server as { _requestHandlers?: unknown })._requestHandlers;
+  if (!(handlers instanceof Map)) {
+    throw new Error('Expected server._requestHandlers to be a Map');
+  }
+  const handler = handlers.get('tools/call');
+  if (typeof handler !== 'function') {
+    throw new Error('Expected tools/call handler to be registered');
+  }
+  return handler as (request: ToolCallRequest) => Promise<ToolCallResponse>;
+}
+
 describe('get_symbol_references MCP tool', () => {
   let tempRoot: string | null = null;
   let originalArgv: string[] | null = null;
@@ -106,7 +130,7 @@ describe('get_symbol_references MCP tool', () => {
     );
 
     const { server } = await import('../src/index.js');
-    const handler = (server as any)._requestHandlers.get('tools/call');
+    const handler = getToolCallHandler(server);
 
     const response = await handler({
       jsonrpc: '2.0',
@@ -202,7 +226,7 @@ describe('get_symbol_references MCP tool', () => {
     );
 
     const { server } = await import('../src/index.js');
-    const handler = (server as any)._requestHandlers.get('tools/call');
+    const handler = getToolCallHandler(server);
 
     const response = await handler({
       jsonrpc: '2.0',
@@ -283,7 +307,7 @@ describe('get_symbol_references MCP tool', () => {
     );
 
     const { server } = await import('../src/index.js');
-    const handler = (server as any)._requestHandlers.get('tools/call');
+    const handler = getToolCallHandler(server);
 
     const response = await handler({
       jsonrpc: '2.0',
@@ -362,7 +386,7 @@ describe('get_symbol_references MCP tool', () => {
     );
 
     const { server } = await import('../src/index.js');
-    const handler = (server as any)._requestHandlers.get('tools/call');
+    const handler = getToolCallHandler(server);
 
     const response = await handler({
       jsonrpc: '2.0',

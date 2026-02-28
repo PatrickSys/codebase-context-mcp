@@ -68,16 +68,25 @@ function buildPreviewFromFileLines(lines: string[], line: number): string {
 }
 
 function resolveAbsoluteChunkPath(rootPath: string, chunk: IndexedChunk): string | null {
+  const resolvedRoot = path.resolve(rootPath);
+  const isWithinRoot = (candidate: string): boolean => {
+    const resolvedCandidate = path.resolve(candidate);
+    const relative = path.relative(resolvedRoot, resolvedCandidate);
+    return Boolean(relative) && !relative.startsWith('..') && !path.isAbsolute(relative);
+  };
+
   if (typeof chunk.filePath === 'string' && chunk.filePath.trim()) {
     const raw = chunk.filePath.trim();
     if (path.isAbsolute(raw)) {
-      return raw;
+      return isWithinRoot(raw) ? raw : null;
     }
-    return path.resolve(rootPath, raw);
+    const resolved = path.resolve(resolvedRoot, raw);
+    return isWithinRoot(resolved) ? resolved : null;
   }
 
   if (typeof chunk.relativePath === 'string' && chunk.relativePath.trim()) {
-    return path.resolve(rootPath, chunk.relativePath.trim());
+    const resolved = path.resolve(resolvedRoot, chunk.relativePath.trim());
+    return isWithinRoot(resolved) ? resolved : null;
   }
 
   return null;
