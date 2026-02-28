@@ -105,11 +105,17 @@ export interface GoldenFile {
   score: number;
 }
 
+export interface LibraryEntry {
+  source: string;
+  count: number;
+}
+
 export interface PatternResponse {
-  patterns: Record<string, PatternCategory>;
+  patterns?: Record<string, PatternCategory>;
   goldenFiles?: GoldenFile[];
   memories?: Array<{ type: string; memory: string }>;
   conflicts?: PatternConflict[];
+  topUsed?: LibraryEntry[];
 }
 
 // --- Metadata response types ---

@@ -7,6 +7,7 @@ import path from 'path';
 import type {
   PatternResponse,
   PatternEntry,
+  LibraryEntry,
   SearchResponse,
   SearchResultItem,
   RefsResponse,
@@ -150,6 +151,18 @@ export function formatPatterns(data: PatternResponse): void {
       if (alsoDetected) {
         for (const alt of alsoDetected) renderEntry(alt, true);
       }
+    }
+  }
+
+  const topUsed = data.topUsed;
+  if (topUsed && topUsed.length > 0) {
+    lines.push('');
+    lines.push('\u2500'.repeat(66));
+    lines.push('');
+    lines.push('TOP LIBRARIES');
+    for (const lib of topUsed.slice(0, 15) as LibraryEntry[]) {
+      const src = padRight(lib.source ?? '', 52);
+      lines.push(`  ${src} ${lib.count} imports`);
     }
   }
 
@@ -604,6 +617,16 @@ export function formatJson(
     data = JSON.parse(json);
   } catch {
     console.log(json);
+    return;
+  }
+
+  // Tools return { status: 'error', message: '...' } in their JSON payload but
+  // don't always set isError on the MCP envelope. Route these to stderr before
+  // a command formatter would render a misleading empty box.
+  if (typeof data === 'object' && data !== null && (data as Record<string, unknown>).status === 'error') {
+    const d = data as Record<string, unknown>;
+    const msg = typeof d.message === 'string' ? d.message : JSON.stringify(d, null, 2);
+    process.stderr.write(`Error: ${msg}\n`);
     return;
   }
 
