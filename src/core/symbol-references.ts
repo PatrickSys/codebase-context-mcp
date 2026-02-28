@@ -3,6 +3,8 @@ import path from 'path';
 import { CODEBASE_CONTEXT_DIRNAME, KEYWORD_INDEX_FILENAME } from '../constants/codebase-context.js';
 import { IndexCorruptedError } from '../errors/index.js';
 import type { UsageLocation } from '../types/index.js';
+import { detectLanguage } from '../utils/language-detection.js';
+import { findIdentifierOccurrences } from '../utils/tree-sitter.js';
 
 interface IndexedChunk {
   content?: unknown;
@@ -59,6 +61,37 @@ function buildPreview(content: string, lineOffset: number): string {
   return previewLines.join('\n').trim();
 }
 
+function buildPreviewFromFileLines(lines: string[], line: number): string {
+  const start = Math.max(0, line - 2);
+  const end = Math.min(lines.length, line + 1);
+  return lines.slice(start, end).join('\n').trim();
+}
+
+function resolveAbsoluteChunkPath(rootPath: string, chunk: IndexedChunk): string | null {
+  if (typeof chunk.filePath === 'string' && chunk.filePath.trim()) {
+    const raw = chunk.filePath.trim();
+    if (path.isAbsolute(raw)) {
+      return raw;
+    }
+    return path.resolve(rootPath, raw);
+  }
+
+  if (typeof chunk.relativePath === 'string' && chunk.relativePath.trim()) {
+    return path.resolve(rootPath, chunk.relativePath.trim());
+  }
+
+  return null;
+}
+
+async function fileExists(targetPath: string): Promise<boolean> {
+  try {
+    const stat = await fs.stat(targetPath);
+    return stat.isFile();
+  } catch {
+    return false;
+  }
+}
+
 export async function findSymbolReferences(
   rootPath: string,
   symbol: string,
@@ -110,34 +143,95 @@ export async function findSymbolReferences(
   let usageCount = 0;
 
   const escapedSymbol = escapeRegex(normalizedSymbol);
+  const prefilter = new RegExp(`\\b${escapedSymbol}\\b`);
   const matcher = new RegExp(`\\b${escapedSymbol}\\b`, 'g');
+
+  // Prefilter candidate files from the keyword index. We do not trust chunk contents for
+  // exact reference counting when Tree-sitter is available; chunks only guide which files to scan.
+  const chunksByFile = new Map<
+    string,
+    { relPath: string; absPath: string | null; chunks: IndexedChunk[] }
+  >();
 
   for (const chunkRaw of chunks) {
     const chunk = chunkRaw as IndexedChunk;
-    if (typeof chunk.content !== 'string') {
-      continue;
+    if (typeof chunk.content !== 'string') continue;
+    if (!prefilter.test(chunk.content)) continue;
+
+    const relPath = getUsageFile(rootPath, chunk);
+    const absPath = resolveAbsoluteChunkPath(rootPath, chunk);
+
+    const entry = chunksByFile.get(relPath);
+    if (entry) {
+      entry.chunks.push(chunk);
+      // Prefer a real absolute path when available
+      if (!entry.absPath && absPath) {
+        entry.absPath = absPath;
+      }
+    } else {
+      chunksByFile.set(relPath, { relPath, absPath, chunks: [chunk] });
+    }
+  }
+
+  for (const entry of chunksByFile.values()) {
+    const relPath = entry.relPath;
+    const absPath = entry.absPath;
+
+    // Preferred: Tree-sitter identifier walk on the real file content.
+    if (absPath && (await fileExists(absPath))) {
+      try {
+        const raw = await fs.readFile(absPath, 'utf-8');
+        const content = raw.replace(/\r\n/g, '\n');
+        const language = detectLanguage(absPath);
+        const occurrences = await findIdentifierOccurrences(content, language, normalizedSymbol);
+
+        if (occurrences) {
+          usageCount += occurrences.length;
+
+          if (usages.length < normalizedLimit && occurrences.length > 0) {
+            const lines = content.split('\n');
+            for (const occ of occurrences) {
+              if (usages.length >= normalizedLimit) break;
+              usages.push({
+                file: relPath,
+                line: occ.line,
+                preview: buildPreviewFromFileLines(lines, occ.line)
+              });
+            }
+          }
+
+          continue;
+        }
+      } catch {
+        // Fall through to chunk-regex fallback (missing grammar, parse failure, etc.)
+      }
     }
 
-    const chunkContent = chunk.content;
-    const startLine = typeof chunk.startLine === 'number' ? chunk.startLine : 1;
-    matcher.lastIndex = 0;
+    // Fallback: regex scan inside the matched chunks (legacy behavior).
+    for (const chunk of entry.chunks) {
+      if (typeof chunk.content !== 'string') continue;
 
-    let match: RegExpExecArray | null;
-    while ((match = matcher.exec(chunkContent)) !== null) {
-      usageCount += 1;
+      const chunkContent = chunk.content;
+      const startLine = typeof chunk.startLine === 'number' ? chunk.startLine : 1;
+      matcher.lastIndex = 0;
 
-      if (usages.length >= normalizedLimit) {
-        continue;
+      let match: RegExpExecArray | null;
+      while ((match = matcher.exec(chunkContent)) !== null) {
+        usageCount += 1;
+
+        if (usages.length >= normalizedLimit) {
+          continue;
+        }
+
+        const prefix = chunkContent.slice(0, match.index);
+        const lineOffset = prefix.split('\n').length - 1;
+
+        usages.push({
+          file: relPath,
+          line: startLine + lineOffset,
+          preview: buildPreview(chunkContent, lineOffset)
+        });
       }
-
-      const prefix = chunkContent.slice(0, match.index);
-      const lineOffset = prefix.split('\n').length - 1;
-
-      usages.push({
-        file: getUsageFile(rootPath, chunk),
-        line: startLine + lineOffset,
-        preview: buildPreview(chunkContent, lineOffset)
-      });
     }
   }
 

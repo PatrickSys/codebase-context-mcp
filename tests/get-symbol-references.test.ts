@@ -136,6 +136,100 @@ describe('get_symbol_references MCP tool', () => {
     }
   });
 
+  it('excludes comment and string matches when file exists and Tree-sitter is supported', async () => {
+    if (!tempRoot) {
+      throw new Error('tempRoot not initialized');
+    }
+
+    const contextDir = path.join(tempRoot, CODEBASE_CONTEXT_DIRNAME);
+    await fs.rm(contextDir, { recursive: true, force: true });
+    await fs.mkdir(contextDir, { recursive: true });
+
+    const buildId = 'test-build-symbol-refs-treesitter';
+    const generatedAt = new Date().toISOString();
+
+    await fs.mkdir(path.join(contextDir, 'index'), { recursive: true });
+    await fs.writeFile(
+      path.join(contextDir, 'index', 'index-build.json'),
+      JSON.stringify({ buildId, formatVersion: INDEX_FORMAT_VERSION }),
+      'utf-8'
+    );
+
+    const srcDir = path.join(tempRoot, 'src');
+    await fs.mkdir(srcDir, { recursive: true });
+    const filePath = path.join(srcDir, 'example.ts');
+    const fileContent = [
+      'const alpha = 1;',
+      '// alpha only in comment',
+      'console.log(alpha);',
+      'const s = \"alpha\";'
+    ].join('\n');
+    await fs.writeFile(filePath, fileContent, 'utf-8');
+
+    const chunks = [
+      {
+        content: fileContent,
+        startLine: 1,
+        relativePath: 'src/example.ts',
+        filePath
+      }
+    ];
+
+    await fs.writeFile(
+      path.join(contextDir, KEYWORD_INDEX_FILENAME),
+      JSON.stringify({ header: { buildId, formatVersion: INDEX_FORMAT_VERSION }, chunks }),
+      'utf-8'
+    );
+
+    await fs.writeFile(
+      path.join(contextDir, INDEX_META_FILENAME),
+      JSON.stringify(
+        {
+          metaVersion: INDEX_META_VERSION,
+          formatVersion: INDEX_FORMAT_VERSION,
+          buildId,
+          generatedAt,
+          toolVersion: 'test',
+          artifacts: {
+            keywordIndex: { path: KEYWORD_INDEX_FILENAME },
+            vectorDb: { path: 'index', provider: 'lancedb' }
+          }
+        },
+        null,
+        2
+      ),
+      'utf-8'
+    );
+
+    const { server } = await import('../src/index.js');
+    const handler = (server as any)._requestHandlers.get('tools/call');
+
+    const response = await handler({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'get_symbol_references',
+        arguments: {
+          symbol: 'alpha',
+          limit: 10
+        }
+      }
+    });
+
+    const payload = JSON.parse(response.content[0].text) as unknown as {
+      status: string;
+      usageCount: number;
+      usages: Array<{ file: string; line: number }>;
+    };
+    expect(payload.status).toBe('success');
+    expect(payload.usageCount).toBe(2);
+    expect(payload.usages.length).toBe(2);
+    expect(payload.usages.every((usage) => usage.file === 'src/example.ts')).toBe(true);
+    const lines = payload.usages.map((usage) => usage.line).sort((a, b) => a - b);
+    expect(lines).toEqual([1, 3]);
+  });
+
   it('isComplete is true when results are less than limit', async () => {
     if (!tempRoot) {
       throw new Error('tempRoot not initialized');
