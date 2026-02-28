@@ -168,7 +168,7 @@ export interface StyleGuideResult {
 }
 
 export interface StyleGuideResponse {
-  status?: string;           // 'success' | 'no_results'
+  status?: string; // 'success' | 'no_results'
   query?: string;
   category?: string;
   results?: StyleGuideResult[];

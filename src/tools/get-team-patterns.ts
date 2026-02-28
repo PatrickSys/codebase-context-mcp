@@ -51,15 +51,23 @@ export async function handle(
     } else if (category === 'di') {
       result.patterns = {};
       if (intel.patterns?.dependencyInjection)
-        (result.patterns as Record<string, unknown>).dependencyInjection = intel.patterns.dependencyInjection;
+        (result.patterns as Record<string, unknown>).dependencyInjection =
+          intel.patterns.dependencyInjection;
     } else if (category === 'state') {
       result.patterns = {};
       if (intel.patterns?.stateManagement)
-        (result.patterns as Record<string, unknown>).stateManagement = intel.patterns.stateManagement;
+        (result.patterns as Record<string, unknown>).stateManagement =
+          intel.patterns.stateManagement;
     } else if (category === 'testing') {
       result.patterns = {};
-      for (const k of ['unitTestFramework', 'e2eFramework', 'testingFramework', 'testMocking'] as const) {
-        if (intel.patterns?.[k]) (result.patterns as Record<string, unknown>)[k] = intel.patterns[k];
+      for (const k of [
+        'unitTestFramework',
+        'e2eFramework',
+        'testingFramework',
+        'testMocking'
+      ] as const) {
+        if (intel.patterns?.[k])
+          (result.patterns as Record<string, unknown>)[k] = intel.patterns[k];
       }
     } else if (category === 'libraries') {
       result.topUsed = intel.importGraph?.topUsed || [];

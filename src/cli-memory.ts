@@ -4,10 +4,7 @@
 
 import path from 'path';
 import type { Memory, MemoryCategory, MemoryType } from './types/index.js';
-import {
-  CODEBASE_CONTEXT_DIRNAME,
-  MEMORY_FILENAME
-} from './constants/codebase-context.js';
+import { CODEBASE_CONTEXT_DIRNAME, MEMORY_FILENAME } from './constants/codebase-context.js';
 import {
   appendMemoryFile,
   readMemoriesFile,
@@ -24,7 +21,12 @@ const MEMORY_CATEGORIES = [
   'conventions'
 ] as const satisfies readonly MemoryCategory[];
 
-const MEMORY_TYPES = ['convention', 'decision', 'gotcha', 'failure'] as const satisfies readonly MemoryType[];
+const MEMORY_TYPES = [
+  'convention',
+  'decision',
+  'gotcha',
+  'failure'
+] as const satisfies readonly MemoryType[];
 
 const MEMORY_CATEGORY_SET: ReadonlySet<string> = new Set(MEMORY_CATEGORIES);
 function isMemoryCategory(value: string): value is MemoryCategory {

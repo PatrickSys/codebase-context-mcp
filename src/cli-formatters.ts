@@ -82,8 +82,10 @@ export function wrapLine(text: string, maxWidth: number): string[] {
   let cur = '';
   for (const w of words) {
     const candidate = cur ? `${cur} ${w}` : w;
-    if (candidate.length > maxWidth) { if (cur) out.push(cur); cur = w; }
-    else cur = candidate;
+    if (candidate.length > maxWidth) {
+      if (cur) out.push(cur);
+      cur = w;
+    } else cur = candidate;
   }
   if (cur) out.push(cur);
   return out;
@@ -243,13 +245,16 @@ export function formatSearch(
 
     const patterns = preflight.patterns;
     if (patterns) {
-      if ((patterns.do && patterns.do.length > 0) || (patterns.avoid && patterns.avoid.length > 0)) {
+      if (
+        (patterns.do && patterns.do.length > 0) ||
+        (patterns.avoid && patterns.avoid.length > 0)
+      ) {
         boxLines.push('');
         boxLines.push('Patterns:');
-        for (const p of (patterns.do ?? [])) {
+        for (const p of patterns.do ?? []) {
           boxLines.push(`  do:    ${p}`);
         }
-        for (const p of (patterns.avoid ?? [])) {
+        for (const p of patterns.avoid ?? []) {
           boxLines.push(`  avoid: ${p}`);
         }
       }
@@ -281,7 +286,8 @@ export function formatSearch(
   const titleParts: string[] = [];
   if (query) titleParts.push(`"${query}"`);
   if (intent) titleParts.push(`intent: ${intent}`);
-  const boxTitle = titleParts.length > 0 ? `Search: ${titleParts.join(' \u2500\u2500\u2500 ')}` : 'Search';
+  const boxTitle =
+    titleParts.length > 0 ? `Search: ${titleParts.join(' \u2500\u2500\u2500 ')}` : 'Search';
 
   console.log('');
   if (boxLines.length > 0) {
@@ -300,11 +306,12 @@ export function formatSearch(
     for (let i = 0; i < results.length; i++) {
       const r: SearchResultItem = results[i];
       const file = shortPath(r.file ?? '', rootPath);
-      const score = Math.min(Number(r.score ?? 0), 1).toFixed(2);
+      const scoreValue = Number(r.score ?? 0);
+      const score = scoreValue.toFixed(2);
       const typePart = formatType(r.type);
       const trendPart = formatTrend(r.trend);
 
-      const metaParts = [`confidence: ${scoreBar(Math.min(r.score ?? 0, 1))} ${score}`];
+      const metaParts = [`confidence: ${scoreBar(scoreValue)} ${score}`];
       if (typePart) metaParts.push(typePart);
       if (trendPart) metaParts.push(trendPart);
 
@@ -371,7 +378,11 @@ export function formatRefs(data: RefsResponse, rootPath: string): void {
 
       const preview = u.preview ?? '';
       if (preview) {
-        const nonEmpty = preview.split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 2);
+        const nonEmpty = preview
+          .split('\n')
+          .map((l) => l.trim())
+          .filter(Boolean)
+          .slice(0, 2);
         const indent = isLast ? '   ' : '\u2502  ';
         const maxPrev = BOX_WIDTH - 10;
         for (const pl of nonEmpty) {
@@ -388,7 +399,8 @@ export function formatRefs(data: RefsResponse, rootPath: string): void {
 
   lines.push('');
 
-  const confLabel = confidence === 'syntactic' ? 'static analysis' : (confidence ?? 'static analysis');
+  const confLabel =
+    confidence === 'syntactic' ? 'static analysis' : (confidence ?? 'static analysis');
   const boxTitle = `${symbol} \u2500\u2500\u2500 ${count} references \u2500\u2500\u2500 ${confLabel}`;
   const boxOut = drawBox(boxTitle, lines, BOX_WIDTH);
   console.log('');
@@ -410,7 +422,8 @@ export function formatCycles(data: CyclesResponse, rootPath: string): void {
   }
   if (stats?.files != null) statParts.push(`${stats.files} files`);
   if (stats?.edges != null) statParts.push(`${stats.edges} edges`);
-  if (stats?.avgDependencies != null) statParts.push(`${stats.avgDependencies.toFixed(1)} avg deps`);
+  if (stats?.avgDependencies != null)
+    statParts.push(`${stats.avgDependencies.toFixed(1)} avg deps`);
 
   const lines: string[] = [];
   lines.push('');
@@ -505,7 +518,12 @@ export function formatMetadata(data: MetadataResponse): void {
   const deps = m.dependencies ?? [];
   if (deps.length > 0) {
     lines.push('');
-    lines.push(`Dependencies: ${deps.slice(0, 6).map((d: MetadataDependency) => d.name).join(' · ')}${deps.length > 6 ? ` (+${deps.length - 6} more)` : ''}`);
+    lines.push(
+      `Dependencies: ${deps
+        .slice(0, 6)
+        .map((d: MetadataDependency) => d.name)
+        .join(' · ')}${deps.length > 6 ? ` (+${deps.length - 6} more)` : ''}`
+    );
   }
 
   // Framework extras: state, testing, ui
@@ -530,7 +548,12 @@ export function formatMetadata(data: MetadataResponse): void {
   const modules = m.architecture?.modules;
   if (modules && modules.length > 0) {
     lines.push('');
-    lines.push(`Modules: ${modules.slice(0, 6).map((mod) => mod.name).join(' · ')}${modules.length > 6 ? ` (+${modules.length - 6})` : ''}`);
+    lines.push(
+      `Modules: ${modules
+        .slice(0, 6)
+        .map((mod) => mod.name)
+        .join(' · ')}${modules.length > 6 ? ` (+${modules.length - 6})` : ''}`
+    );
   }
 
   lines.push('');
@@ -582,7 +605,7 @@ export function formatStyleGuide(data: StyleGuideResponse, rootPath: string): vo
   for (const result of data.results) {
     lines.push('');
     lines.push(shortPath(result.file ?? '', rootPath));
-    for (const section of (result.relevantSections ?? [])) {
+    for (const section of result.relevantSections ?? []) {
       const stripped = section.replace(/^#+\s*/, '');
       lines.push(`  \u00a7 ${stripped}`);
     }
@@ -623,7 +646,11 @@ export function formatJson(
   // Tools return { status: 'error', message: '...' } in their JSON payload but
   // don't always set isError on the MCP envelope. Route these to stderr before
   // a command formatter would render a misleading empty box.
-  if (typeof data === 'object' && data !== null && (data as Record<string, unknown>).status === 'error') {
+  if (
+    typeof data === 'object' &&
+    data !== null &&
+    (data as Record<string, unknown>).status === 'error'
+  ) {
     const d = data as Record<string, unknown>;
     const msg = typeof d.message === 'string' ? d.message : JSON.stringify(d, null, 2);
     process.stderr.write(`Error: ${msg}\n`);
