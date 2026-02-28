@@ -1,4 +1,6 @@
 import chokidar from 'chokidar';
+import path from 'path';
+import { getSupportedExtensions } from '../utils/language-detection.js';
 
 export interface FileWatcherOptions {
   rootPath: string;
@@ -6,6 +8,15 @@ export interface FileWatcherOptions {
   debounceMs?: number;
   /** Called once the debounce window expires after the last detected change */
   onChanged: () => void;
+}
+
+const TRACKED_EXTENSIONS = new Set(
+  getSupportedExtensions().map((extension) => extension.toLowerCase())
+);
+
+function isTrackedSourcePath(filePath: string): boolean {
+  const extension = path.extname(filePath).toLowerCase();
+  return extension.length > 0 && TRACKED_EXTENSIONS.has(extension);
 }
 
 /**
@@ -16,7 +27,8 @@ export function startFileWatcher(opts: FileWatcherOptions): () => void {
   const { rootPath, debounceMs = 2000, onChanged } = opts;
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
-  const trigger = () => {
+  const trigger = (filePath: string) => {
+    if (!isTrackedSourcePath(filePath)) return;
     if (debounceTimer !== undefined) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
       debounceTimer = undefined;
