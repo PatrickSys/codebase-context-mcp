@@ -38,6 +38,7 @@ import {
 } from './constants/codebase-context.js';
 import { appendMemoryFile } from './memory/store.js';
 import { handleCliCommand } from './cli.js';
+import { startFileWatcher } from './core/file-watcher.js';
 import { parseGitLogLineToMemory } from './memory/git-memory.js';
 import {
   isComplementaryPatternCategory,
@@ -250,6 +251,8 @@ const PKG_VERSION: string = JSON.parse(
 const indexState: IndexState = {
   status: 'idle'
 };
+
+let autoRefreshQueued = false;
 
 const server: Server = new Server(
   {
@@ -511,7 +514,7 @@ async function extractGitMemories(): Promise<number> {
   return added;
 }
 
-async function performIndexing(incrementalOnly?: boolean): Promise<void> {
+async function performIndexingOnce(incrementalOnly?: boolean): Promise<void> {
   indexState.status = 'indexing';
   const mode = incrementalOnly ? 'incremental' : 'full';
   console.error(`Indexing (${mode}): ${ROOT_PATH}`);
@@ -562,6 +565,22 @@ async function performIndexing(incrementalOnly?: boolean): Promise<void> {
     indexState.status = 'error';
     indexState.error = error instanceof Error ? error.message : String(error);
     console.error('Indexing failed:', indexState.error);
+  }
+}
+
+async function performIndexing(incrementalOnly?: boolean): Promise<void> {
+  let nextMode = incrementalOnly;
+  for (;;) {
+    await performIndexingOnce(nextMode);
+
+    const shouldRunQueuedRefresh = autoRefreshQueued && indexState.status === 'ready';
+    autoRefreshQueued = false;
+    if (!shouldRunQueuedRefresh) return;
+
+    if (process.env.CODEBASE_CONTEXT_DEBUG) {
+      console.error('[file-watcher] Running queued auto-refresh');
+    }
+    nextMode = true;
   }
 }
 
@@ -726,6 +745,37 @@ async function main() {
   await server.connect(transport);
 
   if (process.env.CODEBASE_CONTEXT_DEBUG) console.error('[DEBUG] Server ready');
+
+  // Auto-refresh: watch for file changes and trigger incremental reindex
+  const debounceEnv = Number.parseInt(process.env.CODEBASE_CONTEXT_DEBOUNCE_MS ?? '', 10);
+  const debounceMs = Number.isFinite(debounceEnv) && debounceEnv >= 0 ? debounceEnv : 2000;
+  const stopWatcher = startFileWatcher({
+    rootPath: ROOT_PATH,
+    debounceMs,
+    onChanged: () => {
+      if (indexState.status === 'indexing') {
+        autoRefreshQueued = true;
+        if (process.env.CODEBASE_CONTEXT_DEBUG) {
+          console.error('[file-watcher] Index in progress — queueing auto-refresh');
+        }
+        return;
+      }
+      if (process.env.CODEBASE_CONTEXT_DEBUG) {
+        console.error('[file-watcher] Changes detected — incremental reindex starting');
+      }
+      void performIndexing(true);
+    }
+  });
+
+  process.once('exit', stopWatcher);
+  process.once('SIGINT', () => {
+    stopWatcher();
+    process.exit(0);
+  });
+  process.once('SIGTERM', () => {
+    stopWatcher();
+    process.exit(0);
+  });
 }
 
 // Export server components for programmatic use
