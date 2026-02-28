@@ -63,7 +63,7 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
         if (!hasVectorColumn) {
           throw new IndexCorruptedError('LanceDB index corrupted: missing vector column');
         }
-        console.error('Opened existing LanceDB table');
+        if (process.env.CODEBASE_CONTEXT_DEBUG) console.error('Opened existing LanceDB table');
       } else if (options?.expectExisting) {
         throw new IndexCorruptedError(
           `LanceDB index missing: no code_chunks table found at ${storagePath}`

@@ -47,8 +47,10 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
 
   private async _initialize(): Promise<void> {
     try {
-      console.error(`Loading embedding model: ${this.modelName}`);
-      console.error('(First run will download the model - this may take a moment)');
+      if (process.env.CODEBASE_CONTEXT_DEBUG) {
+        console.error(`Loading embedding model: ${this.modelName}`);
+        console.error('(First run will download the model - this may take a moment)');
+      }
 
       const { pipeline } = await import('@huggingface/transformers');
 
@@ -64,7 +66,9 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
       });
 
       this.ready = true;
-      console.error(`Model loaded successfully: ${this.modelName}`);
+      if (process.env.CODEBASE_CONTEXT_DEBUG) {
+        console.error(`Model loaded successfully: ${this.modelName}`);
+      }
     } catch (error) {
       console.error('Failed to initialize embedding model:', error);
       throw error;

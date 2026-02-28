@@ -655,10 +655,10 @@ export async function handle(
         // Add patterns (do/avoid, capped at 3 each, with adoption %)
         const doPatterns = preferredPatternsForOutput
           .slice(0, 3)
-          .map((p) => `${p.pattern} — ${p.adoption ? ` ${p.adoption}% adoption` : ''}`);
+          .map((p) => `${p.pattern} — ${p.adoption ? `${p.adoption} adoption` : ''}`);
         const avoidPatterns = avoidPatternsForOutput
           .slice(0, 3)
-          .map((p) => `${p.pattern} — ${p.adoption ? ` ${p.adoption}% adoption` : ''} (declining)`);
+          .map((p) => `${p.pattern} — ${p.adoption ? `${p.adoption} adoption` : ''} (declining)`);
         if (doPatterns.length > 0 || avoidPatterns.length > 0) {
           decisionCard.patterns = {
             ...(doPatterns.length > 0 && { do: doPatterns }),
@@ -775,7 +775,7 @@ export async function handle(
                 file: `${r.filePath}:${r.startLine}-${r.endLine}`,
                 summary: r.summary,
                 score: Math.round(r.score * 100) / 100,
-                ...(r.componentType && r.layer && { type: `${r.componentType}:${r.layer}` }),
+                ...(r.componentType && r.layer && r.layer !== 'unknown' && { type: `${r.componentType}:${r.layer}` }),
                 ...(r.trend && r.trend !== 'Stable' && { trend: r.trend }),
                 ...(r.patternWarning && { patternWarning: r.patternWarning }),
                 ...(relationshipsAndHints.relationships && {
