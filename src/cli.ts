@@ -107,10 +107,10 @@ async function initToolContext(): Promise<ToolContext> {
     status: indexExists ? 'ready' : 'idle'
   };
 
-  const performIndexing = async (incrementalOnly?: boolean): Promise<void> => {
+  const performIndexing = async (incrementalOnly?: boolean, reason?: string): Promise<void> => {
     indexState.status = 'indexing';
     const mode = incrementalOnly ? 'incremental' : 'full';
-    console.error(`Indexing (${mode}): ${rootPath}`);
+    console.error(`Indexing (${mode})${reason ? ` — ${reason}` : ''}: ${rootPath}`);
 
     try {
       let lastLoggedProgress = { phase: '', percentage: -1 };
@@ -324,9 +324,9 @@ export async function handleCliCommand(argv: string[]): Promise<void> {
     }
     case 'reindex': {
       const usage = 'codebase-context reindex [--incremental] [--reason <r>]';
-      optionalStringFlag(flags, 'reason', usage);
+      const reason = optionalStringFlag(flags, 'reason', usage);
       const incremental = booleanFlag(flags, 'incremental', usage);
-      await ctx.performIndexing(incremental);
+      await ctx.performIndexing(incremental, reason);
       const statusResult = await dispatchTool('get_indexing_status', {}, ctx);
       formatJson(extractText(statusResult), useJson);
       return;

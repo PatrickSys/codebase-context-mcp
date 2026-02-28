@@ -37,7 +37,7 @@ export interface ToolContext {
   indexState: IndexState;
   paths: ToolPaths;
   rootPath: string;
-  performIndexing: (incrementalOnly?: boolean) => void;
+  performIndexing: (incrementalOnly?: boolean, reason?: string) => void;
 }
 
 export interface ToolResponse {
