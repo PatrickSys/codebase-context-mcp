@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { promises as fs } from 'fs';
 import path from 'path';
-import os from 'os';
 import { CodebaseIndexer } from '../src/core/indexer.js';
 import { dispatchTool } from '../src/tools/index.js';
 import type { ToolContext } from '../src/tools/types.js';
@@ -10,14 +9,16 @@ import {
   INTELLIGENCE_FILENAME,
   KEYWORD_INDEX_FILENAME,
   VECTOR_DB_DIRNAME,
-  MEMORY_FILENAME
+  MEMORY_FILENAME,
+  RELATIONSHIPS_FILENAME
 } from '../src/constants/codebase-context.js';
 
 describe('Impact candidates (2-hop)', () => {
   let tempRoot: string | null = null;
 
   beforeEach(async () => {
-    tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'impact-2hop-'));
+    // Keep test artifacts under CWD (mirrors other indexer tests and avoids OS tmp quirks)
+    tempRoot = await fs.mkdtemp(path.join(process.cwd(), '.tmp-impact-2hop-'));
     const srcDir = path.join(tempRoot, 'src');
     await fs.mkdir(srcDir, { recursive: true });
     await fs.writeFile(path.join(tempRoot, 'package.json'), JSON.stringify({ name: 'impact-2hop' }));
@@ -61,6 +62,23 @@ describe('Impact candidates (2-hop)', () => {
       rootPath,
       performIndexing: () => {}
     };
+
+    const relationshipsPath = path.join(rootPath, CODEBASE_CONTEXT_DIRNAME, RELATIONSHIPS_FILENAME);
+    const relationshipsRaw = await fs.readFile(relationshipsPath, 'utf-8');
+    const relationships = JSON.parse(relationshipsRaw) as {
+      graph?: { imports?: Record<string, string[]> };
+    };
+    const imports = relationships.graph?.imports ?? {};
+    const hasInternalEdge =
+      (imports['src/b.ts'] ?? []).some((d) => d.endsWith('src/c.ts') || d === 'src/c.ts') &&
+      (imports['src/a.ts'] ?? []).some((d) => d.endsWith('src/b.ts') || d === 'src/b.ts');
+    if (!hasInternalEdge) {
+      throw new Error(
+        `Expected relationships graph to include src/a.ts -> src/b.ts and src/b.ts -> src/c.ts, got imports keys=${JSON.stringify(
+          Object.keys(imports)
+        )}`
+      );
+    }
 
     const resp = await dispatchTool(
       'search_codebase',
