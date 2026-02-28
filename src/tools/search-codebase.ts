@@ -369,7 +369,9 @@ export async function handle(
     const candidates = new Map<string, ImpactCandidate>();
 
     const addCandidate = (file: string, hop: 1 | 2, line?: number): void => {
-      if (Array.from(targetSet).some((t) => pathsMatch(t, file))) return;
+      for (const t of targetSet) {
+        if (pathsMatch(t, file)) return;
+      }
 
       const existing = candidates.get(file);
       if (existing) {
