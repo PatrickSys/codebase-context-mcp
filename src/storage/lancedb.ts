@@ -143,9 +143,12 @@ export class LanceDBStorageProvider implements VectorStorageProvider {
       );
     }
     if (!this.table) {
-      throw new IndexCorruptedError(
-        'LanceDB index corrupted: no table available for search (rebuild required)'
-      );
+      // No semantic index was built (e.g. skipEmbedding) or it hasn't been created yet.
+      // Degrade gracefully to keyword-only search instead of forcing an auto-heal rebuild.
+      if (process.env.CODEBASE_CONTEXT_DEBUG) {
+        console.error('[LanceDB] No table available for semantic search (keyword-only mode).');
+      }
+      return [];
     }
 
     try {
