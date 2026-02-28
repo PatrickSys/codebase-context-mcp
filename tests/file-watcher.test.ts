@@ -49,6 +49,8 @@ describe('FileWatcher', () => {
     });
 
     try {
+      // Give chokidar a moment to finish initializing before the first write
+      await new Promise((resolve) => setTimeout(resolve, 100));
       // Write 5 files in quick succession — all within the debounce window
       for (let i = 0; i < 5; i++) {
         await fs.writeFile(path.join(tempDir, `file${i}.ts`), `export const x${i} = ${i};`);
@@ -72,6 +74,8 @@ describe('FileWatcher', () => {
       onChanged: () => { callCount++; },
     });
 
+    // Give chokidar a moment to finish initializing before the first write
+    await new Promise((resolve) => setTimeout(resolve, 100));
     await fs.writeFile(path.join(tempDir, 'cancel.ts'), 'export const y = 99;');
     // Let chokidar detect the event but stop before debounce fires
     await new Promise((resolve) => setTimeout(resolve, 150));

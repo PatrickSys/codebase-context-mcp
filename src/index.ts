@@ -252,6 +252,8 @@ const indexState: IndexState = {
   status: 'idle'
 };
 
+let autoRefreshQueued = false;
+
 const server: Server = new Server(
   {
     name: 'codebase-context',
@@ -512,7 +514,7 @@ async function extractGitMemories(): Promise<number> {
   return added;
 }
 
-async function performIndexing(incrementalOnly?: boolean): Promise<void> {
+async function performIndexingOnce(incrementalOnly?: boolean): Promise<void> {
   indexState.status = 'indexing';
   const mode = incrementalOnly ? 'incremental' : 'full';
   console.error(`Indexing (${mode}): ${ROOT_PATH}`);
@@ -563,6 +565,22 @@ async function performIndexing(incrementalOnly?: boolean): Promise<void> {
     indexState.status = 'error';
     indexState.error = error instanceof Error ? error.message : String(error);
     console.error('Indexing failed:', indexState.error);
+  }
+}
+
+async function performIndexing(incrementalOnly?: boolean): Promise<void> {
+  let nextMode = incrementalOnly;
+  for (;;) {
+    await performIndexingOnce(nextMode);
+
+    const shouldRunQueuedRefresh = autoRefreshQueued && indexState.status === 'ready';
+    autoRefreshQueued = false;
+    if (!shouldRunQueuedRefresh) return;
+
+    if (process.env.CODEBASE_CONTEXT_DEBUG) {
+      console.error('[file-watcher] Running queued auto-refresh');
+    }
+    nextMode = true;
   }
 }
 
@@ -735,13 +753,16 @@ async function main() {
     debounceMs,
     onChanged: () => {
       if (indexState.status === 'indexing') {
+        autoRefreshQueued = true;
         if (process.env.CODEBASE_CONTEXT_DEBUG) {
-          console.error('[file-watcher] Index in progress — skipping auto-refresh');
+          console.error('[file-watcher] Index in progress — queueing auto-refresh');
         }
         return;
       }
-      console.error('[file-watcher] Changes detected — incremental reindex starting');
-      performIndexing(true);
+      if (process.env.CODEBASE_CONTEXT_DEBUG) {
+        console.error('[file-watcher] Changes detected — incremental reindex starting');
+      }
+      void performIndexing(true);
     }
   });
 
