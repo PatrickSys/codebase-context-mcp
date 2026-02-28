@@ -64,7 +64,7 @@ describe('Impact candidates (2-hop)', () => {
 
     const resp = await dispatchTool(
       'search_codebase',
-      { query: 'UNIQUE_TOKEN_123', intent: 'edit', includeSnippets: false },
+      { query: 'UNIQUE_TOKEN_123', intent: 'edit', includeSnippets: false, limit: 1 },
       ctx
     );
 
@@ -72,8 +72,17 @@ describe('Impact candidates (2-hop)', () => {
     const parsed = JSON.parse(text) as { preflight?: { impact?: { details?: Array<{ file: string; hop: 1 | 2 }> } } };
     const details = parsed.preflight?.impact?.details ?? [];
 
-    expect(details.some((d) => d.file.endsWith('src/b.ts') && d.hop === 1)).toBe(true);
-    expect(details.some((d) => d.file.endsWith('src/a.ts') && d.hop === 2)).toBe(true);
+    const hasHop1 = details.some((d) => d.file.endsWith('src/b.ts') && d.hop === 1);
+    if (!hasHop1) {
+      throw new Error(
+        `Expected hop 1 candidate src/b.ts, got impact.details=${JSON.stringify(details)}`
+      );
+    }
+    const hasHop2 = details.some((d) => d.file.endsWith('src/a.ts') && d.hop === 2);
+    if (!hasHop2) {
+      throw new Error(
+        `Expected hop 2 candidate src/a.ts, got impact.details=${JSON.stringify(details)}`
+      );
+    }
   });
 });
-
