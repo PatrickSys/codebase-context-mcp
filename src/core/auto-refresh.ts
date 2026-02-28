@@ -25,6 +25,10 @@ export function createAutoRefreshController(): AutoRefreshController {
       return true;
     },
     consumeQueuedRefresh: (indexStatus) => {
+      if (indexStatus === 'indexing') {
+        // Defensive: if called while indexing, do not clear the queue.
+        return false;
+      }
       const shouldRun = queued && indexStatus === 'ready';
       queued = false;
       return shouldRun;
