@@ -364,15 +364,10 @@ export async function handle(
     }
 
     const targets = resultPaths.map((rp) => normalizeGraphPath(rp));
-    const targetSet = new Set(targets);
 
     const candidates = new Map<string, ImpactCandidate>();
 
     const addCandidate = (file: string, hop: 1 | 2, line?: number): void => {
-      for (const t of targetSet) {
-        if (pathsMatch(t, file)) return;
-      }
-
       const existing = candidates.get(file);
       if (existing) {
         if (existing.hop <= hop) return;
