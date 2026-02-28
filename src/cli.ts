@@ -231,7 +231,8 @@ function drawBox(title: string, lines: string[], width: number = 60): string[] {
   const remaining = Math.max(0, width - titlePart.length - 1);
   output.push(titlePart + dashes.repeat(remaining) + '\u2510');
   for (const line of lines) {
-    const padded = line.length <= inner ? line + ' '.repeat(inner - line.length) : line.slice(0, inner);
+    const padded =
+      line.length <= inner ? line + ' '.repeat(inner - line.length) : line.slice(0, inner);
     output.push(`\u2502 ${padded} \u2502`);
   }
   output.push('\u2514' + dashes.repeat(width - 2) + '\u2518');
@@ -284,7 +285,9 @@ function formatPatterns(data: PatternResponse): void {
     lines.push('');
     lines.push('CONFLICTS');
     for (const c of conflicts) {
-      lines.push(`  ${c.category}: ${c.primary?.name} (${c.primary?.adoption}) vs ${c.alternative?.name} (${c.alternative?.adoption})`);
+      lines.push(
+        `  ${c.category}: ${c.primary?.name} (${c.primary?.adoption}) vs ${c.alternative?.name} (${c.alternative?.adoption})`
+      );
     }
   }
 
@@ -373,7 +376,8 @@ function formatSearch(
   const titleParts: string[] = [];
   if (query) titleParts.push(`"${query}"`);
   if (intent) titleParts.push(`intent: ${intent}`);
-  const boxTitle = titleParts.length > 0 ? `Search: ${titleParts.join(' \u2500\u2500\u2500 ')}` : 'Search';
+  const boxTitle =
+    titleParts.length > 0 ? `Search: ${titleParts.join(' \u2500\u2500\u2500 ')}` : 'Search';
 
   // Print box if there is preflight content
   console.log('');
@@ -518,12 +522,12 @@ export async function handleCliCommand(argv: string[]): Promise<void> {
         ...(flags['limit'] ? { limit: Number(flags['limit']) } : {}),
         ...(flags['lang'] || flags['framework'] || flags['layer']
           ? {
-            filters: {
-              ...(flags['lang'] ? { language: flags['lang'] } : {}),
-              ...(flags['framework'] ? { framework: flags['framework'] } : {}),
-              ...(flags['layer'] ? { layer: flags['layer'] } : {})
+              filters: {
+                ...(flags['lang'] ? { language: flags['lang'] } : {}),
+                ...(flags['framework'] ? { framework: flags['framework'] } : {}),
+                ...(flags['layer'] ? { layer: flags['layer'] } : {})
+              }
             }
-          }
           : {})
       };
       break;

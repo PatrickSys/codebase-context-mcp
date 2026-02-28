@@ -1038,9 +1038,7 @@ export class AngularAnalyzer implements FrameworkAnalyzer {
         const providedIn = metadata?.providedIn;
         const methods = this.extractPublicMethods(content);
         const scope = providedIn ? ` (${providedIn})` : '';
-        return `Angular service '${className}'${scope}${
-          methods ? ` providing ${methods}` : ''
-        }.`;
+        return `Angular service '${className}'${scope}${methods ? ` providing ${methods}` : ''}.`;
       }
 
       case 'guard': {
