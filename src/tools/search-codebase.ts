@@ -27,6 +27,7 @@ import { RELATIONSHIPS_FILENAME } from '../constants/codebase-context.js';
 interface RelationshipsData {
   graph?: {
     imports?: Record<string, string[]>;
+    importDetails?: Record<string, Record<string, { line?: number; importedSymbols?: string[] }>>;
   };
   stats?: unknown;
 }
@@ -280,6 +281,35 @@ export async function handle(
     return null;
   }
 
+  type ImportEdgeDetail = { line?: number; importedSymbols?: string[] };
+  type ImportDetailsGraph = Record<string, Record<string, ImportEdgeDetail>>;
+
+  function getImportDetailsGraph(): ImportDetailsGraph | null {
+    if (relationships?.graph?.importDetails) {
+      return relationships.graph.importDetails as ImportDetailsGraph;
+    }
+    const internalDetails = intelligence?.internalFileGraph?.importDetails;
+    if (internalDetails) {
+      return internalDetails as ImportDetailsGraph;
+    }
+    return null;
+  }
+
+  function normalizeGraphPath(filePath: string): string {
+    const normalized = filePath.replace(/\\/g, '/');
+    if (path.isAbsolute(filePath)) {
+      const rel = path.relative(ctx.rootPath, filePath).replace(/\\/g, '/');
+      if (rel && !rel.startsWith('..')) {
+        return rel;
+      }
+    }
+    return normalized.replace(/^\.\//, '');
+  }
+
+  function pathsMatch(a: string, b: string): boolean {
+    return a === b || a.endsWith(b) || b.endsWith(a);
+  }
+
   function computeIndexConfidence(): 'fresh' | 'aging' | 'stale' {
     let confidence: 'fresh' | 'aging' | 'stale' = 'stale';
     if (intelligence?.generatedAt) {
@@ -294,21 +324,92 @@ export async function handle(
     return confidence;
   }
 
-  // Cheap impact breadth estimate from the import graph (used for risk assessment).
-  function computeImpactCandidates(resultPaths: string[]): string[] {
-    const impactCandidates: string[] = [];
-    const allImports = getImportsGraph();
-    if (!allImports) return impactCandidates;
-    for (const [file, deps] of Object.entries(allImports)) {
-      if (
-        deps.some((dep: string) => resultPaths.some((rp) => dep.endsWith(rp) || rp.endsWith(dep)))
-      ) {
-        if (!resultPaths.some((rp) => file.endsWith(rp) || rp.endsWith(file))) {
-          impactCandidates.push(file);
-        }
+  type ImpactCandidate = { file: string; line?: number; hop: 1 | 2 };
+
+  function findImportDetail(
+    details: ImportDetailsGraph | null,
+    importer: string,
+    imported: string
+  ): ImportEdgeDetail | null {
+    if (!details) return null;
+    const edges = details[importer];
+    if (!edges) return null;
+    if (edges[imported]) return edges[imported];
+
+    let bestKey: string | null = null;
+    for (const depKey of Object.keys(edges)) {
+      if (!pathsMatch(depKey, imported)) continue;
+      if (!bestKey || depKey.length > bestKey.length) {
+        bestKey = depKey;
       }
     }
-    return impactCandidates;
+
+    return bestKey ? edges[bestKey] : null;
+  }
+
+  // Impact breadth estimate from the import graph (used for risk assessment).
+  // 2-hop: direct importers (hop 1) + importers of importers (hop 2).
+  function computeImpactCandidates(resultPaths: string[]): ImpactCandidate[] {
+    const allImports = getImportsGraph();
+    if (!allImports) return [];
+
+    const importDetails = getImportDetailsGraph();
+
+    const reverseImportsLocal = new Map<string, string[]>();
+    for (const [file, deps] of Object.entries<string[]>(allImports)) {
+      for (const dep of deps) {
+        if (!reverseImportsLocal.has(dep)) reverseImportsLocal.set(dep, []);
+        reverseImportsLocal.get(dep)!.push(file);
+      }
+    }
+
+    const targets = resultPaths.map((rp) => normalizeGraphPath(rp));
+    const targetSet = new Set(targets);
+
+    const candidates = new Map<string, ImpactCandidate>();
+
+    const addCandidate = (file: string, hop: 1 | 2, line?: number): void => {
+      if (Array.from(targetSet).some((t) => pathsMatch(t, file))) return;
+
+      const existing = candidates.get(file);
+      if (existing) {
+        if (existing.hop <= hop) return;
+      }
+      candidates.set(file, { file, hop, ...(line ? { line } : {}) });
+    };
+
+    const collectImporters = (
+      target: string
+    ): Array<{ importer: string; detail: ImportEdgeDetail | null }> => {
+      const matches: Array<{ importer: string; detail: ImportEdgeDetail | null }> = [];
+      for (const [dep, importers] of reverseImportsLocal) {
+        if (!pathsMatch(dep, target)) continue;
+        for (const importer of importers) {
+          matches.push({ importer, detail: findImportDetail(importDetails, importer, dep) });
+        }
+      }
+      return matches;
+    };
+
+    // Hop 1
+    const hop1Files: string[] = [];
+    for (const target of targets) {
+      for (const { importer, detail } of collectImporters(target)) {
+        addCandidate(importer, 1, detail?.line);
+      }
+    }
+    for (const candidate of candidates.values()) {
+      if (candidate.hop === 1) hop1Files.push(candidate.file);
+    }
+
+    // Hop 2
+    for (const mid of hop1Files) {
+      for (const { importer, detail } of collectImporters(mid)) {
+        addCandidate(importer, 2, detail?.line);
+      }
+    }
+
+    return Array.from(candidates.values()).slice(0, 20);
   }
 
   // Build reverse import map from relationships sidecar (preferred) or intelligence graph
@@ -673,12 +774,18 @@ export async function handle(
 
         // Add impact (coverage + top 3 files)
         if (impactCoverage || impactCandidates.length > 0) {
-          const impactObj: { coverage?: string; files?: string[] } = {};
+          const impactObj: {
+            coverage?: string;
+            files?: string[];
+            details?: Array<{ file: string; line?: number; hop: 1 | 2 }>;
+          } = {};
           if (impactCoverage) {
             impactObj.coverage = `${impactCoverage.covered}/${impactCoverage.total} callers in results`;
           }
           if (impactCandidates.length > 0) {
-            impactObj.files = impactCandidates.slice(0, 3);
+            const top = impactCandidates.slice(0, 3);
+            impactObj.files = top.map((candidate) => candidate.file);
+            impactObj.details = top;
           }
           if (Object.keys(impactObj).length > 0) {
             decisionCard.impact = impactObj;

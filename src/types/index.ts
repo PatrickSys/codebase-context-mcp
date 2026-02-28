@@ -647,6 +647,7 @@ export interface IntelligenceData {
   /** Opaque — consumed via InternalFileGraph.fromJSON */
   internalFileGraph?: {
     imports?: Record<string, string[]>;
+    importDetails?: Record<string, Record<string, { line?: number; importedSymbols?: string[] }>>;
     exports?: Record<string, unknown[]>;
     stats?: unknown;
   };

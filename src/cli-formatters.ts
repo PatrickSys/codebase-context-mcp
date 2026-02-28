@@ -269,7 +269,14 @@ export function formatSearch(
     if (impact?.coverage) {
       boxLines.push(`Callers: ${impact.coverage}`);
     }
-    if (impact?.files && impact.files.length > 0) {
+    if (impact?.details && impact.details.length > 0) {
+      const shown = impact.details.slice(0, 3).map((d) => {
+        const p = shortPath(d.file, rootPath);
+        const suffix = d.line ? `:${d.line}` : '';
+        return `${p}${suffix} (hop ${d.hop})`;
+      });
+      boxLines.push(`Files:   ${shown.join(', ')}`);
+    } else if (impact?.files && impact.files.length > 0) {
       const shown = impact.files.slice(0, 3).map((f) => shortPath(f, rootPath));
       boxLines.push(`Files:   ${shown.join(', ')}`);
     }
