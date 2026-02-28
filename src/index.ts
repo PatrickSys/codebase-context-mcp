@@ -38,6 +38,7 @@ import {
 } from './constants/codebase-context.js';
 import { appendMemoryFile } from './memory/store.js';
 import { handleCliCommand } from './cli.js';
+import { startFileWatcher } from './core/file-watcher.js';
 import { parseGitLogLineToMemory } from './memory/git-memory.js';
 import {
   isComplementaryPatternCategory,
@@ -726,6 +727,33 @@ async function main() {
   await server.connect(transport);
 
   if (process.env.CODEBASE_CONTEXT_DEBUG) console.error('[DEBUG] Server ready');
+
+  // Auto-refresh: watch for file changes and trigger incremental reindex
+  const debounceMs = parseInt(process.env.CODEBASE_CONTEXT_DEBOUNCE_MS ?? '', 10) || 2000;
+  const stopWatcher = startFileWatcher({
+    rootPath: ROOT_PATH,
+    debounceMs,
+    onChanged: () => {
+      if (indexState.status === 'indexing') {
+        if (process.env.CODEBASE_CONTEXT_DEBUG) {
+          console.error('[file-watcher] Index in progress — skipping auto-refresh');
+        }
+        return;
+      }
+      console.error('[file-watcher] Changes detected — incremental reindex starting');
+      performIndexing(true);
+    }
+  });
+
+  process.once('exit', stopWatcher);
+  process.once('SIGINT', () => {
+    stopWatcher();
+    process.exit(0);
+  });
+  process.once('SIGTERM', () => {
+    stopWatcher();
+    process.exit(0);
+  });
 }
 
 // Export server components for programmatic use
