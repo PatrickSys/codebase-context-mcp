@@ -25,7 +25,18 @@ export function startFileWatcher(opts: FileWatcherOptions): () => void {
   };
 
   const watcher = chokidar.watch(rootPath, {
-    ignored: ['**/node_modules/**', '**/.codebase-context/**', '**/.git/**', '**/dist/**'],
+    ignored: [
+      '**/node_modules/**',
+      '**/.codebase-context/**',
+      '**/.git/**',
+      '**/dist/**',
+      '**/.nx/**',
+      '**/.planning/**',
+      '**/coverage/**',
+      '**/.turbo/**',
+      '**/.next/**',
+      '**/.cache/**'
+    ],
     persistent: true,
     ignoreInitial: true,
     awaitWriteFinish: { stabilityThreshold: 200, pollInterval: 100 }

@@ -80,6 +80,28 @@ describe('Relationship Sidecar', () => {
     expect(typeof relationships.graph.imports).toBe('object');
     expect(typeof relationships.graph.importedBy).toBe('object');
     expect(typeof relationships.graph.exports).toBe('object');
+
+    // Rich edge details should be persisted when available
+    const importDetails = relationships.graph.importDetails as
+      | Record<string, Record<string, { line?: number; importedSymbols?: string[] }>>
+      | undefined;
+    expect(importDetails).toBeDefined();
+    expect(typeof importDetails).toBe('object');
+
+    const fromFile = Object.keys(importDetails ?? {}).find((k) => k.endsWith('src/b.ts'));
+    expect(fromFile).toBeDefined();
+    const edges = fromFile ? importDetails?.[fromFile] : undefined;
+
+    const toFile = Object.keys(edges ?? {}).find((k) => k.endsWith('src/a.ts'));
+    expect(toFile).toBeDefined();
+    const detail = toFile ? edges?.[toFile] : undefined;
+
+    expect(detail).toBeDefined();
+    if (detail) {
+      expect(detail.line).toBe(1);
+      expect(Array.isArray(detail.importedSymbols)).toBe(true);
+      expect(detail.importedSymbols ?? []).toContain('greet');
+    }
     expect(relationships.symbols).toBeDefined();
     expect(typeof relationships.symbols.exportedBy).toBe('object');
     expect(relationships.stats).toBeDefined();
