@@ -515,7 +515,7 @@ export class CodebaseIndexer {
                   }
                 }
 
-                internalFileGraph.trackImport(file, resolvedPath, imp.imports);
+                internalFileGraph.trackImport(file, resolvedPath, imp.line || 1, imp.imports);
               }
             }
 
@@ -856,6 +856,7 @@ export class CodebaseIndexer {
         generatedAt,
         graph: {
           imports: graphData.imports || {},
+          ...(graphData.importDetails ? { importDetails: graphData.importDetails } : {}),
           importedBy,
           exports: graphData.exports || {}
         },

@@ -13,6 +13,7 @@ export interface DecisionCard {
   impact?: {
     coverage?: string;
     files?: string[];
+    details?: Array<{ file: string; line?: number; hop: 1 | 2 }>;
   };
   whatWouldHelp?: string[];
 }

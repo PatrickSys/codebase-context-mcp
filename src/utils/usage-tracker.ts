@@ -622,6 +622,11 @@ export interface UnusedExport {
   exports: string[];
 }
 
+export interface ImportEdgeDetail {
+  line?: number;
+  importedSymbols?: string[];
+}
+
 export class InternalFileGraph {
   // Map: normalized file path -> Set of normalized file paths it imports
   private imports: Map<string, Set<string>> = new Map();
@@ -629,6 +634,8 @@ export class InternalFileGraph {
   private exports: Map<string, FileExport[]> = new Map();
   // Map: normalized file path -> Set of what symbols are imported from this file
   private importedSymbols: Map<string, Set<string>> = new Map();
+  // Map: fromFile -> toFile -> edge details (line/symbols)
+  private importDetails: Map<string, Map<string, ImportEdgeDetail>> = new Map();
   // Root path for relative path conversion
   private rootPath: string;
 
@@ -663,7 +670,12 @@ export class InternalFileGraph {
    * Track that importingFile imports importedFile
    * Both should be absolute paths; they will be normalized internally.
    */
-  trackImport(importingFile: string, importedFile: string, importedSymbols?: string[]): void {
+  trackImport(
+    importingFile: string,
+    importedFile: string,
+    line?: number,
+    importedSymbols?: string[]
+  ): void {
     const fromFile = this.normalizePath(importingFile);
     const toFile = this.normalizePath(importedFile);
 
@@ -674,15 +686,43 @@ export class InternalFileGraph {
 
     this.imports.get(fromFile)!.add(toFile);
 
-    // Track which symbols are imported from the target file
-    if (importedSymbols && importedSymbols.length > 0) {
+    const normalizedLine =
+      typeof line === 'number' && Number.isFinite(line) && line > 0 ? Math.floor(line) : undefined;
+
+    const normalizedSymbols =
+      importedSymbols && importedSymbols.length > 0
+        ? importedSymbols.filter((sym) => sym !== '*' && sym !== 'default')
+        : [];
+
+    if (normalizedLine || normalizedSymbols.length > 0) {
+      if (!this.importDetails.has(fromFile)) {
+        this.importDetails.set(fromFile, new Map());
+      }
+      const detailsForFrom = this.importDetails.get(fromFile)!;
+      const existing = detailsForFrom.get(toFile) ?? {};
+
+      const mergedLine =
+        existing.line && normalizedLine
+          ? Math.min(existing.line, normalizedLine)
+          : (existing.line ?? normalizedLine);
+
+      const mergedSymbolsSet = new Set<string>(existing.importedSymbols ?? []);
+      for (const sym of normalizedSymbols) mergedSymbolsSet.add(sym);
+      const mergedSymbols = Array.from(mergedSymbolsSet);
+
+      detailsForFrom.set(toFile, {
+        ...(mergedLine ? { line: mergedLine } : {}),
+        ...(mergedSymbols.length > 0 ? { importedSymbols: mergedSymbols.sort() } : {})
+      });
+    }
+
+    // Track which symbols are imported from the target file (for unused export detection)
+    if (normalizedSymbols.length > 0) {
       if (!this.importedSymbols.has(toFile)) {
         this.importedSymbols.set(toFile, new Set());
       }
-      for (const sym of importedSymbols) {
-        if (sym !== '*' && sym !== 'default') {
-          this.importedSymbols.get(toFile)!.add(sym);
-        }
+      for (const sym of normalizedSymbols) {
+        this.importedSymbols.get(toFile)!.add(sym);
       }
     }
   }
@@ -824,6 +864,7 @@ export class InternalFileGraph {
   toJSON(): {
     imports: Record<string, string[]>;
     exports: Record<string, FileExport[]>;
+    importDetails?: Record<string, Record<string, ImportEdgeDetail>>;
     stats: { files: number; edges: number; avgDependencies: number };
   } {
     const imports: Record<string, string[]> = {};
@@ -836,7 +877,25 @@ export class InternalFileGraph {
       exports[file] = exps;
     }
 
-    return { imports, exports, stats: this.getStats() };
+    const importDetails: Record<string, Record<string, ImportEdgeDetail>> = {};
+    for (const [fromFile, edges] of this.importDetails.entries()) {
+      const nested: Record<string, ImportEdgeDetail> = {};
+      for (const [toFile, detail] of edges.entries()) {
+        if (!detail.line && (!detail.importedSymbols || detail.importedSymbols.length === 0))
+          continue;
+        nested[toFile] = detail;
+      }
+      if (Object.keys(nested).length > 0) {
+        importDetails[fromFile] = nested;
+      }
+    }
+
+    return {
+      imports,
+      exports,
+      ...(Object.keys(importDetails).length > 0 ? { importDetails } : {}),
+      stats: this.getStats()
+    };
   }
 
   /**
@@ -846,6 +905,7 @@ export class InternalFileGraph {
     data: {
       imports?: Record<string, string[]>;
       exports?: Record<string, FileExport[]>;
+      importDetails?: Record<string, Record<string, ImportEdgeDetail>>;
     },
     rootPath: string
   ): InternalFileGraph {
@@ -860,6 +920,27 @@ export class InternalFileGraph {
     if (data.exports) {
       for (const [file, exps] of Object.entries(data.exports)) {
         graph.exports.set(file, exps);
+      }
+    }
+
+    if (data.importDetails) {
+      for (const [fromFile, edges] of Object.entries(data.importDetails)) {
+        const edgeMap = new Map<string, ImportEdgeDetail>();
+        for (const [toFile, detail] of Object.entries(edges ?? {})) {
+          edgeMap.set(toFile, detail);
+
+          if (detail.importedSymbols && detail.importedSymbols.length > 0) {
+            if (!graph.importedSymbols.has(toFile)) {
+              graph.importedSymbols.set(toFile, new Set());
+            }
+            for (const sym of detail.importedSymbols) {
+              graph.importedSymbols.get(toFile)!.add(sym);
+            }
+          }
+        }
+        if (edgeMap.size > 0) {
+          graph.importDetails.set(fromFile, edgeMap);
+        }
       }
     }
 
