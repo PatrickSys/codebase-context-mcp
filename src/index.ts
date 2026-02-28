@@ -39,6 +39,7 @@ import {
 import { appendMemoryFile } from './memory/store.js';
 import { handleCliCommand } from './cli.js';
 import { startFileWatcher } from './core/file-watcher.js';
+import { createAutoRefreshController } from './core/auto-refresh.js';
 import { parseGitLogLineToMemory } from './memory/git-memory.js';
 import {
   isComplementaryPatternCategory,
@@ -252,7 +253,7 @@ const indexState: IndexState = {
   status: 'idle'
 };
 
-let autoRefreshQueued = false;
+const autoRefresh = createAutoRefreshController();
 
 const server: Server = new Server(
   {
@@ -573,8 +574,7 @@ async function performIndexing(incrementalOnly?: boolean): Promise<void> {
   for (;;) {
     await performIndexingOnce(nextMode);
 
-    const shouldRunQueuedRefresh = autoRefreshQueued && indexState.status === 'ready';
-    autoRefreshQueued = false;
+    const shouldRunQueuedRefresh = autoRefresh.consumeQueuedRefresh(indexState.status);
     if (!shouldRunQueuedRefresh) return;
 
     if (process.env.CODEBASE_CONTEXT_DEBUG) {
@@ -753,8 +753,8 @@ async function main() {
     rootPath: ROOT_PATH,
     debounceMs,
     onChanged: () => {
-      if (indexState.status === 'indexing') {
-        autoRefreshQueued = true;
+      const shouldRunNow = autoRefresh.onFileChange(indexState.status === 'indexing');
+      if (!shouldRunNow) {
         if (process.env.CODEBASE_CONTEXT_DEBUG) {
           console.error('[file-watcher] Index in progress — queueing auto-refresh');
         }
