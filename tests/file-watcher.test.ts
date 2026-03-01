@@ -107,4 +107,26 @@ describe('FileWatcher', () => {
       stop();
     }
   }, 5000);
+
+  it('triggers on .gitignore changes', async () => {
+    const debounceMs = 250;
+    let callCount = 0;
+
+    const stop = startFileWatcher({
+      rootPath: tempDir,
+      debounceMs,
+      onChanged: () => {
+        callCount++;
+      }
+    });
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      await fs.writeFile(path.join(tempDir, '.gitignore'), 'dist/\n');
+      await new Promise((resolve) => setTimeout(resolve, debounceMs + 700));
+      expect(callCount).toBe(1);
+    } finally {
+      stop();
+    }
+  }, 5000);
 });

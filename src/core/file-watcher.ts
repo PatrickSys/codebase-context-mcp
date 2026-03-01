@@ -14,7 +14,11 @@ const TRACKED_EXTENSIONS = new Set(
   getSupportedExtensions().map((extension) => extension.toLowerCase())
 );
 
+const TRACKED_METADATA_FILES = new Set(['.gitignore']);
+
 function isTrackedSourcePath(filePath: string): boolean {
+  const basename = path.basename(filePath).toLowerCase();
+  if (TRACKED_METADATA_FILES.has(basename)) return true;
   const extension = path.extname(filePath).toLowerCase();
   return extension.length > 0 && TRACKED_EXTENSIONS.has(extension);
 }

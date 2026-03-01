@@ -44,11 +44,21 @@ async function waitFor(
   intervalMs: number
 ): Promise<void> {
   const startedAt = Date.now();
+  let lastError: unknown;
   while (Date.now() - startedAt < timeoutMs) {
-    if (await condition()) return;
+    try {
+      if (await condition()) return;
+      lastError = undefined;
+    } catch (error) {
+      lastError = error;
+    }
     await sleep(intervalMs);
   }
-  throw new Error(`Timed out after ${timeoutMs}ms waiting for condition`);
+  const reason =
+    lastError instanceof Error && lastError.message
+      ? ` Last transient error: ${lastError.message}`
+      : '';
+  throw new Error(`Timed out after ${timeoutMs}ms waiting for condition.${reason}`);
 }
 
 describe('Auto-refresh E2E', () => {
