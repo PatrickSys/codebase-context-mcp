@@ -363,9 +363,7 @@ export function formatSearch(
   if (query) titleParts.push(`"${query}"`);
   if (intent) titleParts.push(`intent: ${intent}`);
   const boxTitle =
-    titleParts.length > 0
-      ? `Search: ${titleParts.join(` ${g.box.h.repeat(3)} `)}`
-      : 'Search';
+    titleParts.length > 0 ? `Search: ${titleParts.join(` ${g.box.h.repeat(3)} `)}` : 'Search';
 
   console.log('');
   if (boxLines.length > 0) {
