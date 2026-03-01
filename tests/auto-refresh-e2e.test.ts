@@ -111,9 +111,15 @@ describe('Auto-refresh E2E', () => {
       }
     };
 
+    let resolveReady!: () => void;
+    const watcherReady = new Promise<void>((resolve) => {
+      resolveReady = resolve;
+    });
+
     const stopWatcher = startFileWatcher({
       rootPath: tempDir,
       debounceMs: 200,
+      onReady: () => resolveReady(),
       onChanged: () => {
         const shouldRunNow = autoRefresh.onFileChange(indexStatus === 'indexing');
         if (!shouldRunNow) return;
@@ -123,7 +129,7 @@ describe('Auto-refresh E2E', () => {
     });
 
     try {
-      await sleep(250);
+      await watcherReady;
       await fs.writeFile(path.join(tempDir, 'src', 'app.ts'), 'export const token = "UPDATED_TOKEN";\n');
 
       await waitFor(

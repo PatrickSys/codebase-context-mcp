@@ -7,6 +7,24 @@ import { CodebaseIndexer } from '../src/core/indexer.js';
 describe('Search Snippets with Scope Headers', () => {
   let tempRoot: string | null = null;
 
+  async function rmWithRetries(targetPath: string): Promise<void> {
+    const maxAttempts = 8;
+    let delayMs = 25;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        await fs.rm(targetPath, { recursive: true, force: true });
+        return;
+      } catch (error) {
+        const code = (error as { code?: string }).code;
+        const retryable = code === 'ENOTEMPTY' || code === 'EPERM' || code === 'EBUSY';
+        if (!retryable || attempt === maxAttempts) throw error;
+        await new Promise((r) => setTimeout(r, delayMs));
+        delayMs *= 2;
+      }
+    }
+  }
+
   beforeEach(async () => {
     vi.resetModules();
     tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'search-snippets-test-'));
@@ -91,15 +109,15 @@ export const VERSION = '1.0.0';
       config: { skipEmbedding: true }
     });
     await indexer.index();
-  });
+  }, 30000);
 
   afterEach(async () => {
     if (tempRoot) {
-      await fs.rm(tempRoot, { recursive: true, force: true });
+      await rmWithRetries(tempRoot);
       tempRoot = null;
     }
     delete process.env.CODEBASE_ROOT;
-  });
+  }, 30000);
 
   it('returns snippets when includeSnippets=true', async () => {
     if (!tempRoot) throw new Error('tempRoot not initialized');

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { promises as fs } from 'fs';
+import os from 'os';
 import path from 'path';
 import { CodebaseIndexer } from '../src/core/indexer.js';
 import { dispatchTool } from '../src/tools/index.js';
@@ -17,9 +18,26 @@ describe('Impact candidates (2-hop)', () => {
   let tempRoot: string | null = null;
   const token = 'UNIQUETOKEN123';
 
+  async function rmWithRetries(targetPath: string): Promise<void> {
+    const maxAttempts = 8;
+    let delayMs = 25;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        await fs.rm(targetPath, { recursive: true, force: true });
+        return;
+      } catch (error) {
+        const code = (error as { code?: string }).code;
+        const retryable = code === 'ENOTEMPTY' || code === 'EPERM' || code === 'EBUSY';
+        if (!retryable || attempt === maxAttempts) throw error;
+        await new Promise((r) => setTimeout(r, delayMs));
+        delayMs *= 2;
+      }
+    }
+  }
+
   beforeEach(async () => {
-    // Keep test artifacts under CWD (mirrors other indexer tests and avoids OS tmp quirks)
-    tempRoot = await fs.mkdtemp(path.join(process.cwd(), '.tmp-impact-2hop-'));
+    tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'impact-2hop-'));
     const srcDir = path.join(tempRoot, 'src');
     await fs.mkdir(srcDir, { recursive: true });
     await fs.writeFile(path.join(tempRoot, 'package.json'), JSON.stringify({ name: 'impact-2hop' }));
@@ -40,7 +58,7 @@ describe('Impact candidates (2-hop)', () => {
 
   afterEach(async () => {
     if (tempRoot) {
-      await fs.rm(tempRoot, { recursive: true, force: true });
+      await rmWithRetries(tempRoot);
       tempRoot = null;
     }
   });
