@@ -3,7 +3,7 @@
  */
 
 import path from 'path';
-import type { Memory, MemoryCategory, MemoryType } from './types/index.js';
+import type { Memory } from './types/index.js';
 import { CODEBASE_CONTEXT_DIRNAME, MEMORY_FILENAME } from './constants/codebase-context.js';
 import {
   appendMemoryFile,
@@ -19,28 +19,20 @@ const MEMORY_CATEGORIES = [
   'testing',
   'dependencies',
   'conventions'
-] as const satisfies readonly MemoryCategory[];
+] as const;
+type CliMemoryCategory = (typeof MEMORY_CATEGORIES)[number];
 
-const MEMORY_TYPES = [
-  'convention',
-  'decision',
-  'gotcha',
-  'failure'
-] as const satisfies readonly MemoryType[];
+const MEMORY_TYPES = ['convention', 'decision', 'gotcha', 'failure'] as const;
+type CliMemoryType = (typeof MEMORY_TYPES)[number];
 
 const MEMORY_CATEGORY_SET: ReadonlySet<string> = new Set(MEMORY_CATEGORIES);
-function isMemoryCategory(value: string): value is MemoryCategory {
+function isCliMemoryCategory(value: string): value is CliMemoryCategory {
   return MEMORY_CATEGORY_SET.has(value);
 }
 
 const MEMORY_TYPE_SET: ReadonlySet<string> = new Set(MEMORY_TYPES);
-function isMemoryType(value: string): value is MemoryType {
+function isCliMemoryType(value: string): value is CliMemoryType {
   return MEMORY_TYPE_SET.has(value);
-}
-
-function exitWithError(message: string): never {
-  console.error(message);
-  process.exit(1);
 }
 
 export async function handleMemoryCli(args: string[]): Promise<void> {
@@ -48,40 +40,79 @@ export async function handleMemoryCli(args: string[]): Promise<void> {
   const cliRoot = process.env.CODEBASE_ROOT || process.cwd();
   const memoryPath = path.join(cliRoot, CODEBASE_CONTEXT_DIRNAME, MEMORY_FILENAME);
   const subcommand = args[0]; // list | add | remove
+  const useJson = args.includes('--json');
+
+  const listUsage =
+    'Usage: codebase-context memory list [--category <cat>] [--type <type>] [--query <text>] [--json]';
+  const addUsage =
+    'Usage: codebase-context memory add --type <type> --category <category> --memory <text> --reason <text> [--json]';
+  const removeUsage = 'Usage: codebase-context memory remove <id> [--json]';
+
+  const exitWithUsageError = (message: string, usage?: string): never => {
+    if (useJson) {
+      console.log(
+        JSON.stringify(
+          {
+            status: 'error',
+            message,
+            ...(usage ? { usage } : {})
+          },
+          null,
+          2
+        )
+      );
+    } else {
+      console.error(message);
+      if (usage) console.error(usage);
+    }
+    process.exit(1);
+  };
 
   if (subcommand === 'list') {
     const memories = await readMemoriesFile(memoryPath);
-    const opts: { category?: MemoryCategory; type?: MemoryType; query?: string } = {};
+    const opts: { category?: CliMemoryCategory; type?: CliMemoryType; query?: string } = {};
 
     for (let i = 1; i < args.length; i++) {
       if (args[i] === '--category') {
         const value = args[i + 1];
         if (!value || value.startsWith('--')) {
-          exitWithError(
-            `Error: --category requires a value. Allowed: ${MEMORY_CATEGORIES.join(', ')}`
+          exitWithUsageError(
+            `Error: --category requires a value. Allowed: ${MEMORY_CATEGORIES.join(', ')}`,
+            listUsage
           );
         }
-        if (!isMemoryCategory(value)) {
-          exitWithError(
-            `Error: invalid --category "${value}". Allowed: ${MEMORY_CATEGORIES.join(', ')}`
+
+        if (isCliMemoryCategory(value)) {
+          opts.category = value;
+        } else {
+          exitWithUsageError(
+            `Error: invalid --category "${value}". Allowed: ${MEMORY_CATEGORIES.join(', ')}`,
+            listUsage
           );
         }
-        opts.category = value;
         i++;
       } else if (args[i] === '--type') {
         const value = args[i + 1];
         if (!value || value.startsWith('--')) {
-          exitWithError(`Error: --type requires a value. Allowed: ${MEMORY_TYPES.join(', ')}`);
+          exitWithUsageError(
+            `Error: --type requires a value. Allowed: ${MEMORY_TYPES.join(', ')}`,
+            listUsage
+          );
         }
-        if (!isMemoryType(value)) {
-          exitWithError(`Error: invalid --type "${value}". Allowed: ${MEMORY_TYPES.join(', ')}`);
+
+        if (isCliMemoryType(value)) {
+          opts.type = value;
+        } else {
+          exitWithUsageError(
+            `Error: invalid --type "${value}". Allowed: ${MEMORY_TYPES.join(', ')}`,
+            listUsage
+          );
         }
-        opts.type = value;
         i++;
       } else if (args[i] === '--query') {
         const value = args[i + 1];
         if (!value || value.startsWith('--')) {
-          exitWithError('Error: --query requires a value.');
+          exitWithUsageError('Error: --query requires a value.', listUsage);
         }
         opts.query = value;
         i++;
@@ -92,7 +123,6 @@ export async function handleMemoryCli(args: string[]): Promise<void> {
 
     const filtered = filterMemories(memories, opts);
     const enriched = withConfidence(filtered);
-    const useJson = args.includes('--json');
 
     if (useJson) {
       console.log(JSON.stringify(enriched, null, 2));
@@ -111,8 +141,8 @@ export async function handleMemoryCli(args: string[]): Promise<void> {
       }
     }
   } else if (subcommand === 'add') {
-    let type: MemoryType = 'decision';
-    let category: MemoryCategory | undefined;
+    let type: CliMemoryType = 'decision';
+    let category: CliMemoryCategory | undefined;
     let memory: string | undefined;
     let reason: string | undefined;
 
@@ -120,92 +150,120 @@ export async function handleMemoryCli(args: string[]): Promise<void> {
       if (args[i] === '--type') {
         const value = args[i + 1];
         if (!value || value.startsWith('--')) {
-          exitWithError(`Error: --type requires a value. Allowed: ${MEMORY_TYPES.join(', ')}`);
+          exitWithUsageError(
+            `Error: --type requires a value. Allowed: ${MEMORY_TYPES.join(', ')}`,
+            addUsage
+          );
         }
-        if (!isMemoryType(value)) {
-          exitWithError(`Error: invalid --type "${value}". Allowed: ${MEMORY_TYPES.join(', ')}`);
+
+        if (isCliMemoryType(value)) {
+          type = value;
+        } else {
+          exitWithUsageError(
+            `Error: invalid --type "${value}". Allowed: ${MEMORY_TYPES.join(', ')}`,
+            addUsage
+          );
         }
-        type = value;
         i++;
       } else if (args[i] === '--category') {
         const value = args[i + 1];
         if (!value || value.startsWith('--')) {
-          exitWithError(
-            `Error: --category requires a value. Allowed: ${MEMORY_CATEGORIES.join(', ')}`
+          exitWithUsageError(
+            `Error: --category requires a value. Allowed: ${MEMORY_CATEGORIES.join(', ')}`,
+            addUsage
           );
         }
-        if (!isMemoryCategory(value)) {
-          exitWithError(
-            `Error: invalid --category "${value}". Allowed: ${MEMORY_CATEGORIES.join(', ')}`
+
+        if (isCliMemoryCategory(value)) {
+          category = value;
+        } else {
+          exitWithUsageError(
+            `Error: invalid --category "${value}". Allowed: ${MEMORY_CATEGORIES.join(', ')}`,
+            addUsage
           );
         }
-        category = value;
         i++;
       } else if (args[i] === '--memory') {
         const value = args[i + 1];
         if (!value || value.startsWith('--')) {
-          exitWithError('Error: --memory requires a value.');
+          exitWithUsageError('Error: --memory requires a value.', addUsage);
         }
         memory = value;
         i++;
       } else if (args[i] === '--reason') {
         const value = args[i + 1];
         if (!value || value.startsWith('--')) {
-          exitWithError('Error: --reason requires a value.');
+          exitWithUsageError('Error: --reason requires a value.', addUsage);
         }
         reason = value;
         i++;
+      } else if (args[i] === '--json') {
+        // handled above
       }
     }
 
     if (!category || !memory || !reason) {
-      console.error(
-        'Usage: codebase-context memory add --type <type> --category <category> --memory <text> --reason <text>'
-      );
-      console.error('Required: --category, --memory, --reason');
-      process.exit(1);
+      exitWithUsageError('Error: required flags missing: --category, --memory, --reason', addUsage);
+      return;
     }
 
+    const requiredCategory = category;
+    const requiredMemory = memory;
+    const requiredReason = reason;
+
     const crypto = await import('crypto');
-    const hashContent = `${type}:${category}:${memory}:${reason}`;
+    const hashContent = `${type}:${requiredCategory}:${requiredMemory}:${requiredReason}`;
     const hash = crypto.createHash('sha256').update(hashContent).digest('hex');
     const id = hash.substring(0, 12);
 
     const newMemory: Memory = {
       id,
       type,
-      category,
-      memory,
-      reason,
+      category: requiredCategory,
+      memory: requiredMemory,
+      reason: requiredReason,
       date: new Date().toISOString()
     };
     const result = await appendMemoryFile(memoryPath, newMemory);
 
+    if (useJson) {
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    }
+
     if (result.status === 'duplicate') {
       console.log(`Already exists: [${id}] ${memory}`);
-    } else {
-      console.log(`Added: [${id}] ${memory}`);
+      return;
     }
+
+    console.log(`Added: [${id}] ${memory}`);
   } else if (subcommand === 'remove') {
-    const id = args[1];
-    if (!id) {
-      console.error('Usage: codebase-context memory remove <id>');
-      process.exit(1);
+    const id = args.slice(1).find((value) => value !== '--json' && !value.startsWith('--'));
+    if (id === undefined) {
+      exitWithUsageError('Error: missing memory id.', removeUsage);
+      return;
     }
 
     const result = await removeMemory(memoryPath, id);
     if (result.status === 'not_found') {
-      console.error(`Memory not found: ${id}`);
+      if (useJson) {
+        console.log(JSON.stringify({ status: 'not_found', id }, null, 2));
+      } else {
+        console.error(`Memory not found: ${id}`);
+      }
       process.exit(1);
-    } else {
-      console.log(`Removed: ${id}`);
     }
+
+    if (useJson) {
+      console.log(JSON.stringify({ status: 'removed', id }, null, 2));
+      return;
+    }
+
+    console.log(`Removed: ${id}`);
   } else {
-    console.error('Usage: codebase-context memory <list|add|remove>');
-    console.error('');
-    console.error('  list [--category <cat>] [--type <type>] [--query <text>] [--json]');
-    console.error('  add --type <type> --category <category> --memory <text> --reason <text>');
-    console.error('  remove <id>');
-    process.exit(1);
+    exitWithUsageError(
+      'Error: unknown subcommand. Expected: list | add | remove',
+      'Usage: codebase-context memory <list|add|remove>'
+    );
   }
 }

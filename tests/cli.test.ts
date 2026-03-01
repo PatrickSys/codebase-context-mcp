@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import path from 'path';
+import os from 'os';
+import { promises as fs } from 'fs';
 
 const toolMocks = vi.hoisted(() => ({
   dispatchTool: vi.fn()
@@ -83,6 +86,38 @@ describe('CLI', () => {
     expect(toolMocks.dispatchTool).not.toHaveBeenCalled();
   });
 
+  it('status renders human output (not raw JSON)', async () => {
+    const originalAscii = process.env.CODEBASE_CONTEXT_ASCII;
+    process.env.CODEBASE_CONTEXT_ASCII = '1';
+
+    try {
+      toolMocks.dispatchTool.mockResolvedValue({
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              status: 'indexing',
+              rootPath: '/tmp/repo',
+              stats: { indexedFiles: 10, totalChunks: 42, duration: '1.23s', incremental: true },
+              progress: { phase: 'embedding', percentage: 60 },
+              hint: 'Use refresh_index to manually trigger re-indexing when needed.'
+            })
+          }
+        ]
+      });
+
+      await handleCliCommand(['status']);
+
+      const out = logSpy.mock.calls.map((c) => String(c[0] ?? '')).join('\n');
+      expect(out).toMatch(/Index Status/);
+      expect(out).toMatch(/\+\- Index Status/);
+      expect(out).toMatch(/Progress:/);
+    } finally {
+      if (originalAscii === undefined) delete process.env.CODEBASE_CONTEXT_ASCII;
+      else process.env.CODEBASE_CONTEXT_ASCII = originalAscii;
+    }
+  });
+
   it('formatting falls back safely on unexpected JSON', async () => {
     toolMocks.dispatchTool.mockResolvedValue({
       content: [{ type: 'text', text: JSON.stringify({ foo: 'bar' }) }]
@@ -96,6 +131,69 @@ describe('CLI', () => {
   it('memory list errors on invalid --type', async () => {
     await expect(handleMemoryCli(['list', '--type', 'nope'])).rejects.toThrow(/process\.exit:1/);
     expect(errorSpy).toHaveBeenCalled();
+  });
+
+  it('memory add/remove support --json output', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'cli-memory-json-'));
+    const originalEnvRoot = process.env.CODEBASE_ROOT;
+    process.env.CODEBASE_ROOT = tempDir;
+
+    try {
+      logSpy.mockClear();
+      await handleMemoryCli([
+        'add',
+        '--type',
+        'decision',
+        '--category',
+        'tooling',
+        '--memory',
+        'Use pnpm, not npm',
+        '--reason',
+        'Workspace support and speed',
+        '--json'
+      ]);
+
+      const addedText = String(logSpy.mock.calls.at(-1)?.[0] ?? '');
+      const added = JSON.parse(addedText) as { status: string; memory?: { id?: string } };
+      expect(added.status).toBe('added');
+      const id = added.memory?.id;
+      expect(typeof id).toBe('string');
+
+      logSpy.mockClear();
+      await handleMemoryCli([
+        'add',
+        '--type',
+        'decision',
+        '--category',
+        'tooling',
+        '--memory',
+        'Use pnpm, not npm',
+        '--reason',
+        'Workspace support and speed',
+        '--json'
+      ]);
+      const dupText = String(logSpy.mock.calls.at(-1)?.[0] ?? '');
+      const dup = JSON.parse(dupText) as { status: string };
+      expect(dup.status).toBe('duplicate');
+
+      logSpy.mockClear();
+      await handleMemoryCli(['remove', String(id), '--json']);
+      const removedText = String(logSpy.mock.calls.at(-1)?.[0] ?? '');
+      const removed = JSON.parse(removedText) as { status: string; id: string };
+      expect(removed).toEqual({ status: 'removed', id });
+
+      logSpy.mockClear();
+      await expect(handleMemoryCli(['remove', 'does-not-exist', '--json'])).rejects.toThrow(
+        /process\.exit:1/
+      );
+      const notFoundText = String(logSpy.mock.calls.at(-1)?.[0] ?? '');
+      const notFound = JSON.parse(notFoundText) as { status: string; id: string };
+      expect(notFound).toEqual({ status: 'not_found', id: 'does-not-exist' });
+    } finally {
+      if (originalEnvRoot === undefined) delete process.env.CODEBASE_ROOT;
+      else process.env.CODEBASE_ROOT = originalEnvRoot;
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
   });
 });
 

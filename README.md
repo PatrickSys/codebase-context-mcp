@@ -1,6 +1,6 @@
 # codebase-context
 
-## Local-first second brain for AI Agents working on your codebase
+## Local-first second brain for AI agents working on your codebase
 
 [![npm version](https://img.shields.io/npm/v/codebase-context)](https://www.npmjs.com/package/codebase-context) [![license](https://img.shields.io/npm/l/codebase-context)](./LICENSE) [![node](https://img.shields.io/node/v/codebase-context)](./package.json)
 
@@ -20,7 +20,7 @@ Here's what codebase-context does:
 
 One tool call returns all of it. Local-first - your code never leaves your machine.
 
-<!-- TODO: Add demo GIF: search_codebase("How does this app attach the auth token to outgoing API calls?") → AuthInterceptor top result + preflight + agent proceeds or asks -->
+<!-- TODO: Add demo GIF: search_codebase("How does this app attach the auth token to outgoing API calls?") -> AuthInterceptor top result + preflight + agent proceeds or asks -->
 <!-- ![Demo](./docs/assets/demo.gif) -->
 
 ## Quick Start
@@ -93,9 +93,57 @@ Open Settings > MCP and add:
 }
 ```
 
-## Codex
+### Codex
 
-Run codex mcp add codebase-context npx -y codebase-context "/path/to/your/project"
+```bash
+codex mcp add codebase-context npx -y codebase-context "/path/to/your/project"
+```
+
+## New to this codebase?
+
+Three commands to get what usually takes a new developer weeks to piece together:
+
+```bash
+# What tech stack, architecture, and file count?
+npx -y codebase-context metadata
+
+# What does the team actually code like right now?
+npx -y codebase-context patterns
+
+# What team decisions were made (and why)?
+npx -y codebase-context memory list
+```
+
+This is also what your AI agent consumes automatically via MCP tools; the CLI is the human-readable version.
+
+### CLI preview
+
+```text
+$ npx -y codebase-context patterns
+┌─ Team Patterns ──────────────────────────────────────────────────────┐
+│                                                                      │
+│ UNIT TEST FRAMEWORK                                                  │
+│      USE: Vitest – 96% adoption                                      │
+│ alt  CAUTION: Jest – 4% minority pattern                             │
+│                                                                      │
+│ STATE MANAGEMENT                                                     │
+│      PREFER: RxJS – 63% adoption                                     │
+│ alt  Redux-style store – 25%                                         │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+```text
+$ npx -y codebase-context search --query "file watcher" --intent edit --limit 1
+┌─ Search: "file watcher" ─── intent: edit ────────────────────────────┐
+│ Quality: ok (1.00)                                                   │
+│ Ready to edit: YES                                                   │
+│                                                                      │
+│ Best example: index.ts                                               │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+See `docs/cli.md` for the full CLI gallery.
 
 ## What It Actually Does
 
@@ -135,43 +183,8 @@ getToken(): string {
 
 Default output is lean — if the agent wants code, it calls `read_file`.
 
-```json
-{
-  "searchQuality": { "status": "ok", "confidence": 0.72 },
-  "preflight": {
-    "ready": false,
-    "nextAction": "2 of 5 callers aren't in results — search for src/app.module.ts",
-    "patterns": {
-      "do": ["HttpInterceptorFn — 97%", "standalone components — 84%"],
-      "avoid": ["constructor injection — 3% (declining)"]
-    },
-    "bestExample": "src/auth/auth.interceptor.ts",
-    "impact": {
-      "coverage": "3/5 callers in results",
-      "files": ["src/app.module.ts", "src/boot.ts"]
-    },
-    "whatWouldHelp": [
-      "Search for src/app.module.ts to cover the main caller",
-      "Call get_team_patterns for auth/ injection patterns"
-    ]
-  },
-  "results": [
-    {
-      "file": "src/auth/auth.interceptor.ts:1-20",
-      "summary": "HTTP interceptor that attaches auth token to outgoing requests",
-      "score": 0.72,
-      "type": "service:core",
-      "trend": "Rising",
-      "relationships": { "importedByCount": 4, "hasTests": true },
-      "hints": {
-        "callers": ["src/app.module.ts", "src/boot.ts"],
-        "tests": ["src/auth/auth.interceptor.spec.ts"]
-      }
-    }
-  ],
-  "relatedMemories": ["Always use HttpInterceptorFn (0.97)"]
-}
-```
+For scripting and automation, every CLI command accepts `--json` for machine output (stdout = JSON; logs/errors go to stderr).
+See `docs/capabilities.md` for the field reference.
 
 Lean enough to fit on one screen. If search quality is low, preflight blocks edits instead of faking confidence.
 
@@ -194,18 +207,18 @@ Record a decision once. It surfaces automatically in search results and prefligh
 
 ### All Tools
 
-| Tool                           | What it does                                                                                |
-| ------------------------------ | ------------------------------------------------------------------------------------------- |
-| `search_codebase`              | Hybrid search + decision card. Pass `intent="edit"` to get `ready`, `nextAction`, patterns, caller coverage, and `whatWouldHelp`. |
-| `get_team_patterns`            | Pattern frequencies, golden files, conflict detection                                      |
+| Tool                           | What it does                                                                                                                                            |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `search_codebase`              | Hybrid search + decision card. Pass `intent="edit"` to get `ready`, `nextAction`, patterns, caller coverage, and `whatWouldHelp`.                       |
+| `get_team_patterns`            | Pattern frequencies, golden files, conflict detection                                                                                                   |
 | `get_symbol_references`        | Find concrete references to a symbol (usageCount + top snippets). `confidence: "syntactic"` = static/source-based only; no runtime or dynamic dispatch. |
-| `remember`                     | Record a convention, decision, gotcha, or failure                                          |
-| `get_memory`                   | Query team memory with confidence decay scoring                                            |
-| `get_codebase_metadata`        | Project structure, frameworks, dependencies                                                |
-| `get_style_guide`              | Style guide rules for the current project                                                  |
-| `detect_circular_dependencies` | Import cycles between files                                                                |
-| `refresh_index`                | Re-index (full or incremental) + extract git memories                                      |
-| `get_indexing_status`          | Progress and stats for the current index                                                   |
+| `remember`                     | Record a convention, decision, gotcha, or failure                                                                                                       |
+| `get_memory`                   | Query team memory with confidence decay scoring                                                                                                         |
+| `get_codebase_metadata`        | Project structure, frameworks, dependencies                                                                                                             |
+| `get_style_guide`              | Style guide rules for the current project                                                                                                               |
+| `detect_circular_dependencies` | Import cycles between files                                                                                                                             |
+| `refresh_index`                | Re-index (full or incremental) + extract git memories                                                                                                   |
+| `get_indexing_status`          | Progress and stats for the current index                                                                                                                |
 
 ## Evaluation Harness (`npm run eval`)
 
@@ -229,7 +242,7 @@ npm run eval -- tests/fixtures/codebases/eval-controlled tests/fixtures/codebase
 
 The retrieval pipeline is designed around one goal: give the agent the right context, not just any file that matches.
 
-- **Definition-first ranking** - for exact-name lookups (e.g. a symbol name), the file that *defines* the symbol ranks above files that only use it.
+- **Definition-first ranking** - for exact-name lookups (e.g. a symbol name), the file that _defines_ the symbol ranks above files that only use it.
 - **Intent classification** - knows whether "AuthService" is a name lookup or "how does auth work" is conceptual. Adjusts keyword/semantic weights accordingly.
 - **Hybrid fusion (RRF)** - combines keyword and semantic search using Reciprocal Rank Fusion instead of brittle score averaging.
 - **Query expansion** - conceptual queries automatically expand with domain-relevant terms (auth → login, token, session, guard).
@@ -289,63 +302,71 @@ Structured filters available: `framework`, `language`, `componentType`, `layer` 
 
 ## CLI Reference
 
-All MCP tools are available as CLI commands — no AI agent required. Useful for scripting, debugging, and CI workflows.
+All MCP tools are available as CLI commands — no AI agent required. Useful for onboarding, scripting, debugging, and CI workflows.
+For formatted examples and “money shots”, see `docs/cli.md`.
 
 Set `CODEBASE_ROOT` to your project root, or run from the project directory.
 
 ```bash
 # Search the indexed codebase
-npx codebase-context search --query "authentication middleware"
-npx codebase-context search --query "auth" --intent edit --limit 5
+npx -y codebase-context search --query "authentication middleware"
+npx -y codebase-context search --query "auth" --intent edit --limit 5
 
 # Project structure, frameworks, and dependencies
-npx codebase-context metadata
+npx -y codebase-context metadata
 
 # Index state and progress
-npx codebase-context status
+npx -y codebase-context status
 
 # Re-index the codebase
-npx codebase-context reindex
-npx codebase-context reindex --incremental --reason "added new service"
+npx -y codebase-context reindex
+npx -y codebase-context reindex --incremental --reason "added new service"
 
 # Style guide rules
-npx codebase-context style-guide
-npx codebase-context style-guide --query "naming" --category patterns
+npx -y codebase-context style-guide
+npx -y codebase-context style-guide --query "naming" --category patterns
 
 # Team patterns (DI, state, testing, etc.)
-npx codebase-context patterns
-npx codebase-context patterns --category testing
+npx -y codebase-context patterns
+npx -y codebase-context patterns --category testing
 
 # Symbol references
-npx codebase-context refs --symbol "UserService"
-npx codebase-context refs --symbol "handleLogin" --limit 20
+npx -y codebase-context refs --symbol "UserService"
+npx -y codebase-context refs --symbol "handleLogin" --limit 20
 
 # Circular dependency detection
-npx codebase-context cycles
-npx codebase-context cycles --scope src/features
+npx -y codebase-context cycles
+npx -y codebase-context cycles --scope src/features
 
 # Memory management
-npx codebase-context memory list
-npx codebase-context memory list --category conventions --type convention
-npx codebase-context memory list --query "auth" --json
-npx codebase-context memory add --type convention --category tooling --memory "Use pnpm, not npm" --reason "Workspace support and speed"
-npx codebase-context memory remove <id>
+npx -y codebase-context memory list
+npx -y codebase-context memory list --category conventions --type convention
+npx -y codebase-context memory list --query "auth" --json
+npx -y codebase-context memory add --type convention --category tooling --memory "Use pnpm, not npm" --reason "Workspace support and speed"
+npx -y codebase-context memory remove <id>
 ```
 
 All commands accept `--json` for raw JSON output suitable for piping and scripting.
 
-## Tip: Ensuring your AI Agent recalls memory:
+## What to add to your CLAUDE.md / AGENTS.md
 
-Add this to `.cursorrules`, `CLAUDE.md`, or `AGENTS.md`:
+Paste this into `.cursorrules`, `CLAUDE.md`, `AGENTS.md`, or wherever your AI reads project instructions:
 
+```markdown
+## Codebase Context (MCP)
+
+**Start of every task:** Call `get_memory` to load team conventions before writing any code.
+
+**Before editing existing code:** Call `search_codebase` with `intent: "edit"`. If the preflight card says `ready: false`, read the listed files before touching anything.
+
+**Before writing new code:** Call `get_team_patterns` to check how the team handles DI, state, testing, and library wrappers — don't introduce a new pattern if one already exists.
+
+**When asked to "remember" or "record" something:** Call `remember` immediately, before doing anything else.
+
+**When adding imports that cross module boundaries:** Call `detect_circular_dependencies` with the relevant scope after adding the import.
 ```
-## Codebase Context
 
-**At start of each task:** Call `get_memory` to load team conventions.
-
-**When user says "remember this" or "record this":**
-- Call `remember` tool IMMEDIATELY before doing anything else.
-```
+These are the behaviors that make the most difference day-to-day. Copy, trim what doesn't apply to your stack, and add it once.
 
 ## Links
 

@@ -82,6 +82,8 @@ function printUsage(): void {
   console.log('');
   console.log('Environment:');
   console.log('  CODEBASE_ROOT    Project root path (default: cwd)');
+  console.log('  CODEBASE_CONTEXT_ASCII=1  Force ASCII-only box output');
+  console.log('  CODEBASE_CONTEXT_DEBUG=1  Enable verbose logs');
 }
 
 async function initToolContext(): Promise<ToolContext> {
@@ -328,7 +330,7 @@ export async function handleCliCommand(argv: string[]): Promise<void> {
       const incremental = booleanFlag(flags, 'incremental', usage);
       await ctx.performIndexing(incremental, reason);
       const statusResult = await dispatchTool('get_indexing_status', {}, ctx);
-      formatJson(extractText(statusResult), useJson);
+      formatJson(extractText(statusResult), useJson, 'status', ctx.rootPath);
       return;
     }
     case 'style-guide': {

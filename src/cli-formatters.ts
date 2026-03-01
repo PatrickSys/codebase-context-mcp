@@ -21,6 +21,71 @@ import type {
 
 export const BOX_WIDTH = 72;
 
+type Charset = 'unicode' | 'ascii';
+
+function parseEnvBoolean(value: string | undefined): boolean {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
+}
+
+function getCharset(): Charset {
+  if (parseEnvBoolean(process.env.CODEBASE_CONTEXT_ASCII)) return 'ascii';
+  if (process.stdout && process.stdout.isTTY === false) return 'ascii';
+  return 'unicode';
+}
+
+type CliGlyphs = {
+  charset: Charset;
+  box: {
+    tl: string;
+    tr: string;
+    bl: string;
+    br: string;
+    h: string;
+    v: string;
+  };
+  tree: {
+    tee: string;
+    elbow: string;
+    pipe: string;
+  };
+  arrow: string;
+  leftRight: string;
+  dot: string;
+  warn: string;
+  bar: {
+    full: string;
+    empty: string;
+  };
+};
+
+const UNICODE_GLYPHS: CliGlyphs = {
+  charset: 'unicode',
+  box: { tl: '┌', tr: '┐', bl: '└', br: '┘', h: '─', v: '│' },
+  tree: { tee: '├─', elbow: '└─', pipe: '│' },
+  arrow: '→',
+  leftRight: '↔',
+  dot: '·',
+  warn: '⚠',
+  bar: { full: '█', empty: '░' }
+};
+
+const ASCII_GLYPHS: CliGlyphs = {
+  charset: 'ascii',
+  box: { tl: '+', tr: '+', bl: '+', br: '+', h: '-', v: '|' },
+  tree: { tee: '|-', elbow: '`-', pipe: '|' },
+  arrow: '->',
+  leftRight: '<->',
+  dot: '*',
+  warn: '!',
+  bar: { full: '#', empty: '.' }
+};
+
+function getGlyphs(): CliGlyphs {
+  return getCharset() === 'ascii' ? ASCII_GLYPHS : UNICODE_GLYPHS;
+}
+
 export function shortPath(filePath: string, rootPath: string): string {
   const normalized = filePath.replace(/\\/g, '/');
   const normalizedRoot = rootPath.replace(/\\/g, '/');
@@ -45,7 +110,7 @@ export function formatTrend(trend?: string): string {
 
 export function formatType(type?: string): string {
   if (!type) return '';
-  // "interceptor:core" → "interceptor (core)", "resolver:unknown" → "resolver"
+  // "interceptor:core" -> "interceptor (core)", "resolver:unknown" -> "resolver"
   const [compType, layer] = type.split(':');
   if (!layer || layer === 'unknown') return compType;
   return `${compType} (${layer})`;
@@ -60,9 +125,10 @@ export function padLeft(str: string, len: number): string {
 }
 
 export function barChart(pct: number, width: number = 10): string {
+  const g = getGlyphs();
   const clamped = Math.max(0, Math.min(100, pct));
   const filled = Math.round((clamped / 100) * width);
-  return '\u2588'.repeat(filled) + '\u2591'.repeat(width - filled);
+  return g.bar.full.repeat(filled) + g.bar.empty.repeat(width - filled);
 }
 
 export function scoreBar(score: number, width: number = 10): string {
@@ -92,20 +158,21 @@ export function wrapLine(text: string, maxWidth: number): string[] {
 }
 
 export function drawBox(title: string, lines: string[], width: number = 60): string[] {
+  const g = getGlyphs();
   const output: string[] = [];
   const inner = width - 4; // 2 for "| " + 2 for " |"
-  const dashes = '\u2500';
-  const titlePart = `\u250c\u2500 ${title} `;
+  const dashes = g.box.h;
+  const titlePart = `${g.box.tl}${g.box.h} ${title} `;
   const remaining = Math.max(0, width - titlePart.length - 1);
-  output.push(titlePart + dashes.repeat(remaining) + '\u2510');
+  output.push(titlePart + dashes.repeat(remaining) + g.box.tr);
   for (const line of lines) {
     const wrapped = wrapLine(line, inner);
     for (const wl of wrapped) {
       const padded = wl + ' '.repeat(Math.max(0, inner - wl.length));
-      output.push(`\u2502 ${padded} \u2502`);
+      output.push(`${g.box.v} ${padded} ${g.box.v}`);
     }
   }
-  output.push('\u2514' + dashes.repeat(width - 2) + '\u2518');
+  output.push(g.box.bl + dashes.repeat(width - 2) + g.box.br);
   return output;
 }
 
@@ -115,6 +182,7 @@ export function getCycleFiles(cycle: CycleItem): string[] {
 }
 
 export function formatPatterns(data: PatternResponse): void {
+  const g = getGlyphs();
   const { patterns, goldenFiles, memories, conflicts } = data;
   const lines: string[] = [];
 
@@ -127,7 +195,7 @@ export function formatPatterns(data: PatternResponse): void {
         .replace(/^./, (s) => s.toUpperCase())
         .trim();
       if (ei > 0) {
-        lines.push('  ' + '\u2500'.repeat(66));
+        lines.push('  ' + g.box.h.repeat(66));
       }
       lines.push('');
       lines.push(label.toUpperCase());
@@ -159,7 +227,7 @@ export function formatPatterns(data: PatternResponse): void {
   const topUsed = data.topUsed;
   if (topUsed && topUsed.length > 0) {
     lines.push('');
-    lines.push('\u2500'.repeat(66));
+    lines.push(g.box.h.repeat(66));
     lines.push('');
     lines.push('TOP LIBRARIES');
     for (const lib of topUsed.slice(0, 15) as LibraryEntry[]) {
@@ -170,7 +238,7 @@ export function formatPatterns(data: PatternResponse): void {
 
   if (goldenFiles && goldenFiles.length > 0) {
     lines.push('');
-    lines.push('\u2500'.repeat(66));
+    lines.push(g.box.h.repeat(66));
     lines.push('');
     lines.push('GOLDEN FILES');
     for (const gf of goldenFiles.slice(0, 5)) {
@@ -181,7 +249,7 @@ export function formatPatterns(data: PatternResponse): void {
 
   if (conflicts && conflicts.length > 0) {
     lines.push('');
-    lines.push('\u2500'.repeat(66));
+    lines.push(g.box.h.repeat(66));
     lines.push('');
     lines.push('CONFLICTS');
     for (const c of conflicts) {
@@ -195,7 +263,7 @@ export function formatPatterns(data: PatternResponse): void {
 
   if (memories && memories.length > 0) {
     lines.push('');
-    lines.push('\u2500'.repeat(66));
+    lines.push(g.box.h.repeat(66));
     lines.push('');
     lines.push('MEMORIES');
     for (const m of memories.slice(0, 5)) {
@@ -219,6 +287,7 @@ export function formatSearch(
   query?: string,
   intent?: string
 ): void {
+  const g = getGlyphs();
   const { searchQuality: quality, preflight, results, relatedMemories: memories } = data;
 
   const boxLines: string[] = [];
@@ -285,7 +354,7 @@ export function formatSearch(
     if (whatWouldHelp && whatWouldHelp.length > 0) {
       boxLines.push('');
       for (const h of whatWouldHelp) {
-        boxLines.push(`\u2192 ${h}`);
+        boxLines.push(`${g.arrow} ${h}`);
       }
     }
   }
@@ -294,7 +363,7 @@ export function formatSearch(
   if (query) titleParts.push(`"${query}"`);
   if (intent) titleParts.push(`intent: ${intent}`);
   const boxTitle =
-    titleParts.length > 0 ? `Search: ${titleParts.join(' \u2500\u2500\u2500 ')}` : 'Search';
+    titleParts.length > 0 ? `Search: ${titleParts.join(` ${g.box.h.repeat(3)} `)}` : 'Search';
 
   console.log('');
   if (boxLines.length > 0) {
@@ -305,7 +374,7 @@ export function formatSearch(
     console.log('');
   } else if (quality) {
     const status = quality.status === 'ok' ? 'ok' : 'low confidence';
-    console.log(`  ${results?.length ?? 0} results  ·  quality: ${status}`);
+    console.log(`  ${results?.length ?? 0} results  ${g.dot}  quality: ${status}`);
     console.log('');
   }
 
@@ -323,7 +392,7 @@ export function formatSearch(
       if (trendPart) metaParts.push(trendPart);
 
       console.log(`${i + 1}.  ${file}`);
-      console.log(`    ${metaParts.join(' \u00b7 ')}`);
+      console.log(`    ${metaParts.join(` ${g.dot} `)}`);
 
       const summary = r.summary ?? '';
       if (summary) {
@@ -332,7 +401,7 @@ export function formatSearch(
       }
 
       if (r.patternWarning) {
-        console.log(`    \u26a0 ${r.patternWarning}`);
+        console.log(`    ${g.warn} ${r.patternWarning}`);
       }
 
       const hints = r.hints;
@@ -350,7 +419,7 @@ export function formatSearch(
         while (trimmed.length > 0 && trimmed[trimmed.length - 1] === '') trimmed.pop();
         const shown = trimmed.slice(0, 8);
         for (const sl of shown) {
-          console.log(`  \u2502 ${sl}`);
+          console.log(`  ${g.box.v} ${sl}`);
         }
       }
 
@@ -368,6 +437,7 @@ export function formatSearch(
 }
 
 export function formatRefs(data: RefsResponse, rootPath: string): void {
+  const g = getGlyphs();
   const { symbol, usageCount: count, confidence, usages } = data;
 
   const lines: string[] = [];
@@ -375,11 +445,11 @@ export function formatRefs(data: RefsResponse, rootPath: string): void {
   lines.push(String(symbol));
 
   if (usages && usages.length > 0) {
-    lines.push('\u2502');
+    lines.push(g.tree.pipe);
     for (let i = 0; i < usages.length; i++) {
       const u: RefsUsage = usages[i];
       const isLast = i === usages.length - 1;
-      const branch = isLast ? '\u2514\u2500' : '\u251c\u2500';
+      const branch = isLast ? g.tree.elbow : g.tree.tee;
       const file = shortPath(u.file ?? '', rootPath);
       lines.push(`${branch} ${file}:${u.line}`);
 
@@ -390,7 +460,7 @@ export function formatRefs(data: RefsResponse, rootPath: string): void {
           .map((l) => l.trim())
           .filter(Boolean)
           .slice(0, 2);
-        const indent = isLast ? '   ' : '\u2502  ';
+        const indent = isLast ? '   ' : `${g.tree.pipe}  `;
         const maxPrev = BOX_WIDTH - 10;
         for (const pl of nonEmpty) {
           const clipped = pl.length > maxPrev ? pl.slice(0, maxPrev - 3) + '...' : pl;
@@ -399,7 +469,7 @@ export function formatRefs(data: RefsResponse, rootPath: string): void {
       }
 
       if (!isLast) {
-        lines.push('\u2502');
+        lines.push(g.tree.pipe);
       }
     }
   }
@@ -408,7 +478,7 @@ export function formatRefs(data: RefsResponse, rootPath: string): void {
 
   const confLabel =
     confidence === 'syntactic' ? 'static analysis' : (confidence ?? 'static analysis');
-  const boxTitle = `${symbol} \u2500\u2500\u2500 ${count} references \u2500\u2500\u2500 ${confLabel}`;
+  const boxTitle = `${symbol} ${g.box.h.repeat(3)} ${count} references ${g.box.h.repeat(3)} ${confLabel}`;
   const boxOut = drawBox(boxTitle, lines, BOX_WIDTH);
   console.log('');
   for (const l of boxOut) {
@@ -418,6 +488,7 @@ export function formatRefs(data: RefsResponse, rootPath: string): void {
 }
 
 export function formatCycles(data: CyclesResponse, rootPath: string): void {
+  const g = getGlyphs();
   const cycles = data.cycles ?? [];
   const stats = data.graphStats;
 
@@ -434,7 +505,7 @@ export function formatCycles(data: CyclesResponse, rootPath: string): void {
 
   const lines: string[] = [];
   lines.push('');
-  lines.push(statParts.join('  \u00b7  '));
+  lines.push(statParts.join(`  ${g.dot}  `));
 
   for (const c of cycles) {
     const sev = (c.severity ?? 'low').toLowerCase();
@@ -443,9 +514,9 @@ export function formatCycles(data: CyclesResponse, rootPath: string): void {
 
     lines.push('');
     if (nodes.length === 2) {
-      lines.push(`  ${sevLabel}  ${nodes[0]} \u2194 ${nodes[1]}`);
+      lines.push(`  ${sevLabel}  ${nodes[0]} ${g.leftRight} ${nodes[1]}`);
     } else {
-      const arrow = ' \u2192 ';
+      const arrow = ` ${g.arrow} `;
       const full = nodes.join(arrow);
       if (full.length <= 60) {
         lines.push(`  ${sevLabel}  ${full}`);
@@ -483,6 +554,8 @@ export function formatMetadata(data: MetadataResponse): void {
     return;
   }
 
+  const g = getGlyphs();
+
   const lines: string[] = [];
   lines.push('');
 
@@ -518,7 +591,7 @@ export function formatMetadata(data: MetadataResponse): void {
     if (stats.totalFiles != null) statParts.push(`${stats.totalFiles} files`);
     if (stats.totalLines != null) statParts.push(`${stats.totalLines.toLocaleString()} lines`);
     if (stats.totalComponents != null) statParts.push(`${stats.totalComponents} components`);
-    if (statParts.length > 0) lines.push(statParts.join(' · '));
+    if (statParts.length > 0) lines.push(statParts.join(` ${g.dot} `));
   }
 
   // Dependencies
@@ -529,7 +602,7 @@ export function formatMetadata(data: MetadataResponse): void {
       `Dependencies: ${deps
         .slice(0, 6)
         .map((d: MetadataDependency) => d.name)
-        .join(' · ')}${deps.length > 6 ? ` (+${deps.length - 6} more)` : ''}`
+        .join(` ${g.dot} `)}${deps.length > 6 ? ` (+${deps.length - 6} more)` : ''}`
     );
   }
 
@@ -559,7 +632,7 @@ export function formatMetadata(data: MetadataResponse): void {
       `Modules: ${modules
         .slice(0, 6)
         .map((mod) => mod.name)
-        .join(' · ')}${modules.length > 6 ? ` (+${modules.length - 6})` : ''}`
+        .join(` ${g.dot} `)}${modules.length > 6 ? ` (+${modules.length - 6})` : ''}`
     );
   }
 
@@ -576,7 +649,85 @@ export function formatMetadata(data: MetadataResponse): void {
   console.log('');
 }
 
+type IndexingStatusPayload = {
+  status?: string;
+  rootPath?: string;
+  lastIndexed?: string;
+  stats?: {
+    totalFiles?: number;
+    indexedFiles?: number;
+    totalChunks?: number;
+    duration?: string;
+    incremental?: boolean;
+  };
+  progress?: {
+    phase?: string;
+    percentage?: number;
+    filesProcessed?: number;
+    totalFiles?: number;
+  };
+  error?: string;
+  hint?: string;
+};
+
+export function formatStatus(data: IndexingStatusPayload, rootPath: string): void {
+  const g = getGlyphs();
+  const lines: string[] = [];
+  lines.push('');
+
+  const state = data.status ?? 'unknown';
+  lines.push(`State: ${state}`);
+
+  const effectiveRoot = data.rootPath ?? rootPath;
+  if (effectiveRoot) {
+    lines.push(`Root:  ${effectiveRoot}`);
+  }
+
+  if (data.lastIndexed) {
+    lines.push(`Last:  ${data.lastIndexed}`);
+  }
+
+  if (data.stats) {
+    const s = data.stats;
+    const parts: string[] = [];
+    if (s.indexedFiles != null) parts.push(`${s.indexedFiles} files`);
+    if (s.totalChunks != null) parts.push(`${s.totalChunks} chunks`);
+    if (s.duration) parts.push(s.duration);
+    if (typeof s.incremental === 'boolean') parts.push(s.incremental ? 'incremental' : 'full');
+    if (parts.length > 0) lines.push(`Stats: ${parts.join(` ${g.dot} `)}`);
+  }
+
+  if (data.progress) {
+    const p = data.progress;
+    const pct = typeof p.percentage === 'number' ? p.percentage : undefined;
+    const phase = p.phase ?? 'working';
+    if (pct != null) {
+      lines.push(`Progress: ${padRight(phase, 12)} ${barChart(pct, 18)} ${pct}%`);
+    } else {
+      lines.push(`Progress: ${phase}`);
+    }
+  }
+
+  if (data.error) {
+    lines.push('');
+    lines.push(`${g.warn} ${data.error}`);
+  }
+
+  if (data.hint) {
+    lines.push('');
+    lines.push(`${g.arrow} ${data.hint}`);
+  }
+
+  lines.push('');
+
+  const boxOut = drawBox('Index Status', lines, BOX_WIDTH);
+  console.log('');
+  for (const l of boxOut) console.log(l);
+  console.log('');
+}
+
 export function formatStyleGuide(data: StyleGuideResponse, rootPath: string): void {
+  const g = getGlyphs();
   if (data.status === 'no_results' || !data.results || data.results.length === 0) {
     console.log('');
     console.log('No style guides found.');
@@ -601,12 +752,12 @@ export function formatStyleGuide(data: StyleGuideResponse, rootPath: string): vo
   } else {
     const filePart = `${totalFiles} file${totalFiles === 1 ? '' : 's'}`;
     const matchPart = `${totalMatches} match${totalMatches === 1 ? '' : 'es'}`;
-    countParts.push(`${filePart} · ${matchPart}`);
+    countParts.push(`${filePart} ${g.dot} ${matchPart}`);
   }
   lines.push(countParts[0]);
 
   if (data.notice) {
-    lines.push(`\u2192 ${data.notice}`);
+    lines.push(`${g.arrow} ${data.notice}`);
   }
 
   for (const result of data.results) {
@@ -665,6 +816,14 @@ export function formatJson(
   }
 
   switch (command) {
+    case 'status': {
+      try {
+        formatStatus(data as IndexingStatusPayload, rootPath ?? '');
+      } catch {
+        console.log(JSON.stringify(data, null, 2));
+      }
+      break;
+    }
     case 'metadata': {
       try {
         formatMetadata(data as MetadataResponse);
