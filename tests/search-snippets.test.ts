@@ -3,6 +3,7 @@ import { promises as fs } from 'fs';
 import os from 'os';
 import path from 'path';
 import { CodebaseIndexer } from '../src/core/indexer.js';
+import { rmWithRetries } from './test-helpers.js';
 
 describe('Search Snippets with Scope Headers', () => {
   let tempRoot: string | null = null;
@@ -91,15 +92,15 @@ export const VERSION = '1.0.0';
       config: { skipEmbedding: true }
     });
     await indexer.index();
-  });
+  }, 30000);
 
   afterEach(async () => {
     if (tempRoot) {
-      await fs.rm(tempRoot, { recursive: true, force: true });
+      await rmWithRetries(tempRoot);
       tempRoot = null;
     }
     delete process.env.CODEBASE_ROOT;
-  });
+  }, 30000);
 
   it('returns snippets when includeSnippets=true', async () => {
     if (!tempRoot) throw new Error('tempRoot not initialized');

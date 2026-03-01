@@ -3,6 +3,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
 import { startFileWatcher } from '../src/core/file-watcher.js';
+import { rmWithRetries } from './test-helpers.js';
 
 describe('FileWatcher', () => {
   let tempDir: string;
@@ -12,22 +13,27 @@ describe('FileWatcher', () => {
   });
 
   afterEach(async () => {
-    await fs.rm(tempDir, { recursive: true, force: true });
+    await rmWithRetries(tempDir);
   });
 
   it('triggers onChanged after debounce window', async () => {
     const debounceMs = 400;
     let callCount = 0;
 
+    let resolveReady!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      resolveReady = resolve;
+    });
+
     const stop = startFileWatcher({
       rootPath: tempDir,
       debounceMs,
+      onReady: () => resolveReady(),
       onChanged: () => { callCount++; },
     });
 
     try {
-      // Give chokidar a moment to finish initializing before the first write
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await ready;
       await fs.writeFile(path.join(tempDir, 'test.ts'), 'export const x = 1;');
       // Wait for chokidar to pick up the event (including awaitWriteFinish stabilityThreshold)
       // + debounce window + OS scheduling slack
@@ -39,25 +45,31 @@ describe('FileWatcher', () => {
   }, 8000);
 
   it('debounces rapid changes into a single callback', async () => {
-    const debounceMs = 300;
+    const debounceMs = 800;
     let callCount = 0;
+
+    let resolveReady!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      resolveReady = resolve;
+    });
 
     const stop = startFileWatcher({
       rootPath: tempDir,
       debounceMs,
+      onReady: () => resolveReady(),
       onChanged: () => { callCount++; },
     });
 
     try {
       // Give chokidar a moment to finish initializing before the first write
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await ready;
       // Write 5 files in quick succession — all within the debounce window
       for (let i = 0; i < 5; i++) {
         await fs.writeFile(path.join(tempDir, `file${i}.ts`), `export const x${i} = ${i};`);
-        await new Promise((resolve) => setTimeout(resolve, 50));
+        await new Promise((resolve) => setTimeout(resolve, 20));
       }
       // Wait for debounce to settle
-      await new Promise((resolve) => setTimeout(resolve, debounceMs + 400));
+      await new Promise((resolve) => setTimeout(resolve, debounceMs + 1200));
       expect(callCount).toBe(1);
     } finally {
       stop();
@@ -68,14 +80,20 @@ describe('FileWatcher', () => {
     const debounceMs = 500;
     let callCount = 0;
 
+    let resolveReady!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      resolveReady = resolve;
+    });
+
     const stop = startFileWatcher({
       rootPath: tempDir,
       debounceMs,
+      onReady: () => resolveReady(),
       onChanged: () => { callCount++; },
     });
 
     // Give chokidar a moment to finish initializing before the first write
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await ready;
     await fs.writeFile(path.join(tempDir, 'cancel.ts'), 'export const y = 99;');
     // Let chokidar detect the event (including awaitWriteFinish stabilityThreshold)
     // but stop before the debounce window expires.
@@ -90,16 +108,22 @@ describe('FileWatcher', () => {
     const debounceMs = 250;
     let callCount = 0;
 
+    let resolveReady!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      resolveReady = resolve;
+    });
+
     const stop = startFileWatcher({
       rootPath: tempDir,
       debounceMs,
+      onReady: () => resolveReady(),
       onChanged: () => {
         callCount++;
       }
     });
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await ready;
       await fs.writeFile(path.join(tempDir, 'notes.txt'), 'this should be ignored');
       await new Promise((resolve) => setTimeout(resolve, debounceMs + 700));
       expect(callCount).toBe(0);
@@ -112,16 +136,22 @@ describe('FileWatcher', () => {
     const debounceMs = 250;
     let callCount = 0;
 
+    let resolveReady!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      resolveReady = resolve;
+    });
+
     const stop = startFileWatcher({
       rootPath: tempDir,
       debounceMs,
+      onReady: () => resolveReady(),
       onChanged: () => {
         callCount++;
       }
     });
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await ready;
       await fs.writeFile(path.join(tempDir, '.gitignore'), 'dist/\n');
       await new Promise((resolve) => setTimeout(resolve, debounceMs + 700));
       expect(callCount).toBe(1);

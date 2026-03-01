@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { promises as fs } from 'fs';
+import os from 'os';
 import path from 'path';
 import { CodebaseIndexer } from '../src/core/indexer.js';
 import { dispatchTool } from '../src/tools/index.js';
 import type { ToolContext } from '../src/tools/types.js';
+import { rmWithRetries } from './test-helpers.js';
 import {
   CODEBASE_CONTEXT_DIRNAME,
   INTELLIGENCE_FILENAME,
@@ -18,8 +20,7 @@ describe('Impact candidates (2-hop)', () => {
   const token = 'UNIQUETOKEN123';
 
   beforeEach(async () => {
-    // Keep test artifacts under CWD (mirrors other indexer tests and avoids OS tmp quirks)
-    tempRoot = await fs.mkdtemp(path.join(process.cwd(), '.tmp-impact-2hop-'));
+    tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'impact-2hop-'));
     const srcDir = path.join(tempRoot, 'src');
     await fs.mkdir(srcDir, { recursive: true });
     await fs.writeFile(path.join(tempRoot, 'package.json'), JSON.stringify({ name: 'impact-2hop' }));
@@ -40,7 +41,7 @@ describe('Impact candidates (2-hop)', () => {
 
   afterEach(async () => {
     if (tempRoot) {
-      await fs.rm(tempRoot, { recursive: true, force: true });
+      await rmWithRetries(tempRoot);
       tempRoot = null;
     }
   });

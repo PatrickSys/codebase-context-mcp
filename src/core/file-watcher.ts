@@ -6,6 +6,8 @@ export interface FileWatcherOptions {
   rootPath: string;
   /** ms after last change before triggering. Default: 2000 */
   debounceMs?: number;
+  /** Called once chokidar finishes initial scan and starts emitting change events */
+  onReady?: () => void;
   /** Called once the debounce window expires after the last detected change */
   onChanged: () => void;
 }
@@ -28,7 +30,7 @@ function isTrackedSourcePath(filePath: string): boolean {
  * Returns a stop() function that cancels the debounce timer and closes the watcher.
  */
 export function startFileWatcher(opts: FileWatcherOptions): () => void {
-  const { rootPath, debounceMs = 2000, onChanged } = opts;
+  const { rootPath, debounceMs = 2000, onReady, onChanged } = opts;
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
   const trigger = (filePath: string) => {
@@ -59,6 +61,7 @@ export function startFileWatcher(opts: FileWatcherOptions): () => void {
   });
 
   watcher
+    .on('ready', () => onReady?.())
     .on('add', trigger)
     .on('change', trigger)
     .on('unlink', trigger)
