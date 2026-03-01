@@ -85,4 +85,48 @@ describe('FileWatcher', () => {
     await new Promise((resolve) => setTimeout(resolve, debounceMs + 200));
     expect(callCount).toBe(0);
   }, 5000);
+
+  it('ignores changes to non-tracked file extensions', async () => {
+    const debounceMs = 250;
+    let callCount = 0;
+
+    const stop = startFileWatcher({
+      rootPath: tempDir,
+      debounceMs,
+      onChanged: () => {
+        callCount++;
+      }
+    });
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      await fs.writeFile(path.join(tempDir, 'notes.txt'), 'this should be ignored');
+      await new Promise((resolve) => setTimeout(resolve, debounceMs + 700));
+      expect(callCount).toBe(0);
+    } finally {
+      stop();
+    }
+  }, 5000);
+
+  it('triggers on .gitignore changes', async () => {
+    const debounceMs = 250;
+    let callCount = 0;
+
+    const stop = startFileWatcher({
+      rootPath: tempDir,
+      debounceMs,
+      onChanged: () => {
+        callCount++;
+      }
+    });
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      await fs.writeFile(path.join(tempDir, '.gitignore'), 'dist/\n');
+      await new Promise((resolve) => setTimeout(resolve, debounceMs + 700));
+      expect(callCount).toBe(1);
+    } finally {
+      stop();
+    }
+  }, 5000);
 });
