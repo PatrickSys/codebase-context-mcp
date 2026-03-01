@@ -5,6 +5,7 @@ import path from 'path';
 import { CodebaseIndexer } from '../src/core/indexer.js';
 import { dispatchTool } from '../src/tools/index.js';
 import type { ToolContext } from '../src/tools/types.js';
+import { rmWithRetries } from './test-helpers.js';
 import {
   CODEBASE_CONTEXT_DIRNAME,
   INTELLIGENCE_FILENAME,
@@ -17,24 +18,6 @@ import {
 describe('Impact candidates (2-hop)', () => {
   let tempRoot: string | null = null;
   const token = 'UNIQUETOKEN123';
-
-  async function rmWithRetries(targetPath: string): Promise<void> {
-    const maxAttempts = 8;
-    let delayMs = 25;
-
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        await fs.rm(targetPath, { recursive: true, force: true });
-        return;
-      } catch (error) {
-        const code = (error as { code?: string }).code;
-        const retryable = code === 'ENOTEMPTY' || code === 'EPERM' || code === 'EBUSY';
-        if (!retryable || attempt === maxAttempts) throw error;
-        await new Promise((r) => setTimeout(r, delayMs));
-        delayMs *= 2;
-      }
-    }
-  }
 
   beforeEach(async () => {
     tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'impact-2hop-'));

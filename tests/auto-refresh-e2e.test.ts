@@ -5,6 +5,7 @@ import path from 'path';
 import { startFileWatcher } from '../src/core/file-watcher.js';
 import { createAutoRefreshController } from '../src/core/auto-refresh.js';
 import { CodebaseIndexer } from '../src/core/indexer.js';
+import { rmWithRetries } from './test-helpers.js';
 import {
   CODEBASE_CONTEXT_DIRNAME,
   KEYWORD_INDEX_FILENAME
@@ -72,7 +73,7 @@ describe('Auto-refresh E2E', () => {
   });
 
   afterEach(async () => {
-    await fs.rm(tempDir, { recursive: true, force: true });
+    await rmWithRetries(tempDir);
   });
 
   it('updates index after a file edit without manual refresh_index', async () => {

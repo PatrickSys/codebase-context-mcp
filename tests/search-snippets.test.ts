@@ -3,27 +3,10 @@ import { promises as fs } from 'fs';
 import os from 'os';
 import path from 'path';
 import { CodebaseIndexer } from '../src/core/indexer.js';
+import { rmWithRetries } from './test-helpers.js';
 
 describe('Search Snippets with Scope Headers', () => {
   let tempRoot: string | null = null;
-
-  async function rmWithRetries(targetPath: string): Promise<void> {
-    const maxAttempts = 8;
-    let delayMs = 25;
-
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        await fs.rm(targetPath, { recursive: true, force: true });
-        return;
-      } catch (error) {
-        const code = (error as { code?: string }).code;
-        const retryable = code === 'ENOTEMPTY' || code === 'EPERM' || code === 'EBUSY';
-        if (!retryable || attempt === maxAttempts) throw error;
-        await new Promise((r) => setTimeout(r, delayMs));
-        delayMs *= 2;
-      }
-    }
-  }
 
   beforeEach(async () => {
     vi.resetModules();

@@ -3,6 +3,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
 import { startFileWatcher } from '../src/core/file-watcher.js';
+import { rmWithRetries } from './test-helpers.js';
 
 describe('FileWatcher', () => {
   let tempDir: string;
@@ -12,7 +13,7 @@ describe('FileWatcher', () => {
   });
 
   afterEach(async () => {
-    await fs.rm(tempDir, { recursive: true, force: true });
+    await rmWithRetries(tempDir);
   });
 
   it('triggers onChanged after debounce window', async () => {
