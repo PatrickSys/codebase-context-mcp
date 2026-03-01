@@ -4,14 +4,15 @@ Technical reference for what `codebase-context` ships today. For the user-facing
 
 ## CLI Reference
 
-All 10 MCP tools are exposed as CLI subcommands. Set `CODEBASE_ROOT` or run from the project directory.
+All shipped capabilities are available locally via the CLI (human-readable by default, `--json` for automation).
+For a “gallery” of commands and examples, see `docs/cli.md`.
 
 | Command | Flags | Maps to |
 |---|---|---|
 | `search --query <q>` | `--intent explore\|edit\|refactor\|migrate`, `--limit <n>`, `--lang <l>`, `--framework <f>`, `--layer <l>` | `search_codebase` |
 | `metadata` | — | `get_codebase_metadata` |
 | `status` | — | `get_indexing_status` |
-| `reindex` | `--incremental`, `--reason <r>` | `refresh_index` |
+| `reindex` | `--incremental`, `--reason <r>` | equivalent to `refresh_index` |
 | `style-guide` | `--query <q>`, `--category <c>` | `get_style_guide` |
 | `patterns` | `--category all\|di\|state\|testing\|libraries` | `get_team_patterns` |
 | `refs --symbol <name>` | `--limit <n>` | `get_symbol_references` |
@@ -95,8 +96,9 @@ Returned as `preflight` when search `intent` is `edit`, `refactor`, or `migrate`
   };
   bestExample?: string;       // Top 1 golden file (path format)
   impact?: {
-    coverage: string;         // "X/Y callers in results"
-    files: string[];          // Top 3 impact candidates (files importing results)
+    coverage?: string;        // "X/Y callers in results"
+    files?: string[];         // Back-compat: top impact candidates (paths only)
+    details?: Array<{ file: string; line?: number; hop: 1 | 2 }>; // When available
   };
   whatWouldHelp?: string[];   // Concrete next steps (max 4) when ready=false
 }
@@ -111,7 +113,8 @@ Returned as `preflight` when search `intent` is `edit`, `refactor`, or `migrate`
 - `patterns.avoid`: declining patterns, ranked by % (useful for migrations)
 - `bestExample`: exemplar file for the area under edit
 - `impact.coverage`: shows caller visibility ("3/5 callers in results" means 2 callers weren't searched yet)
-- `impact.files`: which files import the results (helps find blind spots)
+- `impact.details`: richer impact candidates with optional `line` and hop distance (1 = direct, 2 = transitive)
+- `impact.files`: back-compat list of impact candidate paths (when details aren’t available)
 - `whatWouldHelp`: specific next searches, tool calls, or files to check that would close evidence gaps
 
 ### How `ready` is determined

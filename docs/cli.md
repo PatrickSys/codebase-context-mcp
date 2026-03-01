@@ -1,0 +1,194 @@
+# CLI Gallery (Human-readable)
+
+`codebase-context` exposes its MCP tools as a local CLI so humans can:
+
+- Onboard themselves onto an unfamiliar repo
+- Debug what the MCP server is doing
+- Use outputs in CI/scripts (via `--json`)
+
+> Output depends on the repo you run it against. The examples below are illustrative (paths, counts, and detected frameworks will vary).
+
+## How to run
+
+```bash
+# Run from a repo root, or set CODEBASE_ROOT explicitly:
+CODEBASE_ROOT=/path/to/repo npx -y codebase-context status
+
+# Every command supports --json (machine output). Human mode is default.
+npx -y codebase-context patterns --json
+```
+
+### ASCII fallback
+
+If your terminal doesn’t render Unicode box-drawing cleanly:
+
+```bash
+CODEBASE_CONTEXT_ASCII=1 npx -y codebase-context patterns
+```
+
+## Commands
+
+- `metadata` — tech stack overview
+- `patterns` — team conventions + adoption/trends
+- `search --query <q>` — ranked results; add `--intent edit` for a preflight card
+- `refs --symbol <name>` — concrete reference evidence
+- `cycles` — circular dependency detection
+- `status` — index status/progress
+- `reindex` — rebuild index (full or incremental)
+- `style-guide` — find style guide sections in docs
+- `memory list|add|remove` — manage team memory (stored in `.codebase-context/memory.json`)
+
+---
+
+## `metadata`
+
+```bash
+npx -y codebase-context metadata
+```
+
+Example output:
+
+```text
+┌─ codebase-context [monorepo] ────────────────────────────────────────┐
+│                                                                      │
+│ Framework: Angular unknown   Architecture: mixed                     │
+│ 130 files · 24,211 lines · 1077 components                           │
+│                                                                      │
+│ Dependencies: @huggingface/transformers · @lancedb/lancedb ·         │
+│ @modelcontextprotocol/sdk · @typescript-eslint/typescript-estree ·   │
+│ chokidar · fuse.js (+14 more)                                        │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+## `patterns`
+
+```bash
+npx -y codebase-context patterns
+```
+
+Example output (truncated):
+
+```text
+┌─ Team Patterns ──────────────────────────────────────────────────────┐
+│                                                                      │
+│ UNIT TEST FRAMEWORK                                                  │
+│      USE: Vitest – 96% adoption                                      │
+│ alt  CAUTION: Jest – 4% minority pattern                             │
+│                                                                      │
+│ STATE MANAGEMENT                                                     │
+│      PREFER: RxJS – 63% adoption                                     │
+│ alt  Redux-style store – 25%                                         │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+## `search`
+
+```bash
+npx -y codebase-context search --query "file watcher" --intent edit --limit 3
+```
+
+Example output (truncated):
+
+```text
+┌─ Search: "file watcher" ─── intent: edit ────────────────────────────┐
+│ Quality: ok (1.00)                                                   │
+│ Ready to edit: YES                                                   │
+│                                                                      │
+│ Best example: index.ts                                               │
+└──────────────────────────────────────────────────────────────────────┘
+
+1.  src/core/file-watcher.ts:44-74
+    confidence: ██████████ 1.18
+    typescript module in file-watcher.ts: startFileWatcher :: (...)
+```
+
+## `refs`
+
+```bash
+npx -y codebase-context refs --symbol "startFileWatcher" --limit 10
+```
+
+Example output (truncated):
+
+```text
+┌─ startFileWatcher ─── 11 references ─── static analysis ─────────────┐
+│                                                                      │
+│ startFileWatcher                                                     │
+│ │                                                                    │
+│ ├─ file-watcher.test.ts:5                                            │
+│ │   import { startFileWatcher } from '../src/core/file-watcher....   │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+## `cycles`
+
+```bash
+npx -y codebase-context cycles --scope src
+```
+
+Example output:
+
+```text
+┌─ Circular Dependencies ──────────────────────────────────────────────┐
+│                                                                      │
+│ No cycles found  ·  98 files  ·  260 edges  ·  2.7 avg deps          │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+## `status`
+
+```bash
+npx -y codebase-context status
+```
+
+Example output:
+
+```text
+┌─ Index Status ───────────────────────────────────────────────────────┐
+│                                                                      │
+│ State: ready                                                         │
+│ Root:  /path/to/repo                                                 │
+│                                                                      │
+│ → Use refresh_index to manually trigger re-indexing when needed.     │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+## `reindex`
+
+```bash
+npx -y codebase-context reindex
+npx -y codebase-context reindex --incremental --reason "changed watcher logic"
+```
+
+## `style-guide`
+
+```bash
+npx -y codebase-context style-guide --query "naming"
+```
+
+Example output:
+
+```text
+No style guides found.
+  Hint: Try broader terms like 'naming', 'patterns', 'testing', 'components'
+```
+
+## `memory`
+
+```bash
+npx -y codebase-context memory list
+npx -y codebase-context memory list --query "watcher"
+
+npx -y codebase-context memory add \
+  --type gotcha \
+  --category tooling \
+  --memory "Use pnpm, not npm" \
+  --reason "Workspace support and speed"
+
+npx -y codebase-context memory remove <id>
+```

@@ -83,6 +83,38 @@ describe('CLI', () => {
     expect(toolMocks.dispatchTool).not.toHaveBeenCalled();
   });
 
+  it('status renders human output (not raw JSON)', async () => {
+    const originalAscii = process.env.CODEBASE_CONTEXT_ASCII;
+    process.env.CODEBASE_CONTEXT_ASCII = '1';
+
+    try {
+      toolMocks.dispatchTool.mockResolvedValue({
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              status: 'indexing',
+              rootPath: '/tmp/repo',
+              stats: { indexedFiles: 10, totalChunks: 42, duration: '1.23s', incremental: true },
+              progress: { phase: 'embedding', percentage: 60 },
+              hint: 'Use refresh_index to manually trigger re-indexing when needed.'
+            })
+          }
+        ]
+      });
+
+      await handleCliCommand(['status']);
+
+      const out = logSpy.mock.calls.map((c) => String(c[0] ?? '')).join('\n');
+      expect(out).toMatch(/Index Status/);
+      expect(out).toMatch(/\+\- Index Status/);
+      expect(out).toMatch(/Progress:/);
+    } finally {
+      if (originalAscii === undefined) delete process.env.CODEBASE_CONTEXT_ASCII;
+      else process.env.CODEBASE_CONTEXT_ASCII = originalAscii;
+    }
+  });
+
   it('formatting falls back safely on unexpected JSON', async () => {
     toolMocks.dispatchTool.mockResolvedValue({
       content: [{ type: 'text', text: JSON.stringify({ foo: 'bar' }) }]
